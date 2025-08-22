@@ -1,0 +1,49 @@
+[workspace]
+members = [
+    "service",
+]
+resolver = "2"
+
+[profile.dev]
+debug = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[package]
+name = "prompt-manager"
+version = "0.1.0"
+edition = "2021"
+default-run = "prompt-manager"
+
+[[bin]]
+name = "prompt-manager"
+path = "src/main.rs"
+
+[[bin]]
+name = "launcher"
+path = "src/launcher.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1.0", features = ["full"] }
+tauri = { version = "2.0.0", features = ["tray-icon"] }
+windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }
+tauri-plugin-shell = "2.0.0"
+tauri-plugin-dialog = "2.0.0"
+tauri-plugin-fs = "2.0.0"
+sysinfo = "0.30.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
