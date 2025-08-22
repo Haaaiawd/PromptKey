@@ -1,11 +1,25 @@
 [package]
-name = "test_uia"
+name = "prompt_manager_scripts"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[[bin]]
+name = "test_uia"
+path = "test_uia.rs"
+
+[[bin]]
+name = "ide_compatibility_test"
+path = "ide_compatibility_test.rs"
 
 [dependencies]
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_Accessibility",
     "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
 ] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }

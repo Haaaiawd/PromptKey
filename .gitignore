@@ -1,3 +1,51 @@
+###############
+# OS / Editor #
+###############
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
 
-# Environment variables
+###############
+# Rust / Cargo #
+###############
+target/
+**/*.rs.bk
+Cargo.lock.bk
+
+# 忽略编译过程中产生的临时文件和增量编译缓存
+**/incremental/
+**/deps/
+**/build/
+**/examples/
+**/native/
+
+###############
+# Tauri / Web  #
+###############
+dist/
+build/
+node_modules/
+
+###########
+# Binaries #
+###########
+*.exe
+*.dll
+*.pdb
+*.dSYM/
+
+########
+# Logs #
+########
+logs/
+*.log
+
+########################
+# Env / Local settings #
+########################
+.env
+.env.*
 .env.local
+*.local.yaml
