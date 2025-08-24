@@ -111,7 +111,7 @@ fn default_allow_clipboard() -> bool {
 }
 
 fn default_uia_value_pattern_mode() -> String {
-    "append".to_string() // 只允许 append 模式
+    "insert".to_string() // 默认在光标处插入
 }
 
 fn default_debug_mode() -> bool {

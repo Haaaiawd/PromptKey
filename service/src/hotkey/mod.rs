@@ -212,7 +212,7 @@ impl HotkeyService {
         let tx = self.hotkey_manager.tx.clone();
         let (init_tx, init_rx) = mpsc::channel::<u32>();
         
-        // 在单独的线程中运行消息循环
+    // 在单独的线程中运行消息循环
     let thread_handle = std::thread::spawn(move || -> StdResult<(), Box<dyn std::error::Error + Send + 'static>> {
             log::debug!("Starting hotkey message loop in separate thread");
             let thread_id = unsafe { GetCurrentThreadId() };

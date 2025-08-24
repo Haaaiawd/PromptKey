@@ -37,18 +37,27 @@ pub enum InjectionStrategy {
 #[derive(Debug, Clone)]
 pub enum EditorType {
     Generic,
+    #[allow(dead_code)]
     Scintilla,      // Notepad++
+    #[allow(dead_code)]
     Electron,       // VS Code, Atom
+    #[allow(dead_code)]
     WPF,           // Visual Studio
+    #[allow(dead_code)]
     Swing,         // IntelliJ IDEA, Eclipse
+    #[allow(dead_code)]
     Qt,            // Qt-based editors
 }
 
 #[derive(Debug, Clone)]
 pub struct EditorDetection {
+    #[allow(dead_code)]
     pub editor_type: EditorType,
+    #[allow(dead_code)]
     pub class_name: String,
+    #[allow(dead_code)]
     pub framework_id: String,
+    #[allow(dead_code)]
     pub process_name: String,
 }
 
@@ -96,293 +105,143 @@ impl Injector {
     }
 
     fn effective_strategies_for(&self, app_name: &str) -> Vec<InjectionStrategy> {
-        // 获取应用特定配置
-        let app_config = self.config.get_app_config(app_name);
-        
-        // 构建策略列表：primary + fallback
-        let mut strategies = Vec::new();
-        
-        // 添加主要策略
-        if let Some(primary_strategy) = self.parse_strategy(&app_config.strategies.primary) {
-            strategies.push(primary_strategy);
-        }
-        
-        // 添加回退策略
-        for fallback in &app_config.strategies.fallback {
-            if let Some(fallback_strategy) = self.parse_strategy(fallback) {
-                if !strategies.contains(&fallback_strategy) {
-                    strategies.push(fallback_strategy);
-                }
-            }
-        }
-        
-        // 如果没有配置策略，使用默认顺序
-        if strategies.is_empty() {
-            strategies = self.strategies.clone();
-        }
-        
-        log::debug!("Effective strategies for {}: {:?}", app_name, strategies);
-        strategies
-    }
-    
-    fn parse_strategy(&self, strategy_name: &str) -> Option<InjectionStrategy> {
-        match strategy_name.to_lowercase().as_str() {
-            "uia" | "textpattern_enhanced" => Some(InjectionStrategy::UIA),
-            "clipboard" => Some(InjectionStrategy::Clipboard),
-            "sendinput" => Some(InjectionStrategy::SendInput),
-            _ => None,
-        }
-    }
-    
-    fn inject_via_uia(&self, text: &str, context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
-        log::debug!("Attempting UIA injection");
-        
-        // 将目标窗口前置，提升跨应用稳定性
-        unsafe {
-            if !context.window_handle.0.is_null() {
-                let _ = SetForegroundWindow(context.window_handle);
-            }
-        }
-        
-        // 根据应用类型添加延迟
-        let pre_inject_delay = self.get_pre_inject_delay(&context.app_name);
-        if pre_inject_delay > 0 {
-            log::debug!("Pre-injection delay: {}ms for app: {}", pre_inject_delay, context.app_name);
-            std::thread::sleep(Duration::from_millis(pre_inject_delay));
-        }
-        
-        // 初始化COM
-        unsafe {
-            let result = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            if result.is_err() {
-                return Err(format!("COM initialization failed with HRESULT: {:?}", result).into());
-            }
-        }
-        
-        // 获取UI自动化对象
-        let automation: IUIAutomation = unsafe {
-            match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
-                Ok(instance) => instance,
-                Err(e) => return Err(e.into()),
-            }
-        };
-        
-        // 获取焦点元素
-        let focused_element = unsafe {
-            match automation.GetFocusedElement() {
-                Ok(element) => element,
-                Err(e) => return Err(e.into()),
-            }
-        };
-        
-        // 检测编辑器类型并应用特殊处理
-        let editor_detection = self.detect_editor_type(&focused_element, &context.app_name)?;
-        log::debug!("Detected editor type: {:?} for app: {}", editor_detection.editor_type, context.app_name);
-
-        // 在焦点元素下寻找真正可编辑的子元素（ValuePattern/TextPattern）
-        let target_element = find_editable_element(&automation, &focused_element)
-            .unwrap_or(focused_element.clone());
-
-        // 根据编辑器类型应用特殊的焦点处理
-        self.apply_editor_specific_focus(&target_element, &editor_detection)?;
-        
-        // 检查是否为密码框
-        let is_password = unsafe {
-            match focused_element.CurrentIsPassword() {
-                Ok(result) => result,
-                Err(e) => return Err(e.into()),
-            }
-        };
-        
-        if is_password.as_bool() {
-            return Err("Cannot inject into password fields".into());
-        }
-        
-        // 尝试使用ValuePattern
-    let value_pattern_result = unsafe { target_element.GetCurrentPattern(UIA_ValuePatternId) };
-        
-        if let Ok(pattern) = value_pattern_result {
-            let value_pattern: IUIAutomationValuePattern = pattern.cast()?;
-            // 先判断是否只读
-            let read_only = unsafe { value_pattern.CurrentIsReadOnly()? }.as_bool();
-            if read_only {
-                log::warn!("ValuePattern is read-only on target element; trying TextPattern/SendInput fallback");
-            } else {
-            
-            // 根据配置选择覆盖或末尾追加
-            let final_text = if self.config.injection.uia_value_pattern_mode == "append" {
-                let current_value = unsafe { value_pattern.CurrentValue() };
-                match current_value {
-                    Ok(val) => format!("{}{}", val.to_string(), text),
-                    Err(_) => text.to_string(),
-                }
-            } else {
-                // overwrite
-                text.to_string()
-            };
-            
-            // 使用 SetValue 注入文本
-            unsafe {
-                value_pattern.SetValue(&final_text.into())?;
-            }
-            // 轻微等待后做读回校验，避免“看似成功但实际未变”的情况（如 VS Code）
-            let mut ok = false;
-            for _ in 0..3 {
-                std::thread::sleep(Duration::from_millis(60));
-                let verify_result = unsafe { value_pattern.CurrentValue() };
-                if let Ok(v) = verify_result {
-                    let v = v.to_string();
-                    if self.config.injection.uia_value_pattern_mode == "append" {
-                        if v.ends_with(text) { ok = true; break; }
-                    } else {
-                        // 覆盖模式下 final_text 等于 text
-                        if v == text { ok = true; break; }
-                    }
-                }
-            }
-            if ok {
-                return Ok(());
-            } else {
-                log::warn!("UIA SetValue verification failed; trying clipboard paste then SendInput");
-                // 优先尝试剪贴板粘贴（更快且更稳定），最后再回退 SendInput
-                if self.config.injection.allow_clipboard {
-                    if let Err(e) = self.inject_via_clipboard(text, context) {
-                        log::warn!("Clipboard paste fallback failed: {}. Using SendInput.", e);
-                        self.type_text_via_sendinput(text)?;
-                    }
-                } else {
-                    self.type_text_via_sendinput(text)?;
-                }
-                return Ok(());
-            }
-            }
-        }
-        
-        // 如果没有 ValuePattern，则尝试 TextPattern + SendInput 回退
-        log::debug!("Trying to get TextPattern");
-    let text_pattern_result = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) };
-        
-        if let Ok(pattern) = text_pattern_result {
-            log::debug!("TextPattern found - trying InsertText if supported, else SendInput");
-            let text_pattern: IUIAutomationTextPattern = pattern.cast()?;
-            
-            // 尝试获取当前选区
-            let selection_result = unsafe { text_pattern.GetSelection() };
-            if let Ok(selection) = selection_result {
-                let selection_length = unsafe { selection.Length()? };
-                log::debug!("Selection length: {}", selection_length);
-                
-                if selection_length > 0 {
-                    // 有选区，先删除选区内容，然后在当前位置插入新文本
-                    log::debug!("Replacing selected text by deleting selection and inserting new text");
-                    let text_range = unsafe { selection.GetElement(0)? };
-                    unsafe {
-                        // 选中范围并删除内容（通过将范围折叠到起点来删除选中内容）
-                        text_range.Select()?;
-                    }
-                    log::debug!("Selection cleared, now inserting new text");
-                } else {
-                    // 根据配置决定插入位置：当前光标位置或文档末尾
-                    if self.config.injection.uia_value_pattern_mode == "append" {
-                        // 移动到文档末尾
-                        log::debug!("Appending at end of document");
-                        let doc_range = unsafe { text_pattern.DocumentRange()? };
-                        unsafe {
-                            // 将光标移到末尾
-                            let _ = doc_range.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1_000_000);
-                            let _ = doc_range.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1_000_000);
-                            doc_range.Select()?;
-                        }
-                        log::debug!("Caret moved to end via TextPattern");
-                    } else {
-                        // 在当前光标位置插入
-                        log::debug!("Inserting at current cursor position");
-                        // 当前光标位置已经正确，不需要额外移动
-                    }
-                }
-            } else {
-                // 无法获取选区信息，回退到文档末尾追加
-                log::debug!("Could not get selection, falling back to end of document");
-                let doc_range = unsafe { text_pattern.DocumentRange()? };
-                unsafe {
-                    // 将光标移到末尾
-                    let _ = doc_range.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1_000_000);
-                    let _ = doc_range.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1_000_000);
-                    doc_range.Select()?;
-                }
-                log::debug!("Caret moved to end via TextPattern");
-            }
-
-            // 根据编辑器类型选择最优注入策略
-            let editor_detection = self.detect_editor_type(&target_element, &context.app_name)?;
-            match editor_detection.editor_type {
-                EditorType::Electron => {
-                    // VS Code等Electron应用，SendInput通常更稳定
-                    log::debug!("Using SendInput for Electron-based editor");
-                    self.type_text_via_sendinput(text)?;
-                }
-                EditorType::Swing => {
-                    // Java Swing应用，尽量使用剪贴板
-                    if self.config.injection.allow_clipboard {
-                        match self.inject_via_clipboard(text, context) {
-                            Ok(_) => {
-                                log::info!("Text injected via Clipboard for Swing editor");
-                                return Ok(());
-                            }
-                            Err(e) => {
-                                log::warn!("Clipboard paste failed for Swing: {}. Trying SendInput.", e);
-                                self.type_text_via_sendinput(text)?;
-                            }
-                        }
-                    } else {
-                        self.type_text_via_sendinput(text)?;
-                    }
-                }
-                _ => {
-                    // 通用策略：优先剪贴板，回退SendInput
-                    if self.config.injection.allow_clipboard {
-                        match self.inject_via_clipboard(text, context) {
-                            Ok(_) => {
-                                log::info!("Text injected via Clipboard after TextPattern caret placement");
-                                return Ok(());
-                            }
-                            Err(e) => {
-                                log::warn!("Clipboard paste after TextPattern failed: {}. Falling back to SendInput.", e);
-                            }
-                        }
-                    }
-                    // 回退为 SendInput 模拟键入
-                    self.type_text_via_sendinput(text)?;
-                }
-            }
-            log::info!("Text injected via TextPattern + fallback strategy");
-            return Ok(());
+        // 优先使用应用级策略；否则使用全局顺序
+        let app_cfg = self.config.get_app_config(app_name);
+        let mut order: Vec<String> = Vec::new();
+        if !app_cfg.strategies.primary.is_empty() {
+            order.push(app_cfg.strategies.primary.to_lowercase());
+            for f in app_cfg.strategies.fallback { order.push(f.to_lowercase()); }
         } else {
-            log::debug!("TextPattern not available");
+            order = self.config.injection.order.iter().map(|s| s.to_lowercase()).collect();
         }
-        
-        // 如果UIA完全不可用，根据编辑器类型选择最佳回退策略
-        let editor_detection = self.detect_editor_type(&focused_element, &context.app_name).unwrap_or(EditorDetection {
+
+        // 去重并映射到枚举
+        let mut seen = std::collections::HashSet::new();
+        let mut mapped = Vec::new();
+        for s in order {
+            let key = s.as_str();
+            let variant = match key {
+                "uia" | "textpattern_enhanced" => Some(InjectionStrategy::UIA),
+                "clipboard" => Some(InjectionStrategy::Clipboard),
+                "sendinput" => Some(InjectionStrategy::SendInput),
+                _ => { log::debug!("Unknown strategy '{}' ignored", s); None }
+            };
+            if let Some(v) = variant {
+                let name = match v { InjectionStrategy::UIA => "uia", InjectionStrategy::Clipboard => "clipboard", InjectionStrategy::SendInput => "sendinput" };
+                if seen.insert(name.to_string()) { mapped.push(v); }
+            }
+        }
+        if mapped.is_empty() { mapped.push(InjectionStrategy::UIA); }
+        mapped
+    }
+
+    fn inject_via_uia(&self, text: &str, context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
+        log::debug!("inject_via_uia starting; mode={}", self.config.injection.uia_value_pattern_mode);
+
+        // 将目标窗口置前，稍等焦点稳定
+        unsafe { let _ = SetForegroundWindow(context.window_handle); }
+        std::thread::sleep(Duration::from_millis(self.get_pre_inject_delay(&context.app_name)));
+
+        // 初始化 COM 并创建 UIAutomation
+        unsafe { let _ = CoInitializeEx(None, COINIT_MULTITHREADED); }
+        let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+
+        // 获取聚焦元素，必要时在其子树中寻找可编辑控件
+        let focused_element = unsafe { automation.GetFocusedElement()? };
+        let target_element = find_editable_element(&automation, &focused_element).unwrap_or(focused_element.clone());
+
+        // 应用一些编辑器特定的焦点处理
+        let detection = self.detect_editor_type(&target_element, &context.app_name).unwrap_or(EditorDetection{
             editor_type: EditorType::Generic,
             class_name: "Unknown".to_string(),
             framework_id: "Unknown".to_string(),
-            process_name: context.app_name.clone(),
+            process_name: context.app_name.clone()
         });
-        
-        log::warn!("No UIA patterns available for {:?} editor, trying fallback strategies", editor_detection.editor_type);
-        
-        // 优先使用剪贴板（兼容性好）
-        if self.config.injection.allow_clipboard {
-            if let Ok(_) = self.inject_via_clipboard(text, context) {
-                log::info!("Text injected via Clipboard fallback for {:?} editor", editor_detection.editor_type);
-                return Ok(());
+        let _ = self.apply_editor_specific_focus(&target_element, &detection);
+
+        // 如果是密码或不可编辑，直接走粘贴/SendInput
+        let is_password = unsafe { target_element.CurrentIsPassword().unwrap_or(BOOL(0)).as_bool() };
+        if is_password { log::warn!("Target element is password field; bypassing ValuePattern"); }
+
+        match self.config.injection.uia_value_pattern_mode.as_str() {
+            "insert" => {
+                // 保持当前光标/选区：如果能拿到 TextPattern，仅用于确认选区，不移动光标
+                if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) } {
+                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
+                        if let Ok(sel) = unsafe { tp.GetSelection() } {
+                            let len = unsafe { sel.Length().unwrap_or(0) }; // 仅日志用途
+                            log::debug!("Current selection count: {}", len);
+                        }
+                    }
+                }
+
+                // 执行插入：优先剪贴板，失败回退 SendInput
+                if self.config.injection.allow_clipboard {
+                    if let Err(e) = self.inject_via_clipboard(text, context) {
+                        log::warn!("Clipboard insert failed: {}. Fallback to SendInput.", e);
+                        self.type_text_via_sendinput(text)?;
+                    }
+                } else {
+                    self.type_text_via_sendinput(text)?;
+                }
+                Ok(())
+            }
+            mode => {
+                // 非 insert 模式：尝试 ValuePattern（append/overwrite），失败走 TextPattern + 粘贴/SendInput
+                if !is_password {
+                    if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_ValuePatternId) } {
+                        if let Ok(vp) = p.cast::<IUIAutomationValuePattern>() {
+                            let read_only = unsafe { vp.CurrentIsReadOnly().unwrap_or(BOOL(1)).as_bool() };
+                            if !read_only {
+                                let final_text = if mode == "append" {
+                                    match unsafe { vp.CurrentValue() } {
+                                        Ok(val) => format!("{}{}", val.to_string(), text),
+                                        Err(_) => text.to_string(),
+                                    }
+                                } else { text.to_string() };
+
+                                unsafe { vp.SetValue(&final_text.into())?; }
+
+                                // 简单校验
+                                let mut ok = false;
+                                for _ in 0..self.config.injection.max_retries.max(1) {
+                                    std::thread::sleep(Duration::from_millis(60));
+                                    if let Ok(v) = unsafe { vp.CurrentValue() } {
+                                        let v = v.to_string();
+                                        if mode == "append" { if v.ends_with(text) { ok = true; break; } }
+                                        else { if v == text { ok = true; break; } }
+                                    }
+                                }
+                                if ok { return Ok(()); }
+                                log::warn!("UIA ValuePattern verification failed; falling back");
+                            } else {
+                                log::warn!("ValuePattern is read-only; falling back");
+                            }
+                        }
+                    }
+                }
+
+                // TextPattern：定位末尾（仅 append），否则保持原位
+                if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) } {
+                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
+                        if mode == "append" {
+                            if let Ok(doc) = unsafe { tp.DocumentRange() } {
+                                unsafe {
+                                    let _ = doc.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1_000_000);
+                                    let _ = doc.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1_000_000);
+                                    let _ = doc.Select();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if self.config.injection.allow_clipboard {
+                    if let Ok(_) = self.inject_via_clipboard(text, context) { return Ok(()); }
+                }
+                self.type_text_via_sendinput(text)
             }
         }
-        
-        // 最后使用SendInput
-        self.type_text_via_sendinput(text)?;
-        log::info!("Text injected via SendInput fallback for {:?} editor", editor_detection.editor_type);
-        Ok(())
     }
     
     fn inject_via_clipboard(&self, text: &str, _context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
@@ -675,10 +534,13 @@ fn find_editable_element(
         let has_text = unsafe { node.GetCurrentPattern(UIA_TextPatternId).is_ok() };
         
         if has_value || has_text {
-            let priority = match control_type {
-                UIA_DocumentControlTypeId => 3,  // 最高优先级：Document + Pattern
-                UIA_EditControlTypeId => 2,      // 中等优先级：Edit + Pattern  
-                _ => 1,                           // 低优先级：其他 + Pattern
+            // 使用if-else结构替代match表达式以避免不可达模式警告
+            let priority = if control_type == UIA_DocumentControlTypeId {
+                3  // 最高优先级：Document + Pattern
+            } else if control_type == UIA_EditControlTypeId {
+                2  // 中等优先级：Edit + Pattern
+            } else {
+                1  // 低优先级：其他 + Pattern
             };
             candidates.push((priority, node.clone()));
         }
