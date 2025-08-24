@@ -62,6 +62,7 @@ pub struct EditorDetection {
 }
 
 pub struct Injector {
+    #[allow(dead_code)]
     strategies: Vec<InjectionStrategy>,
     config: Config,
 }
@@ -157,22 +158,71 @@ impl Injector {
             framework_id: "Unknown".to_string(),
             process_name: context.app_name.clone()
         });
-        let _ = self.apply_editor_specific_focus(&target_element, &detection);
+    // insert 模式下尽量避免 SetFocus 触发某些控件的“全选”行为
 
         // 如果是密码或不可编辑，直接走粘贴/SendInput
         let is_password = unsafe { target_element.CurrentIsPassword().unwrap_or(BOOL(0)).as_bool() };
         if is_password { log::warn!("Target element is password field; bypassing ValuePattern"); }
 
-        match self.config.injection.uia_value_pattern_mode.as_str() {
+    match self.config.injection.uia_value_pattern_mode.as_str() {
             "insert" => {
-                // 保持当前光标/选区：如果能拿到 TextPattern，仅用于确认选区，不移动光标
-                if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) } {
-                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
-                        if let Ok(sel) = unsafe { tp.GetSelection() } {
-                            let len = unsafe { sel.Length().unwrap_or(0) }; // 仅日志用途
-                            log::debug!("Current selection count: {}", len);
+                // 浏览器/富文本控件可能在 onfocus 时全选；先显式聚焦，等待事件完成，再折叠选区
+                let _ = self.apply_editor_specific_focus(&target_element, &detection);
+                let mut delay = self.get_pre_inject_delay(&context.app_name);
+                if delay < 120 { delay = 120; }
+                std::thread::sleep(Duration::from_millis(delay));
+
+                // 优先使用 TextPattern2 的 GetCaretRange 折叠到插入点（浏览器实现更可靠）
+                let mut collapsed_by_tp2 = false;
+                if let Ok(p2) = unsafe { target_element.GetCurrentPattern(UIA_TextPattern2Id) } {
+                    if let Ok(tp2) = p2.cast::<IUIAutomationTextPattern2>() {
+                        let mut active = BOOL(0);
+                        if let Ok(caret_range) = unsafe { tp2.GetCaretRange(&mut active) } {
+                            unsafe { let _ = caret_range.Select(); }
+                            collapsed_by_tp2 = true;
+                            log::debug!("Collapsed selection via TextPattern2.GetCaretRange (active={})", active.as_bool());
                         }
                     }
+                }
+
+                // 使用 TextPattern 检测并折叠选区（若未通过 TP2 折叠）
+                let mut selection_was_nonempty = false;
+                let mut collapse_failed = false;
+                if !collapsed_by_tp2 { if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) } {
+                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
+                        if let Ok(sel_array) = unsafe { tp.GetSelection() } {
+                            let count = unsafe { sel_array.Length().unwrap_or(0) };
+                            if count > 0 {
+                                if let Ok(range) = unsafe { sel_array.GetElement(0) } {
+                                    let sample_bstr = unsafe { range.GetText(1).unwrap_or(BSTR::new()) };
+                                    let has_sel = !sample_bstr.to_string().is_empty();
+                                    if has_sel {
+                                        selection_was_nonempty = true;
+                                        // 折叠到末端
+                                        unsafe {
+                                            let _ = range.MoveEndpointByRange(
+                                                TextPatternRangeEndpoint_Start,
+                                                &range,
+                                                TextPatternRangeEndpoint_End,
+                                            );
+                                            let _ = range.Select();
+                                        }
+                                        // 重新检查是否仍非空（极端情况下某些控件不接受该操作）
+                                        if let Ok(after_text) = unsafe { range.GetText(1) } {
+                                            if !after_text.to_string().is_empty() { collapse_failed = true; }
+                                        }
+                                        log::debug!("Tried to collapse selection via TextPattern; failed? {}", collapse_failed);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } }
+
+                // 如果曾经有非空选区且折叠失败，发送一次 VK_RIGHT 折叠
+                if selection_was_nonempty && collapse_failed {
+                    let _ = self.send_vk(VIRTUAL_KEY(0x27)); // VK_RIGHT
+                    std::thread::sleep(Duration::from_millis(20));
                 }
 
                 // 执行插入：优先剪贴板，失败回退 SendInput
@@ -187,6 +237,8 @@ impl Injector {
                 Ok(())
             }
             mode => {
+                // 非 insert：可安全地应用焦点处理
+                let _ = self.apply_editor_specific_focus(&target_element, &detection);
                 // 非 insert 模式：尝试 ValuePattern（append/overwrite），失败走 TextPattern + 粘贴/SendInput
                 if !is_password {
                     if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_ValuePatternId) } {
@@ -474,6 +526,17 @@ impl Injector {
                     return Err("SendInput failed".into());
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn send_vk(&self, vk: VIRTUAL_KEY) -> StdResult<(), Box<dyn std::error::Error>> {
+        unsafe {
+            let mut inputs = [
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: KEYBD_EVENT_FLAGS(0), time: 0, dwExtraInfo: 0 } } },
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: KEYBD_EVENT_FLAGS(KEYEVENTF_KEYUP.0), time: 0, dwExtraInfo: 0 } } },
+            ];
+            if SendInput(&mut inputs, std::mem::size_of::<INPUT>() as i32) == 0 { return Err("SendInput VK failed".into()); }
         }
         Ok(())
     }
