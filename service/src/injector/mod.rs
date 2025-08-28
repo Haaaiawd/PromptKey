@@ -67,6 +67,21 @@ pub struct Injector {
     config: Config,
 }
 
+fn describe_element(el: &IUIAutomationElement) -> String {
+    unsafe {
+        let class = el.CurrentClassName().unwrap_or_else(|_| "".into()).to_string();
+        let fw = el.CurrentFrameworkId().unwrap_or_else(|_| "".into()).to_string();
+        let ct = el.CurrentControlType().map(|v| v.0).unwrap_or(0);
+        let has_val = el.GetCurrentPattern(UIA_ValuePatternId).is_ok();
+        let has_txt = el.GetCurrentPattern(UIA_TextPatternId).is_ok();
+        let has_tp2 = el.GetCurrentPattern(UIA_TextPattern2Id).is_ok();
+        format!(
+            "class='{}', framework='{}', controlType={}, patterns: value={}, text={}, text2={}",
+            class, fw, ct, has_val, has_txt, has_tp2
+        )
+    }
+}
+
 impl Injector {
     pub fn new(strategies: Vec<InjectionStrategy>, config: Config) -> Self {
         log::debug!("Creating injector with strategies: {:?}", strategies);
@@ -77,7 +92,12 @@ impl Injector {
     log::info!("Attempting to inject text using available strategies");
         log::debug!("Text to inject: {}", text);
         log::debug!("Context: app_name={}, window_title={}", context.app_name, context.window_title);
-        
+        log::debug!(
+            "Config: order={:?}, allow_clipboard={}, mode={}",
+            self.config.injection.order,
+            self.config.injection.allow_clipboard,
+            self.config.injection.uia_value_pattern_mode
+        );
     let effective = self.effective_strategies_for(&context.app_name);
     log::debug!("Effective strategy order: {:?}", effective);
 
@@ -148,8 +168,11 @@ impl Injector {
         let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
 
         // 获取聚焦元素，必要时在其子树中寻找可编辑控件
-        let focused_element = unsafe { automation.GetFocusedElement()? };
-        let target_element = find_editable_element(&automation, &focused_element).unwrap_or(focused_element.clone());
+    let focused_element = unsafe { automation.GetFocusedElement()? };
+    let target_element = find_editable_element(&automation, &focused_element).unwrap_or(focused_element.clone());
+
+    log::debug!("Focused: {}", describe_element(&focused_element));
+    log::debug!("Target : {}", describe_element(&target_element));
 
         // 应用一些编辑器特定的焦点处理
         let detection = self.detect_editor_type(&target_element, &context.app_name).unwrap_or(EditorDetection{
@@ -166,66 +189,113 @@ impl Injector {
 
     match self.config.injection.uia_value_pattern_mode.as_str() {
             "insert" => {
-                // 浏览器/富文本控件可能在 onfocus 时全选；先显式聚焦，等待事件完成，再折叠选区
-                let _ = self.apply_editor_specific_focus(&target_element, &detection);
-                let mut delay = self.get_pre_inject_delay(&context.app_name);
-                if delay < 120 { delay = 120; }
-                std::thread::sleep(Duration::from_millis(delay));
+                // 避免额外 SetFocus 触发全选；直接在“真正聚焦的元素”上折叠选区
+                let collapse_on = &focused_element;
 
-                // 优先使用 TextPattern2 的 GetCaretRange 折叠到插入点（浏览器实现更可靠）
+                // 优先使用 TextPattern2 的 GetCaretRange 折叠
                 let mut collapsed_by_tp2 = false;
-                if let Ok(p2) = unsafe { target_element.GetCurrentPattern(UIA_TextPattern2Id) } {
+                if let Ok(p2) = unsafe { collapse_on.GetCurrentPattern(UIA_TextPattern2Id) } {
                     if let Ok(tp2) = p2.cast::<IUIAutomationTextPattern2>() {
                         let mut active = BOOL(0);
                         if let Ok(caret_range) = unsafe { tp2.GetCaretRange(&mut active) } {
                             unsafe { let _ = caret_range.Select(); }
                             collapsed_by_tp2 = true;
-                            log::debug!("Collapsed selection via TextPattern2.GetCaretRange (active={})", active.as_bool());
+                            log::debug!("[insert] TP2.GetCaretRange -> Select (active={})", active.as_bool());
+                        } else {
+                            log::debug!("[insert] TP2.GetCaretRange not available");
                         }
+                    } else {
+                        log::debug!("[insert] TextPattern2 cast failed");
                     }
+                } else {
+                    log::debug!("[insert] TextPattern2 not available on focused element");
                 }
 
                 // 使用 TextPattern 检测并折叠选区（若未通过 TP2 折叠）
                 let mut selection_was_nonempty = false;
                 let mut collapse_failed = false;
-                if !collapsed_by_tp2 { if let Ok(p) = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId) } {
-                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
-                        if let Ok(sel_array) = unsafe { tp.GetSelection() } {
-                            let count = unsafe { sel_array.Length().unwrap_or(0) };
-                            if count > 0 {
-                                if let Ok(range) = unsafe { sel_array.GetElement(0) } {
-                                    let sample_bstr = unsafe { range.GetText(1).unwrap_or(BSTR::new()) };
-                                    let has_sel = !sample_bstr.to_string().is_empty();
-                                    if has_sel {
-                                        selection_was_nonempty = true;
-                                        // 折叠到末端
-                                        unsafe {
-                                            let _ = range.MoveEndpointByRange(
+                if !collapsed_by_tp2 {
+                    if let Ok(p) = unsafe { collapse_on.GetCurrentPattern(UIA_TextPatternId) } {
+                        if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
+                            if let Ok(sel_array) = unsafe { tp.GetSelection() } {
+                                let count = unsafe { sel_array.Length().unwrap_or(0) };
+                                if count > 0 {
+                                    if let Ok(range) = unsafe { sel_array.GetElement(0) } {
+                                        let has_sel = match unsafe { range.CompareEndpoints(
+                                            TextPatternRangeEndpoint_Start,
+                                            &range,
+                                            TextPatternRangeEndpoint_End,
+                                        ) } {
+                                            Ok(cmp) => cmp != 0,
+                                            Err(_) => true,
+                                        };
+                                        log::debug!("[insert] TP1 selection detected? {}", has_sel);
+                                        if has_sel {
+                                            selection_was_nonempty = true;
+                                            unsafe {
+                                                let _ = range.MoveEndpointByRange(
+                                                    TextPatternRangeEndpoint_Start,
+                                                    &range,
+                                                    TextPatternRangeEndpoint_End,
+                                                );
+                                                let _ = range.Select();
+                                            }
+                                            collapse_failed = match unsafe { range.CompareEndpoints(
                                                 TextPatternRangeEndpoint_Start,
                                                 &range,
                                                 TextPatternRangeEndpoint_End,
-                                            );
-                                            let _ = range.Select();
+                                            ) } { Ok(cmp) => cmp != 0, Err(_) => false };
+                                            log::debug!("[insert] TP1 collapse done; failed? {}", collapse_failed);
                                         }
-                                        // 重新检查是否仍非空（极端情况下某些控件不接受该操作）
-                                        if let Ok(after_text) = unsafe { range.GetText(1) } {
-                                            if !after_text.to_string().is_empty() { collapse_failed = true; }
-                                        }
-                                        log::debug!("Tried to collapse selection via TextPattern; failed? {}", collapse_failed);
+                                    }
+                                }
+                            }
+                        } else {
+                            log::debug!("[insert] TextPattern cast failed on focused element");
+                        }
+                    } else {
+                        log::debug!("[insert] TextPattern not available on focused element");
+                    }
+                }
+
+                // 如果曾经有非空选区且折叠失败，发送 VK_RIGHT 折叠；然后二次验证
+                if selection_was_nonempty && collapse_failed {
+                    log::debug!("[insert] Collapsing via VK_RIGHT (phase1)");
+                    let _ = self.send_vk(VIRTUAL_KEY(0x27)); // VK_RIGHT
+                    std::thread::sleep(Duration::from_millis(60));
+                } else if !collapsed_by_tp2 && !selection_was_nonempty {
+                    // UIA 无法确认：用剪贴板探针判断是否有选区
+                    if self.probe_selection_via_clipboard()? {
+                        log::debug!("[insert] Clipboard probe detected selection; VK_RIGHT (phase1)");
+                        let _ = self.send_vk(VIRTUAL_KEY(0x27));
+                        std::thread::sleep(Duration::from_millis(60));
+                    }
+                }
+
+                // 二阶段：再次检查是否仍存在非空选区，必要时再次 VK_RIGHT
+                if let Ok(p) = unsafe { collapse_on.GetCurrentPattern(UIA_TextPatternId) } {
+                    if let Ok(tp) = p.cast::<IUIAutomationTextPattern>() {
+                        if let Ok(sel_array) = unsafe { tp.GetSelection() } {
+                            if unsafe { sel_array.Length().unwrap_or(0) } > 0 {
+                                if let Ok(range) = unsafe { sel_array.GetElement(0) } {
+                                    let still_selected = match unsafe { range.CompareEndpoints(
+                                        TextPatternRangeEndpoint_Start,
+                                        &range,
+                                        TextPatternRangeEndpoint_End,
+                                    ) } { Ok(cmp) => cmp != 0, Err(_) => false };
+                                    log::debug!("[insert] Post-collapse check; still selected? {}", still_selected);
+                                    if still_selected {
+                                        log::debug!("[insert] Collapsing via VK_RIGHT (phase2)");
+                                        let _ = self.send_vk(VIRTUAL_KEY(0x27));
+                                        std::thread::sleep(Duration::from_millis(80));
                                     }
                                 }
                             }
                         }
                     }
-                } }
-
-                // 如果曾经有非空选区且折叠失败，发送一次 VK_RIGHT 折叠
-                if selection_was_nonempty && collapse_failed {
-                    let _ = self.send_vk(VIRTUAL_KEY(0x27)); // VK_RIGHT
-                    std::thread::sleep(Duration::from_millis(20));
                 }
 
-                // 执行插入：优先剪贴板，失败回退 SendInput
+                // 执行插入：优先剪贴板粘贴（折叠后更稳），失败再回退 SendInput
                 if self.config.injection.allow_clipboard {
                     if let Err(e) = self.inject_via_clipboard(text, context) {
                         log::warn!("Clipboard insert failed: {}. Fallback to SendInput.", e);
@@ -540,6 +610,98 @@ impl Injector {
         }
         Ok(())
     }
+
+    /// 粗略探测是否存在选区：
+    /// 尝试不破坏现有剪贴板内容的前提下，发送 Ctrl+C 看是否复制到文本。
+    /// 若成功复制出非空文本，视为存在选区。
+    /// 注意：部分应用会屏蔽该方式，函数返回“未知=false”。
+    fn probe_selection_via_clipboard(&self) -> StdResult<bool, Box<dyn std::error::Error>> {
+        // 备份当前剪贴板（仅文本）
+        let mut prev_text: Option<Vec<u16>> = None;
+        unsafe {
+            if OpenClipboard(HWND(std::ptr::null_mut())).is_ok() {
+                if IsClipboardFormatAvailable(CF_UNICODETEXT_CONST).is_ok() {
+                    if let Ok(h) = GetClipboardData(CF_UNICODETEXT_CONST) {
+                        let hg = HGLOBAL(h.0);
+                        let ptr = GlobalLock(hg) as *const u16;
+                        if !ptr.is_null() {
+                            let mut v = Vec::new();
+                            let mut p = ptr;
+                            loop {
+                                let ch = *p;
+                                v.push(ch);
+                                if ch == 0 { break; }
+                                p = p.add(1);
+                            }
+                            prev_text = Some(v);
+                            let _ = GlobalUnlock(hg);
+                        }
+                    }
+                }
+                let _ = CloseClipboard();
+            }
+        }
+
+        // 发送 Ctrl+C 复制
+        unsafe {
+            let mut inputs = [
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_CONTROL, wScan: VIRTUAL_KEY(0).0 as u16, dwFlags: KEYBD_EVENT_FLAGS(0), time: 0, dwExtraInfo: 0 } } },
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(0x43), wScan: 0, dwFlags: KEYBD_EVENT_FLAGS(0), time: 0, dwExtraInfo: 0 } } },
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(0x43), wScan: 0, dwFlags: KEYBD_EVENT_FLAGS(KEYEVENTF_KEYUP.0), time: 0, dwExtraInfo: 0 } } },
+                INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_CONTROL, wScan: VIRTUAL_KEY(0).0 as u16, dwFlags: KEYBD_EVENT_FLAGS(KEYEVENTF_KEYUP.0), time: 0, dwExtraInfo: 0 } } },
+            ];
+            let _ = SendInput(&mut inputs, std::mem::size_of::<INPUT>() as i32);
+        }
+        std::thread::sleep(Duration::from_millis(30));
+
+        // 检查当前剪贴板是否存在文本且非空
+        let mut has_selection = false;
+        unsafe {
+            if OpenClipboard(HWND(std::ptr::null_mut())).is_ok() {
+                if IsClipboardFormatAvailable(CF_UNICODETEXT_CONST).is_ok() {
+                    if let Ok(h) = GetClipboardData(CF_UNICODETEXT_CONST) {
+                        let hg = HGLOBAL(h.0);
+                        let ptr = GlobalLock(hg) as *const u16;
+                        if !ptr.is_null() {
+                            let mut len = 0usize;
+                            let mut p = ptr;
+                            loop {
+                                let ch = *p;
+                                if ch == 0 { break; }
+                                len += 1;
+                                p = p.add(1);
+                                if len > 0 { has_selection = true; break; }
+                            }
+                            let _ = GlobalUnlock(hg);
+                        }
+                    }
+                }
+                let _ = CloseClipboard();
+            }
+        }
+
+        // 恢复剪贴板
+        if let Some(v) = prev_text {
+            unsafe {
+                if OpenClipboard(HWND(std::ptr::null_mut())).is_ok() {
+                    let _ = EmptyClipboard();
+                    let bytes = (v.len() * std::mem::size_of::<u16>()) as usize;
+                    if let Ok(hmem) = GlobalAlloc(GMEM_MOVEABLE, bytes) {
+                        let ptr = GlobalLock(hmem) as *mut u8;
+                        if !ptr.is_null() {
+                            std::ptr::copy_nonoverlapping(v.as_ptr() as *const u8, ptr, bytes);
+                            let _ = GlobalUnlock(hmem);
+                            let _ = SetClipboardData(CF_UNICODETEXT_CONST, HANDLE(hmem.0));
+                        } else {
+                            let _ = GlobalFree(hmem);
+                        }
+                    }
+                    let _ = CloseClipboard();
+                }
+            }
+        }
+        Ok(has_selection)
+    }
 }
 
 /// 在元素子树中查找可编辑的元素（优先 ValuePattern，其次 TextPattern），限制遍历节点数避免卡顿
@@ -576,7 +738,7 @@ fn find_editable_element(
         }
     }
 
-    // 2) 回退：增强的BFS搜索，优先查找Document控件
+    // 2) 回退：增强的BFS搜索，优先查找Edit控件
     let walker = unsafe { automation.RawViewWalker().ok()? };
 
     // 两阶段搜索：先找Document控件，再找Edit控件
@@ -597,11 +759,11 @@ fn find_editable_element(
         let has_text = unsafe { node.GetCurrentPattern(UIA_TextPatternId).is_ok() };
         
         if has_value || has_text {
-            // 使用if-else结构替代match表达式以避免不可达模式警告
-            let priority = if control_type == UIA_DocumentControlTypeId {
-                3  // 最高优先级：Document + Pattern
-            } else if control_type == UIA_EditControlTypeId {
-                2  // 中等优先级：Edit + Pattern
+            // 优先 Edit，再 Document
+            let priority = if control_type == UIA_EditControlTypeId {
+                3  // 最高优先级：Edit + Pattern
+            } else if control_type == UIA_DocumentControlTypeId {
+                2  // 次优先级：Document + Pattern
             } else {
                 1  // 低优先级：其他 + Pattern
             };
