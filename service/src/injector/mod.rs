@@ -167,7 +167,7 @@ impl Injector {
         unsafe { let _ = CoInitializeEx(None, COINIT_MULTITHREADED); }
         let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
 
-        // 获取聚焦元素，必要时在其子树中寻找可编辑控件
+    // 获取聚焦元素，必要时在其子树中寻找可编辑控件
     let focused_element = unsafe { automation.GetFocusedElement()? };
     let target_element = find_editable_element(&automation, &focused_element).unwrap_or(focused_element.clone());
 
@@ -187,10 +187,27 @@ impl Injector {
         let is_password = unsafe { target_element.CurrentIsPassword().unwrap_or(BOOL(0)).as_bool() };
         if is_password { log::warn!("Target element is password field; bypassing ValuePattern"); }
 
-    match self.config.injection.uia_value_pattern_mode.as_str() {
+        // 根据控件能力与框架，动态决定本次的 effective_mode
+        let target_fw = unsafe { target_element.CurrentFrameworkId().unwrap_or_else(|_| "".into()).to_string() };
+        let target_ct = unsafe { target_element.CurrentControlType().map(|v| v.0).unwrap_or(0) };
+        let target_has_text = unsafe { target_element.GetCurrentPattern(UIA_TextPatternId).is_ok() };
+        let mut effective_mode = self.config.injection.uia_value_pattern_mode.clone();
+        if effective_mode.to_lowercase() != "insert" {
+            // 在 Chrome/Electron 等 Web/Electron 场景，强制按 insert 处理以避免 focus 全选导致替换
+            if target_fw.eq_ignore_ascii_case("Chrome") || target_fw.eq_ignore_ascii_case("WPF") || target_fw.eq_ignore_ascii_case("Win32") {
+                if target_ct == UIA_EditControlTypeId.0 && target_has_text {
+                    log::warn!("Overriding mode='{}' -> 'insert' for text-edit control in framework='{}'", effective_mode, target_fw);
+                    effective_mode = "insert".to_string();
+                }
+            }
+        }
+        log::debug!("effective_mode={}", effective_mode);
+
+    match effective_mode.as_str() {
             "insert" => {
                 // 避免额外 SetFocus 触发全选；直接在“真正聚焦的元素”上折叠选区
                 let collapse_on = &focused_element;
+                let is_chrome_like = target_fw.eq_ignore_ascii_case("Chrome");
 
                 // 优先使用 TextPattern2 的 GetCaretRange 折叠
                 let mut collapsed_by_tp2 = false;
@@ -262,13 +279,13 @@ impl Injector {
                 if selection_was_nonempty && collapse_failed {
                     log::debug!("[insert] Collapsing via VK_RIGHT (phase1)");
                     let _ = self.send_vk(VIRTUAL_KEY(0x27)); // VK_RIGHT
-                    std::thread::sleep(Duration::from_millis(60));
+                    std::thread::sleep(Duration::from_millis(if is_chrome_like { 120 } else { 60 }));
                 } else if !collapsed_by_tp2 && !selection_was_nonempty {
                     // UIA 无法确认：用剪贴板探针判断是否有选区
                     if self.probe_selection_via_clipboard()? {
                         log::debug!("[insert] Clipboard probe detected selection; VK_RIGHT (phase1)");
                         let _ = self.send_vk(VIRTUAL_KEY(0x27));
-                        std::thread::sleep(Duration::from_millis(60));
+                        std::thread::sleep(Duration::from_millis(if is_chrome_like { 120 } else { 60 }));
                     }
                 }
 
@@ -287,7 +304,7 @@ impl Injector {
                                     if still_selected {
                                         log::debug!("[insert] Collapsing via VK_RIGHT (phase2)");
                                         let _ = self.send_vk(VIRTUAL_KEY(0x27));
-                                        std::thread::sleep(Duration::from_millis(80));
+                                        std::thread::sleep(Duration::from_millis(if is_chrome_like { 150 } else { 80 }));
                                     }
                                 }
                             }
@@ -295,14 +312,20 @@ impl Injector {
                     }
                 }
 
-                // 执行插入：优先剪贴板粘贴（折叠后更稳），失败再回退 SendInput
-                if self.config.injection.allow_clipboard {
-                    if let Err(e) = self.inject_via_clipboard(text, context) {
-                        log::warn!("Clipboard insert failed: {}. Fallback to SendInput.", e);
+                // 执行插入：对 Chrome/Electron Edit 且无 TP2 的控件，优先 SendInput 以规避某些站点粘贴时的“全选替换”
+                let prefer_sendinput = is_chrome_like && !collapsed_by_tp2 && target_ct == UIA_EditControlTypeId.0;
+                if prefer_sendinput {
+                    log::debug!("[insert] Prefer SendInput typing for Chrome-like Edit without TextPattern2");
+                    self.type_text_via_sendinput(text)?;
+                } else {
+                    if self.config.injection.allow_clipboard {
+                        if let Err(e) = self.inject_via_clipboard(text, context) {
+                            log::warn!("Clipboard insert failed: {}. Fallback to SendInput.", e);
+                            self.type_text_via_sendinput(text)?;
+                        }
+                    } else {
                         self.type_text_via_sendinput(text)?;
                     }
-                } else {
-                    self.type_text_via_sendinput(text)?;
                 }
                 Ok(())
             }
@@ -352,6 +375,33 @@ impl Injector {
                                     let _ = doc.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1_000_000);
                                     let _ = doc.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 1_000_000);
                                     let _ = doc.Select();
+                                }
+                            }
+                        } else {
+                            // 在非 insert 模式的兜底路径（剪贴板/SendInput）之前，若为 Edit 且支持 TextPattern，尽量折叠当前选区避免替换
+                            if target_ct == UIA_EditControlTypeId.0 {
+                                if let Ok(sel_array) = unsafe { tp.GetSelection() } {
+                                    if unsafe { sel_array.Length().unwrap_or(0) } > 0 {
+                                        if let Ok(range) = unsafe { sel_array.GetElement(0) } {
+                                            let has_sel = match unsafe { range.CompareEndpoints(
+                                                TextPatternRangeEndpoint_Start,
+                                                &range,
+                                                TextPatternRangeEndpoint_End,
+                                            ) } { Ok(cmp) => cmp != 0, Err(_) => false };
+                                            if has_sel {
+                                                log::debug!("[non-insert] Collapsing selection before paste to avoid replacement");
+                                                unsafe {
+                                                    let _ = range.MoveEndpointByRange(
+                                                        TextPatternRangeEndpoint_Start,
+                                                        &range,
+                                                        TextPatternRangeEndpoint_End,
+                                                    );
+                                                    let _ = range.Select();
+                                                }
+                                                std::thread::sleep(Duration::from_millis(50));
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
