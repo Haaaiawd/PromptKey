@@ -1,12 +1,12 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// 隐藏控制台窗口（开发/发布均不弹出）
+#![windows_subsystem = "windows"]
 
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder, AppHandle
 };
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -38,8 +38,9 @@ impl ServiceState {
     fn is_running(&mut self) -> bool {
         if let Some(ref mut child) = self.process {
             match child.try_wait() {
-                Ok(Some(_)) => {
+                Ok(Some(status)) => {
                     // 进程已退出
+                    println!("服务进程已退出，退出状态: {:?}", status);
                     self.process = None;
                     false
                 }
@@ -47,8 +48,9 @@ impl ServiceState {
                     // 进程仍在运行
                     true
                 }
-                Err(_) => {
+                Err(e) => {
                     // 检查进程状态时出错
+                    eprintln!("检查服务进程状态时出错: {}", e);
                     self.process = None;
                     false
                 }
@@ -60,21 +62,34 @@ impl ServiceState {
     
     fn start_service(&mut self) -> Result<(), String> {
         if self.is_running() {
+            println!("服务已在运行中");
             return Ok(());
         }
         
         // 获取服务可执行文件路径
         let service_exe_path = resolve_service_exe_path()?;
+        println!("服务可执行文件路径: {}", service_exe_path);
         
-        // 启动服务进程
-        match Command::new(&service_exe_path)
-            .current_dir(std::env::current_dir().unwrap())
-            .spawn() {
+        // 启动服务进程（隐藏窗口，断开标准流）
+        let mut cmd = Command::new(&service_exe_path);
+        cmd.current_dir(std::env::current_dir().unwrap())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        match cmd.spawn() {
                 Ok(child) => {
+                    println!("服务启动成功，PID: {:?}", child.id());
                     self.process = Some(child);
                     Ok(())
                 }
                 Err(e) => {
+                    eprintln!("启动服务失败: {}", e);
                     Err(format!("启动服务失败: {}", e))
                 }
             }
@@ -138,6 +153,15 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(Mutex::new(ServiceState::new()))
+        // 关闭窗口改为隐藏到托盘
+        .on_window_event(|app, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             start_service,
             stop_service,
@@ -147,7 +171,8 @@ fn main() {
             get_all_prompts,
             create_prompt,
             update_prompt,
-            delete_prompt
+            delete_prompt,
+            reset_settings
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -162,6 +187,11 @@ fn main() {
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
+                        // 退出前先尝试停止服务
+                        if let Ok(service_state) = app.state::<Mutex<ServiceState>>().lock() {
+                            let mut ss = service_state;
+                            let _ = ss.stop_service();
+                        }
                         app.exit(0);
                     }
                     "show" => {
@@ -184,6 +214,8 @@ fn main() {
             let mut service_state = service_state.lock().unwrap();
             if let Err(e) = service_state.start_service() {
                 eprintln!("启动服务时出错: {}", e);
+            } else {
+                println!("服务启动成功");
             }
             
             Ok(())
@@ -526,4 +558,18 @@ fn get_settings() -> Result<serde_json::Value, String> {
         "hotkey": cfg.hotkey,
         "uia_mode": cfg.injection.uia_value_pattern_mode,
     }))
+}
+
+#[tauri::command]
+fn reset_settings() -> Result<String, String> {
+    // 删除现有配置文件
+    let path = config_path()?;
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("删除配置文件失败: {}", e))?;
+    }
+    
+    // 重新创建默认配置文件
+    let _ = load_or_default_config()?;
+    
+    Ok("设置已重置".into())
 }

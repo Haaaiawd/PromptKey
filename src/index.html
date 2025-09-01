@@ -2,135 +2,168 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" id="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prompt Manager</title>
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <div id="app">
+<body class="theme-light">
+    <div class="app-container">
+        <!-- 顶部状态栏 -->
         <header class="app-header">
-            <h1>Prompt Manager</h1>
-            <nav class="main-nav">
-                <button id="prompts-btn" class="nav-btn active">提示词</button>
-                <button id="settings-btn" class="nav-btn">设置</button>
-                <button id="market-btn" class="nav-btn">市场</button>
-                <button id="logs-btn" class="nav-btn">日志</button>
-            </nav>
+            <div class="header-left">
+                <h1>Prompt Manager</h1>
+            </div>
+            <div class="header-right">
+                <div class="app-status">
+                    <span class="status-label">状态:</span>
+                    <span class="status-active">运行中</span>
+                </div>
+            </div>
         </header>
         
-        <main class="app-main">
-            <div id="prompts-panel" class="panel active">
-                <div class="panel-header">
-                    <h2>提示词管理</h2>
-                    <div class="search-box">
-                        <input type="text" id="search-input" placeholder="搜索提示词...">
-                        <button id="add-prompt-btn" class="primary-btn">添加提示词</button>
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- 侧边栏导航 -->
+            <nav class="sidebar">
+                <ul class="nav-list">
+                    <li><button id="prompts-btn" class="nav-btn active" type="button">提示词</button></li>
+                    <li><button id="settings-btn" class="nav-btn" type="button">设置</button></li>
+                    <li><button id="market-btn" class="nav-btn" type="button">市场</button></li>
+                    <li><button id="logs-btn" class="nav-btn" type="button">日志</button></li>
+                </ul>
+                
+                <div class="help-section">
+                    <h3>使用帮助</h3>
+                    <ul>
+                        <li>1. 使用快捷键调用提示词</li>
+                        <li>2. 默认快捷键: Ctrl+Alt+Space</li>
+                        <li>3. 在任何文本编辑器中使用</li>
+                    </ul>
+                </div>
+            </nav>
+            
+            <!-- 内容面板 -->
+            <div class="content-area">
+                <!-- 提示词面板 -->
+                <div id="prompts-panel" class="panel active">
+                    <div class="panel-header">
+                        <h2>提示词管理</h2>
+                        <button id="add-prompt-btn" class="primary-btn" type="button">
+                            <i class="icon-plus"></i> 添加提示词
+                        </button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="prompt-list">
+                            <!-- 提示词列表将在这里显示 -->
+                            <div class="empty-state">
+                                <p>暂无提示词</p>
+                                <p class="hint">点击"添加提示词"按钮创建第一个提示词</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="panel-content">
-                    <div class="prompt-list">
-                        <div class="prompt-item">
-                            <div class="prompt-info">
-                                <h3>默认测试模板</h3>
-                                <p class="prompt-content">这是一个测试模板，用于演示功能。</p>
-                                <div class="prompt-meta">
-                                    <span class="tag">测试</span>
-                                    <span class="last-used">上次使用: 2025-08-18</span>
+                
+                <!-- 设置面板 -->
+                <div id="settings-panel" class="panel">
+                    <div class="panel-header">
+                        <h2>设置</h2>
+                    </div>
+                    <div class="panel-content">
+                        <div class="settings-section">
+                            <h3>快捷键设置</h3>
+                            <div class="setting-item">
+                                <label for="hotkey-input">触发快捷键</label>
+                                <div class="hotkey-input-group">
+                                    <input type="text" id="hotkey-input" class="form-input" readonly>
+                                    <button id="hotkey-record-btn" class="secondary-btn" type="button">录制</button>
                                 </div>
                             </div>
-                            <div class="prompt-actions">
-                                <button class="btn-icon edit-btn" title="编辑">
-                                    <i class="icon-edit"></i>
+                        </div>
+                        
+                        <div class="settings-section">
+                            <h3>注入设置</h3>
+                            <div class="setting-item">
+                                <label for="injection-mode">注入模式</label>
+                                <select id="injection-mode">
+                                    <option value="append">追加模式</option>
+                                    <option value="replace">替换模式</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-section">
+                            <h3>界面设置</h3>
+                            <div class="setting-item">
+                                <label for="theme-select">主题</label>
+                                <select id="theme-select">
+                                    <option value="light">浅色主题</option>
+                                    <option value="dark">深色主题</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button id="save-settings-btn" class="primary-btn" type="button">保存设置</button>
+                            <button id="reset-settings-btn" class="secondary-btn" type="button">重置</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="market-panel" class="panel">
+                    <div class="panel-header">
+                        <h2>提示词市场</h2>
+                    </div>
+                    <div class="panel-content">
+                        <div class="market-toolbar">
+                            <div class="search-box">
+                                <input type="text" id="market-search" placeholder="搜索提示词模板...">
+                                <button id="market-search-btn" class="btn-icon" type="button" title="搜索" aria-label="搜索">
+                                    <i class="icon-search"></i>
                                 </button>
-                                <button class="btn-icon delete-btn" title="删除">
-                                    <i class="icon-delete"></i>
+                            </div>
+                            <button id="refresh-market-btn" class="secondary-btn" type="button" title="刷新" aria-label="刷新">
+                                <i class="icon-refresh"></i> 刷新
+                            </button>
+                        </div>
+                        <div class="market-list" id="market-list">
+                            <!-- 市场提示词模板将在这里显示 -->
+                            <div class="empty-state">
+                                <p>暂无提示词模板</p>
+                                <p class="hint">点击刷新按钮获取最新模板</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="logs-panel" class="panel">
+                    <div class="panel-header">
+                        <h2>使用日志</h2>
+                    </div>
+                    <div class="panel-content">
+                        <div class="logs-toolbar">
+                            <div class="search-box">
+                                <input type="text" id="logs-search" placeholder="搜索日志...">
+                                <button id="logs-search-btn" class="btn-icon" type="button" title="搜索日志" aria-label="搜索日志">
+                                    <i class="icon-search"></i>
                                 </button>
                             </div>
+                            <button id="clear-logs-btn" class="secondary-btn" type="button" title="清空日志" aria-label="清空日志">
+                                <i class="icon-delete"></i> 清空日志
+                            </button>
                         </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="settings-panel" class="panel">
-                <div class="panel-header">
-                    <h2>设置</h2>
-                </div>
-                <div class="panel-content">
-                    <div class="settings-section">
-                        <h3>服务状态</h3>
-                        <div class="setting-item">
-                            <div class="service-status">
-                                <span id="service-status">未知</span>
-                                <button id="toggle-service-btn" class="secondary-btn">启动服务</button>
+                        <div class="logs-list" id="logs-list">
+                            <!-- 日志条目将在这里显示 -->
+                            <div class="empty-state">
+                                <p>暂无使用日志</p>
+                                <p class="hint">使用提示词后会在这里显示记录</p>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h3>快捷键设置</h3>
-                        <div class="setting-item">
-                            <label for="hotkey-input">触发快捷键</label>
-                            <div class="hotkey-setting">
-                                <input type="text" id="hotkey-input" readonly placeholder="点击设置快捷键" value="Ctrl+Alt+Space" />
-                                <button id="hotkey-record-btn" class="secondary-btn">设置</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h3>注入设置</h3>
-                        <div class="setting-item">
-                            <label for="injection-mode">注入模式</label>
-                            <select id="injection-mode">
-                                <option value="append">追加模式</option>
-                                <option value="replace" disabled>替换模式（暂不支持）</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h3>外观设置</h3>
-                        <div class="setting-item">
-                            <label for="theme-select">主题</label>
-                            <select id="theme-select">
-                                <option value="light">浅色</option>
-                                <option value="dark">深色</option>
-                                <option value="system">跟随系统</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-actions">
-                        <button id="save-settings-btn" class="primary-btn">保存设置</button>
-                        <button id="reset-settings-btn" class="secondary-btn">重置</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="market-panel" class="panel">
-                <div class="panel-header">
-                    <h2>提示词市场</h2>
-                </div>
-                <div class="panel-content">
-                    <div class="market-placeholder">
-                        <p>提示词市场功能正在开发中...</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="logs-panel" class="panel">
-                <div class="panel-header">
-                    <h2>使用日志</h2>
-                </div>
-                <div class="panel-content">
-                    <div class="logs-placeholder">
-                        <p>使用日志功能正在开发中...</p>
                     </div>
                 </div>
             </div>
         </main>
     </div>
     
-    <script src="main.js"></script>
+    <script type="module" src="main.js"></script>
 </body>
 </html>

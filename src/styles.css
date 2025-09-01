@@ -4,30 +4,32 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f8f9fa;
   --bg-tertiary: #e9ecef;
+  --bg-card: #ffffff;
   --text-primary: #212529;
   --text-secondary: #6c757d;
   --border-color: #dee2e6;
-  --accent-color: #0d6efd;
-  --accent-hover: #0b5ed7;
-  --success-color: #198754;
+  --accent-color: #667eea;
+  --accent-hover: #5a6fd8;
+  --success-color: #28a745;
   --danger-color: #dc3545;
   --warning-color: #ffc107;
   --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-  --radius: 6px;
+  --radius: 8px;
   --transition: all 0.2s ease-in-out;
 }
 
-/* 深色主题 */
-[data-theme="dark"] {
+/* 深色主题（与 JS 的 theme-dark 类名对齐） */
+.theme-dark {
   --bg-primary: #121212;
   --bg-secondary: #1e1e1e;
   --bg-tertiary: #2d2d2d;
+  --bg-card: #1e1e1e;
   --text-primary: #e0e0e0;
   --text-secondary: #9e9e9e;
   --border-color: #424242;
-  --accent-color: #42a5f5;
-  --accent-hover: #2196f3;
+  --accent-color: #667eea;
+  --accent-hover: #5a6fd8;
 }
 
 * {
@@ -44,6 +46,67 @@ body {
   transition: var(--transition);
 }
 
+/* 与当前 HTML 结构对齐的容器布局 */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0; /* 防止溢出 */
+}
+
+.sidebar {
+  width: 240px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 1rem;
+  overflow-y: auto;
+  transition: var(--transition);
+}
+
+.content-area {
+  flex: 1;
+  background-color: var(--bg-primary);
+  padding: 1.5rem;
+  overflow: hidden;
+}
+
+.nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.help-section {
+  margin-top: 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.help-section h3 {
+  margin-bottom: 0.75rem;
+  color: var(--accent-color);
+}
+
+.help-section ul {
+  padding-left: 1.25rem;
+}
+
+.help-section li {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+/* 兼容旧选择器（如果页面中存在 #app，可继承到 .app-container） */
 #app {
   display: flex;
   flex-direction: column;
@@ -57,6 +120,9 @@ body {
   padding: 0 1.5rem;
   box-shadow: var(--shadow);
   z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .app-header h1 {
@@ -66,21 +132,30 @@ body {
   color: var(--accent-color);
 }
 
-.main-nav {
+/* 状态显示 */
+.app-status {
   display: flex;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 1rem;
+  align-items: center;
+  gap: 0.5rem;
 }
 
+.status-active {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+/* 导航按钮 */
 .nav-btn {
   background: none;
   border: none;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 1rem;
   font-size: 1rem;
   color: var(--text-secondary);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius);
   transition: var(--transition);
+  text-align: left;
+  width: 100%;
 }
 
 .nav-btn:hover {
@@ -90,16 +165,11 @@ body {
 
 .nav-btn.active {
   color: var(--accent-color);
-  border-bottom-color: var(--accent-color);
+  background-color: rgba(102, 126, 234, 0.1);
+  font-weight: 500;
 }
 
-/* 主要内容区域 */
-.app-main {
-  flex: 1;
-  overflow: hidden;
-  padding: 0 1.5rem 1.5rem;
-}
-
+/* 面板 */
 .panel {
   display: none;
   height: 100%;
@@ -111,7 +181,10 @@ body {
 }
 
 .panel-header {
-  padding: 1.5rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 1.5rem;
 }
@@ -119,66 +192,58 @@ body {
 .panel-header h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  color: var(--text-primary);
 }
 
 /* 搜索框 */
 .search-box {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 400px;
 }
 
-#search-input {
+#search-input,
+#market-search,
+#logs-search {
   flex: 1;
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background-color: var(--bg-primary);
+  background-color: var(--bg-card);
   color: var(--text-primary);
   font-size: 1rem;
   transition: var(--transition);
 }
 
-#search-input:focus {
+#search-input:focus,
+#market-search:focus,
+#logs-search:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 
 /* 按钮样式 */
 .primary-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent-color) 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 12px 25px;
-  border-radius: 25px;
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  transition: var(--transition);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .primary-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.secondary-btn {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
-  border: 1px solid #667eea;
-  padding: 12px 25px;
-  border-radius: 25px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.secondary-btn:hover {
-  background: rgba(102, 126, 234, 0.2);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
 }
 
 .secondary-btn {
@@ -186,45 +251,60 @@ body {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .secondary-btn:hover {
   background-color: var(--bg-tertiary);
+  border-color: var(--accent-color);
+}
+
+/* 工具栏 */
+.market-toolbar,
+.logs-toolbar {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
 /* 提示词列表 */
 .prompt-list {
   display: grid;
-  gap: 20px;
+  gap: 1rem;
 }
 
 .prompt-item {
-  background: white;
-  border-radius: 15px;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  border: 1px solid #e1e5e9;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
 }
 
 .prompt-item:hover {
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   border-color: var(--accent-color);
+  transform: translateY(-2px);
 }
 
 .prompt-info {
   flex: 1;
+  margin-right: 1rem;
 }
 
 .prompt-info h3 {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   margin-bottom: 0.5rem;
   color: var(--text-primary);
 }
@@ -233,25 +313,28 @@ body {
   color: var(--text-secondary);
   margin-bottom: 1rem;
   line-height: 1.5;
+  font-size: 0.95rem;
 }
 
 .prompt-meta {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .tag {
   background-color: var(--accent-color);
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius);
-  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 2rem;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .last-used {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .prompt-actions {
@@ -263,38 +346,44 @@ body {
   background: none;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: var(--transition);
+  color: var(--text-secondary);
 }
 
 .btn-icon:hover {
   background-color: var(--bg-tertiary);
   border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
 /* 设置面板 */
 .settings-section {
-  margin-bottom: 30px;
-  padding: 20px;
-  background: rgba(102, 126, 234, 0.05);
-  border-radius: 15px;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
 }
 
 .settings-section h3 {
   font-size: 1.25rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   color: var(--text-primary);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .setting-item {
   display: flex;
   flex-direction: column;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .setting-item label {
@@ -303,17 +392,17 @@ body {
   color: var(--text-primary);
 }
 
-.hotkey-setting {
+.hotkey-input-group {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 #hotkey-input {
   flex: 1;
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background-color: var(--bg-primary);
+  background-color: var(--bg-card);
   color: var(--text-primary);
   font-size: 1rem;
   transition: var(--transition);
@@ -322,14 +411,14 @@ body {
 #hotkey-input:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 
 select {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background-color: var(--bg-primary);
+  background-color: var(--bg-card);
   color: var(--text-primary);
   font-size: 1rem;
   transition: var(--transition);
@@ -338,50 +427,52 @@ select {
 select:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 
 .settings-actions {
   display: flex;
   gap: 1rem;
-  margin-top: 2rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
 }
 
 /* 占位符面板 */
 .market-placeholder,
-.logs-placeholder {
+.logs-placeholder,
+.empty-state {
   text-align: center;
-  padding: 60px 20px;
-  color: #999;
+  padding: 3rem 1rem;
+  color: var(--text-secondary);
 }
 
 .market-placeholder p,
-.logs-placeholder p {
-  font-size: 1.2rem;
+.logs-placeholder p,
+.empty-state p {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
 }
 
-/* 服务状态样式 */
-.service-status {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+.hint {
+  font-size: 0.9rem !important;
+  color: var(--text-secondary) !important;
+  font-weight: normal !important;
 }
 
-.status-running {
-  color: #28a745;
-  font-weight: 500;
-}
-
-.status-stopped {
-  color: #dc3545;
-  font-weight: 500;
+/* 加载和错误状态 */
+.loading,
+.error-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
 }
 
 /* 动画效果 */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -389,62 +480,69 @@ select:focus {
   }
 }
 
+.prompt-item,
+.panel-header,
+.settings-section {
+  animation: fadeIn 0.3s ease-out;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
-  body {
-    padding: 10px;
+  .main-content {
+    flex-direction: column;
   }
   
-  #app {
-    border-radius: 15px;
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
   }
   
-  .app-header {
-    padding: 15px;
-  }
-  
-  .app-header h1 {
-    font-size: 1.5rem;
-  }
-  
-  .main-nav {
-    gap: 5px;
+  .nav-list {
+    flex-direction: row;
+    overflow-x: auto;
   }
   
   .nav-btn {
-    padding: 8px 15px;
-    font-size: 0.8rem;
+    white-space: nowrap;
   }
   
-  .panel {
-    padding: 15px;
+  .help-section {
+    display: none;
   }
   
-  .panel-header h2 {
-    font-size: 1.5rem;
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .market-toolbar,
+  .logs-toolbar {
+    flex-direction: column;
+  }
+  
+  .search-box {
+    max-width: 100%;
   }
   
   .prompt-item {
     flex-direction: column;
-    gap: 15px;
+    gap: 1rem;
   }
   
-  .hotkey-setting {
-    flex-direction: column;
-    align-items: stretch;
+  .prompt-actions {
+    align-self: flex-end;
   }
   
   .settings-actions {
     flex-direction: column;
   }
   
-  .settings-actions .primary-btn,
-  .settings-actions .secondary-btn {
+  .primary-btn,
+  .secondary-btn {
     width: 100%;
-  }
-  
-  .modal-content {
-    width: 95%;
+    justify-content: center;
   }
 }
 
@@ -463,17 +561,18 @@ select:focus {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 15px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
   width: 90%;
   max-width: 600px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 .modal-header {
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--accent-color) 0%, #764ba2 100%);
   color: white;
   display: flex;
   justify-content: space-between;
@@ -481,16 +580,21 @@ select:focus {
 }
 
 .modal-header h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 500;
 }
 
 .close-btn {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   cursor: pointer;
   background: none;
   border: none;
   color: white;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .close-btn:hover {
@@ -498,46 +602,70 @@ select:focus {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 1.5rem;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 1.25rem;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  color: #333;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .form-input,
 .form-textarea {
   width: 100%;
-  padding: 12px 15px;
-  border: 2px solid #e1e5e9;
-  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
   font-size: 1rem;
-  transition: border-color 0.3s ease;
+  transition: var(--transition);
 }
 
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 
 .form-textarea {
-  min-height: 150px;
+  min-height: 120px;
   resize: vertical;
 }
 
 .modal-footer {
-  padding: 20px;
+  padding: 1.25rem;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid #eee;
+  gap: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 图标 */
+.icon-plus::before {
+  content: "+";
+  font-weight: bold;
+}
+
+.icon-edit::before {
+  content: "✎";
+}
+
+.icon-delete::before {
+  content: "✕";
+}
+
+.icon-search::before {
+  content: "🔍";
+}
+
+.icon-refresh::before {
+  content: "↻";
 }
