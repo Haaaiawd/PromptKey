@@ -9,6 +9,7 @@ use tauri::{
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 // 服务进程句柄
 struct ServiceState {
@@ -253,16 +254,8 @@ fn check_service_status(app: AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 fn get_all_prompts() -> Result<Vec<Prompt>, String> {
-    // 获取数据库路径
-    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptManager\\promptmgr.db", appdata)
-    } else {
-        return Err("无法获取APPDATA路径".to_string());
-    };
-    
-    // 连接数据库
-    let conn = rusqlite::Connection::open(&database_path)
-        .map_err(|e| format!("无法连接数据库: {}", e))?;
+    // 连接数据库（确保目录与表存在）
+    let conn = open_db()?;
     
     // 查询所有提示词
     let mut stmt = conn.prepare(
@@ -307,16 +300,8 @@ fn get_all_prompts() -> Result<Vec<Prompt>, String> {
 
 #[tauri::command]
 fn create_prompt(prompt: Prompt) -> Result<i32, String> {
-    // 获取数据库路径
-    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptManager\\promptmgr.db", appdata)
-    } else {
-        return Err("无法获取APPDATA路径".to_string());
-    };
-    
-    // 连接数据库
-    let conn = rusqlite::Connection::open(&database_path)
-        .map_err(|e| format!("无法连接数据库: {}", e))?;
+    // 连接数据库（确保目录与表存在）
+    let conn = open_db()?;
     
     // 准备插入语句
     let mut stmt = conn.prepare(
@@ -344,16 +329,8 @@ fn create_prompt(prompt: Prompt) -> Result<i32, String> {
 
 #[tauri::command]
 fn update_prompt(prompt: Prompt) -> Result<(), String> {
-    // 获取数据库路径
-    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptManager\\promptmgr.db", appdata)
-    } else {
-        return Err("无法获取APPDATA路径".to_string());
-    };
-    
-    // 连接数据库
-    let conn = rusqlite::Connection::open(&database_path)
-        .map_err(|e| format!("无法连接数据库: {}", e))?;
+    // 连接数据库（确保目录与表存在）
+    let conn = open_db()?;
     
     // 准备更新语句
     let mut stmt = conn.prepare(
@@ -383,16 +360,8 @@ fn update_prompt(prompt: Prompt) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_prompt(id: i32) -> Result<(), String> {
-    // 获取数据库路径
-    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptManager\\promptmgr.db", appdata)
-    } else {
-        return Err("无法获取APPDATA路径".to_string());
-    };
-    
-    // 连接数据库
-    let conn = rusqlite::Connection::open(&database_path)
-        .map_err(|e| format!("无法连接数据库: {}", e))?;
+    // 连接数据库（确保目录与表存在）
+    let conn = open_db()?;
     
     // 准备删除语句
     let mut stmt = conn.prepare("DELETE FROM prompts WHERE id = ?1")
@@ -405,7 +374,71 @@ fn delete_prompt(id: i32) -> Result<(), String> {
     Ok(())
 }
 
+// 打开数据库并确保目录/表存在，设置 busy_timeout 与 WAL
+fn open_db() -> Result<rusqlite::Connection, String> {
+    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
+        format!("{}\\PromptManager\\promptmgr.db", appdata)
+    } else {
+        return Err("无法获取APPDATA路径".to_string());
+    };
+
+    // 确保目录存在
+    if let Some(parent) = std::path::Path::new(&database_path).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("创建数据库目录失败: {}", e))?;
+    }
+
+    let conn = rusqlite::Connection::open(&database_path)
+        .map_err(|e| format!("无法连接数据库: {}", e))?;
+    conn.busy_timeout(Duration::from_millis(2000))
+        .map_err(|e| format!("设置 busy_timeout 失败: {}", e))?;
+    // 开启 WAL（若已开启则无影响）
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .map_err(|e| format!("设置 WAL 失败: {}", e))?;
+
+    // 确保表存在
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS prompts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            tags TEXT,
+            content TEXT NOT NULL,
+            content_type TEXT,
+            variables_json TEXT,
+            app_scopes_json TEXT,
+            inject_order TEXT,
+            version INTEGER DEFAULT 1,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    ).map_err(|e| format!("创建 prompts 表失败: {}", e))?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS usage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prompt_id INTEGER,
+            target_app TEXT,
+            window_title TEXT,
+            strategy TEXT,
+            success INTEGER,
+            error TEXT,
+            result TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    ).map_err(|e| format!("创建 usage_logs 表失败: {}", e))?;
+
+    Ok(conn)
+}
+
 fn create_and_show_window(app: &AppHandle) {
+    // 检查窗口是否已存在
+    if let Some(existing_window) = app.get_webview_window("main") {
+        let _ = existing_window.show();
+        let _ = existing_window.set_focus();
+        return;
+    }
+    
     // 创建新窗口
     let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Prompt Manager")

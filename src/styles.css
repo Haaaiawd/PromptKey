@@ -283,13 +283,11 @@ body {
 .prompt-item {
   background: var(--bg-card);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: 1.5rem;
   box-shadow: var(--shadow);
   transition: var(--transition);
   border: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
 .prompt-item:hover {
@@ -298,22 +296,72 @@ body {
   transform: translateY(-2px);
 }
 
-.prompt-info {
-  flex: 1;
-  margin-right: 1rem;
+.prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
-.prompt-info h3 {
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+.prompt-header h3 {
+  font-size: 1.2rem;
   color: var(--text-primary);
+  margin: 0;
+  font-weight: 600;
+}
+
+.prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.prompt-actions .edit-btn {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.prompt-actions .edit-btn:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.prompt-actions .delete-btn {
+  background-color: var(--danger-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.prompt-actions .delete-btn:hover {
+  background-color: #c82333;
+  transform: translateY(-1px);
 }
 
 .prompt-content {
+  background-color: var(--bg-secondary);
+  padding: 1rem;
+  border-radius: calc(var(--radius) - 2px);
+  border-left: 4px solid var(--accent-color);
+  margin: 0;
+}
+
+.prompt-content p {
   color: var(--text-secondary);
-  margin-bottom: 1rem;
-  line-height: 1.5;
+  line-height: 1.6;
   font-size: 0.95rem;
+  margin: 0;
+  word-wrap: break-word;
 }
 
 .prompt-meta {
@@ -668,4 +716,99 @@ select:focus {
 
 .icon-refresh::before {
   content: "↻";
+}
+
+/* 改进的模态框样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background-color: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 改进的表单样式 */
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.875rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+}
+
+/* 通知样式 */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  color: white;
+  font-weight: 500;
+  z-index: 10001;
+  animation: slideInRight 0.3s ease-out;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.notification-success {
+  background-color: var(--success-color);
+}
+
+.notification-error {
+  background-color: var(--danger-color);
+}
+
+.notification-info {
+  background-color: var(--accent-color);
 }

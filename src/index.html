@@ -7,6 +7,21 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="theme-light">
+    <!-- 调试信息显示区域 - 移到左上角 -->
+    <div id="debug-info" style="position: fixed; top: 10px; left: 10px; background: #f0f0f0; padding: 10px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; max-width: 250px; z-index: 9999; border-radius: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <strong>调试信息</strong>
+            <button onclick="document.getElementById('debug-content').style.display = document.getElementById('debug-content').style.display === 'none' ? 'block' : 'none'" style="padding: 2px 6px; font-size: 10px;">切换</button>
+        </div>
+        <div id="debug-content" style="max-height: 200px; overflow-y: auto;">JavaScript未加载</div>
+        <div style="margin-top: 5px;">
+            <button onclick="window.testFunction ? window.testFunction() : alert('testFunction不存在')" style="margin-right: 3px; padding: 2px 6px; font-size: 10px;">测试JS</button>
+            <button onclick="window.clearDebugInfo ? window.clearDebugInfo() : alert('清除功能不可用')" style="margin-right: 3px; padding: 2px 6px; font-size: 10px;">清除</button>
+            <button onclick="window.copyDebugLogs ? window.copyDebugLogs() : alert('复制功能不可用')" style="margin-right: 3px; padding: 2px 6px; font-size: 10px;">复制日志</button>
+            <button onclick="window.testButtonBinding ? window.testButtonBinding() : alert('测试功能不可用')" style="padding: 2px 6px; font-size: 10px;">测试按钮</button>
+        </div>
+    </div>
+    
     <div class="app-container">
         <!-- 顶部状态栏 -->
         <header class="app-header">
@@ -164,6 +179,6 @@
         </main>
     </div>
     
-    <script type="module" src="main.js"></script>
+    <script type="module" src="main_simple.js"></script>
 </body>
 </html>
