@@ -179,6 +179,36 @@
         </main>
     </div>
     
+    <!-- 添加添加新提示词的模态框 -->
+    <div id="add-prompt-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>添加新提示词</h2>
+                <button class="close-btn" onclick="closeAddPromptModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-prompt-form">
+                    <div class="form-group">
+                        <label for="prompt-name">提示词名称*</label>
+                        <input type="text" id="prompt-name" class="form-input" placeholder="请输入提示词名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-content">提示词内容*</label>
+                        <textarea id="prompt-content" class="form-textarea" placeholder="请输入提示词内容" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-tags">标签 (可选)</label>
+                        <input type="text" id="prompt-tags" class="form-input" placeholder="用逗号分隔多个标签，如：工作,邮件,AI">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-prompt-btn" class="secondary-btn">取消</button>
+                <button id="submit-prompt-btn" class="primary-btn">保存</button>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="main_simple.js"></script>
 </body>
 </html>

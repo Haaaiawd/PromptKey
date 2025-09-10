@@ -29,6 +29,11 @@ impl HotkeyManager {
         let (vk, modifiers) = Self::parse_hotkey(hotkey)?;
         log::debug!("Parsed hotkey: vk={:x}, modifiers={:x}", vk, modifiers.0);
         
+        // 首先尝试注销可能已注册的热键
+        unsafe {
+            let _ = UnregisterHotKey(None, 1);
+        }
+        
         let result = unsafe {
             RegisterHotKey(
                 None,
@@ -47,6 +52,11 @@ impl HotkeyManager {
             log::info!("Trying fallback hotkey: Ctrl+Alt+V");
             let (fallback_vk, fallback_modifiers) = Self::parse_hotkey("Ctrl+Alt+V")?;
             log::debug!("Parsed fallback hotkey: vk={:x}, modifiers={:x}", fallback_vk, fallback_modifiers.0);
+            
+            // 注销可能已注册的备用热键
+            unsafe {
+                let _ = UnregisterHotKey(None, 2);
+            }
             
             let fallback_result = unsafe {
                 RegisterHotKey(

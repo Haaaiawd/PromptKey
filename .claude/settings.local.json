@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__cloudbase__interactiveDialog",
+      "Bash(git config:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "cloudbase"
+  ],
+  "outputStyle": "default"
+}

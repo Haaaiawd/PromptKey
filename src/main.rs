@@ -173,7 +173,8 @@ fn main() {
             create_prompt,
             update_prompt,
             delete_prompt,
-            reset_settings
+            reset_settings,
+            set_selected_prompt
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -428,7 +429,36 @@ fn open_db() -> Result<rusqlite::Connection, String> {
         [],
     ).map_err(|e| format!("创建 usage_logs 表失败: {}", e))?;
 
+    // 创建selected_prompt表用于存储选中的提示词ID
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS selected_prompt (
+            id INTEGER PRIMARY KEY,
+            prompt_id INTEGER NOT NULL
+        )",
+        [],
+    ).map_err(|e| format!("创建 selected_prompt 表失败: {}", e))?;
+    
+    // 插入默认选中记录（如果不存在）
+    conn.execute(
+        "INSERT OR IGNORE INTO selected_prompt (id, prompt_id) VALUES (1, 0)",
+        [],
+    ).map_err(|e| format!("初始化 selected_prompt 表失败: {}", e))?;
+
     Ok(conn)
+}
+
+#[tauri::command]
+fn set_selected_prompt(id: i32) -> Result<(), String> {
+    // 连接数据库（确保目录与表存在）
+    let conn = open_db()?;
+    
+    // 更新选中的提示词ID
+    conn.execute(
+        "UPDATE selected_prompt SET prompt_id = ?1 WHERE id = 1",
+        rusqlite::params![id],
+    ).map_err(|e| format!("设置选中提示词失败: {}", e))?;
+    
+    Ok(())
 }
 
 fn create_and_show_window(app: &AppHandle) {

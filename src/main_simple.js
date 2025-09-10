@@ -3,6 +3,7 @@
 console.log('=== 简化版main.js开始加载 ===');
 
 let debugCounter = 0;
+let selectedPromptId = null; // 用于跟踪当前选中的提示词ID
 
 // 调试信息更新函数
 function updateDebugInfo(message) {
@@ -501,15 +502,15 @@ function showAddPromptModal() {
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="prompt-name">提示词名称*</label>
-                        <input type="text" id="prompt-name" placeholder="请输入提示词名称" maxlength="100">
+                        <input type="text" id="prompt-name" class="form-input" placeholder="请输入提示词名称" maxlength="100">
                     </div>
                     <div class="form-group">
                         <label for="prompt-content">提示词内容*</label>
-                        <textarea id="prompt-content" placeholder="请输入提示词内容" rows="8"></textarea>
+                        <textarea id="prompt-content" class="form-textarea" placeholder="请输入提示词内容" rows="8"></textarea>
                     </div>
                     <div class="form-group">
                         <label for="prompt-tags">标签 (可选)</label>
-                        <input type="text" id="prompt-tags" placeholder="用逗号分隔多个标签，如：工作,邮件,AI">
+                        <input type="text" id="prompt-tags" class="form-input" placeholder="用逗号分隔多个标签，如：工作,邮件,AI">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -640,17 +641,50 @@ async function loadPrompts() {
                     <div class="prompt-header">
                         <h3>${prompt.name}</h3>
                         <div class="prompt-actions">
-                            <button class="edit-btn" onclick="editPrompt(${prompt.id})">编辑</button>
-                            <button class="delete-btn" onclick="deletePrompt(${prompt.id})">删除</button>
+                            <button class="edit-btn" onclick="editPrompt(${prompt.id}, event)">编辑</button>
+                            <button class="delete-btn" onclick="deletePrompt(${prompt.id}, event)">删除</button>
                         </div>
                     </div>
                     <div class="prompt-content">
                         <p>${prompt.content.substring(0, 100)}${prompt.content.length > 100 ? '...' : ''}</p>
                     </div>
+                    ${prompt.tags && prompt.tags.length > 0 ? `
+                    <div class="prompt-meta">
+                        ${prompt.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                    ` : ''}
                 </div>
             `).join('');
             
             promptList.innerHTML = promptsHtml;
+            
+            // 为每个提示词项添加点击事件监听器
+            document.querySelectorAll('.prompt-item').forEach(item => {
+                item.addEventListener('click', async (e) => {
+                    // 阻止编辑和删除按钮的事件冒泡
+                    if (e.target.classList.contains('edit-btn') || e.target.classList.contains('delete-btn')) {
+                        return;
+                    }
+                    
+                    // 清除之前选中的提示词的样式
+                    document.querySelectorAll('.prompt-item').forEach(i => {
+                        i.classList.remove('selected');
+                    });
+                    
+                    // 设置当前选中的提示词
+                    item.classList.add('selected');
+                    selectedPromptId = parseInt(item.dataset.id);
+                    updateDebugInfo(`选中提示词 ID: ${selectedPromptId}`);
+                    
+                    // 调用后端设置选中的提示词ID
+                    try {
+                        await safeInvoke('set_selected_prompt', selectedPromptId);
+                        updateDebugInfo(`已设置选中的提示词 ID: ${selectedPromptId}`);
+                    } catch (error) {
+                        updateDebugInfo(`设置选中提示词失败: ${error}`);
+                    }
+                });
+            });
         }
         
     } catch (error) {
@@ -659,18 +693,50 @@ async function loadPrompts() {
 }
 
 // 全局函数用于提示词操作
-window.editPrompt = async (id) => {
+window.editPrompt = async (id, event) => {
+    // 阻止事件冒泡
+    if (event) {
+        event.stopPropagation();
+    }
+    
     updateDebugInfo(`编辑提示词: ${id}`);
-    alert('编辑功能暂未实现');
+    
+    try {
+        // 获取所有提示词以找到要编辑的提示词
+        const prompts = await safeInvoke('get_all_prompts');
+        const promptToEdit = prompts.find(p => p.id === id);
+        
+        if (!promptToEdit) {
+            alert('未找到该提示词');
+            return;
+        }
+        
+        // 显示编辑模态框
+        showEditPromptModal(promptToEdit);
+    } catch (error) {
+        updateDebugInfo(`获取提示词失败: ${error}`);
+        alert(`获取提示词失败: ${error}`);
+    }
 };
 
-window.deletePrompt = async (id) => {
+window.deletePrompt = async (id, event) => {
+    // 阻止事件冒泡
+    if (event) {
+        event.stopPropagation();
+    }
+    
     updateDebugInfo(`删除提示词: ${id}`);
     if (confirm('确定要删除这个提示词吗？')) {
         try {
             await safeInvoke('delete_prompt', { id: id });
             updateDebugInfo(`提示词 ${id} 删除成功`);
-            alert('删除成功！');
+            showNotification('删除成功！', 'success');
+            
+            // 如果删除的是当前选中的提示词，清除选中状态
+            if (selectedPromptId === id) {
+                selectedPromptId = null;
+            }
+            
             loadPrompts(); // 刷新列表
         } catch (error) {
             updateDebugInfo(`删除提示词失败: ${error}`);
@@ -678,6 +744,123 @@ window.deletePrompt = async (id) => {
         }
     }
 };
+
+// 显示编辑提示词模态框
+function showEditPromptModal(prompt) {
+    // 创建模态框HTML
+    const tagsString = prompt.tags ? prompt.tags.join(', ') : '';
+    
+    const modalHtml = `
+        <div id="edit-prompt-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑提示词</h3>
+                    <button class="modal-close" onclick="closeEditPromptModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="prompt-id" value="${prompt.id}">
+                    <div class="form-group">
+                        <label for="prompt-name">提示词名称*</label>
+                        <input type="text" id="prompt-name" class="form-input" placeholder="请输入提示词名称" maxlength="100" value="${prompt.name}">
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-content">提示词内容*</label>
+                        <textarea id="prompt-content" class="form-textarea" placeholder="请输入提示词内容" rows="8">${prompt.content}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-tags">标签 (可选)</label>
+                        <input type="text" id="prompt-tags" class="form-input" placeholder="用逗号分隔多个标签，如：工作,邮件,AI" value="${tagsString}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="secondary-btn" onclick="closeEditPromptModal()">取消</button>
+                    <button class="primary-btn" onclick="updatePrompt()">保存</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 聚焦到名称输入框
+    setTimeout(() => {
+        const nameInput = document.getElementById('prompt-name');
+        if (nameInput) nameInput.focus();
+    }, 100);
+    
+    updateDebugInfo(`已显示编辑提示词模态框: ${prompt.id}`);
+}
+
+// 关闭编辑模态框
+function closeEditPromptModal() {
+    const modal = document.getElementById('edit-prompt-modal');
+    if (modal) {
+        modal.remove();
+        updateDebugInfo('已关闭编辑提示词模态框');
+    }
+}
+
+// 更新提示词
+async function updatePrompt() {
+    const id = parseInt(document.getElementById('prompt-id').value);
+    const name = document.getElementById('prompt-name')?.value?.trim();
+    const content = document.getElementById('prompt-content')?.value?.trim();
+    const tagsInput = document.getElementById('prompt-tags')?.value?.trim();
+    
+    if (!name) {
+        alert('请输入提示词名称');
+        document.getElementById('prompt-name')?.focus();
+        return;
+    }
+    
+    if (!content) {
+        alert('请输入提示词内容');
+        document.getElementById('prompt-content')?.focus();
+        return;
+    }
+    
+    // 处理标签
+    let tags = null;
+    if (tagsInput) {
+        tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+        if (tags.length === 0) tags = null;
+    }
+    
+    try {
+        updateDebugInfo(`正在更新提示词: ${id}`);
+        await safeInvoke('update_prompt', {
+            prompt: {
+                id: id,
+                name: name,
+                content: content,
+                tags: tags,
+                content_type: null,
+                variables_json: null,
+                app_scopes_json: null,
+                inject_order: null,
+                version: 1
+            }
+        });
+        
+        updateDebugInfo(`提示词更新成功: ${id}`);
+        closeEditPromptModal();
+        
+        // 显示成功提示
+        showNotification(`提示词 "${name}" 更新成功！`, 'success');
+        
+        // 刷新提示词列表
+        loadPrompts();
+        
+    } catch (error) {
+        updateDebugInfo(`更新提示词失败: ${error}`);
+        alert(`更新失败: ${error}`);
+    }
+}
+
+// 将新函数暴露到全局作用域
+window.closeEditPromptModal = closeEditPromptModal;
+window.updatePrompt = updatePrompt;
 
 // DOM加载完成后执行初始化
 if (document.readyState === 'loading') {

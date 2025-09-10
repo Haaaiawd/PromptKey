@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Prompt {
     pub id: Option<i32>,
     pub name: String,
@@ -71,6 +71,21 @@ impl Database {
                 result TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )",
+            [],
+        )?;
+        
+        // 创建selected_prompt表用于存储选中的提示词ID
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS selected_prompt (
+                id INTEGER PRIMARY KEY,
+                prompt_id INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        
+        // 插入默认选中记录（如果不存在）
+        self.conn.execute(
+            "INSERT OR IGNORE INTO selected_prompt (id, prompt_id) VALUES (1, 0)",
             [],
         )?;
         
@@ -204,6 +219,28 @@ impl Database {
         }
         
         Ok(prompts)
+    }
+    
+    // 新增方法：获取选中的提示词ID
+    pub fn get_selected_prompt_id(&self) -> Result<i32, Box<dyn std::error::Error>> {
+        let mut stmt = self.conn.prepare("SELECT prompt_id FROM selected_prompt WHERE id = 1")?;
+        let mut rows = stmt.query([])?;
+        
+        if let Some(row) = rows.next()? {
+            let prompt_id: i32 = row.get(0)?;
+            Ok(prompt_id)
+        } else {
+            Ok(0) // 默认返回0表示没有选中的提示词
+        }
+    }
+    
+    // 新增方法：设置选中的提示词ID
+    pub fn set_selected_prompt_id(&self, prompt_id: i32) -> Result<(), Box<dyn std::error::Error>> {
+        self.conn.execute(
+            "UPDATE selected_prompt SET prompt_id = ?1 WHERE id = 1",
+            rusqlite::params![prompt_id],
+        )?;
+        Ok(())
     }
     
     #[allow(dead_code)]

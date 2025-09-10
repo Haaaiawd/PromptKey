@@ -166,10 +166,32 @@ fn handle_injection_request(
         }
     };
     
-    // 获取第一个提示词（在MVP中我们只有一个测试提示词）
+    // 获取所有提示词并选择要使用的提示词
     match database.get_all_prompts() {
         Ok(prompts) => {
-            if let Some(prompt) = prompts.first() {
+            // 首先尝试获取选中的提示词
+            let selected_prompt_id = match database.get_selected_prompt_id() {
+                Ok(id) => {
+                    log::debug!("Selected prompt ID from database: {}", id);
+                    id
+                },
+                Err(e) => {
+                    log::warn!("Failed to get selected prompt ID: {}, using first prompt", e);
+                    0 // 使用默认值
+                }
+            };
+            
+            // 根据选中的ID查找提示词，如果没有选中或找不到则使用第一个提示词
+            let prompt_to_use = if selected_prompt_id > 0 {
+                prompts.iter().find(|p| p.id == Some(selected_prompt_id)).cloned()
+            } else {
+                None
+            };
+            
+            // 如果没有选中的提示词或者找不到选中的提示词，则使用第一个提示词
+            let prompt = prompt_to_use.or_else(|| prompts.first().cloned());
+            
+            if let Some(prompt) = prompt {
                 log::info!("Injecting prompt: {}", prompt.name);
                 log::debug!("Prompt content: {}", prompt.content);
                 
