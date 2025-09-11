@@ -71,12 +71,11 @@ impl ServiceState {
         let service_exe_path = resolve_service_exe_path()?;
         println!("服务可执行文件路径: {}", service_exe_path);
         
-        // 启动服务进程（隐藏窗口，断开标准流）
+        // 启动服务进程（保持日志输出，但隐藏窗口）
         let mut cmd = Command::new(&service_exe_path);
         cmd.current_dir(std::env::current_dir().unwrap())
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .env("RUST_LOG", "info"); // 设置日志级别
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -174,7 +173,8 @@ fn main() {
             update_prompt,
             delete_prompt,
             reset_settings,
-            set_selected_prompt
+            set_selected_prompt,
+            get_selected_prompt
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -458,7 +458,28 @@ fn set_selected_prompt(id: i32) -> Result<(), String> {
         rusqlite::params![id],
     ).map_err(|e| format!("设置选中提示词失败: {}", e))?;
     
+    println!("设置选中提示词ID为: {}", id);
     Ok(())
+}
+
+#[tauri::command]
+fn get_selected_prompt() -> Result<i32, String> {
+    let conn = open_db()?;
+    
+    let mut stmt = conn.prepare("SELECT prompt_id FROM selected_prompt WHERE id = 1")
+        .map_err(|e| format!("准备查询语句失败: {}", e))?;
+    
+    let mut rows = stmt.query([])
+        .map_err(|e| format!("执行查询失败: {}", e))?;
+    
+    if let Some(row) = rows.next().map_err(|e| format!("读取查询结果失败: {}", e))? {
+        let prompt_id: i32 = row.get(0).map_err(|e| format!("获取prompt_id失败: {}", e))?;
+        println!("当前选中的提示词ID: {}", prompt_id);
+        Ok(prompt_id)
+    } else {
+        println!("没有找到选中的提示词记录，返回默认值0");
+        Ok(0)
+    }
 }
 
 fn create_and_show_window(app: &AppHandle) {

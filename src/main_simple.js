@@ -214,12 +214,16 @@ async function initializeApp() {
                     return;
                 }
                 
-                updateDebugInfo(`正在保存热键: ${currentHotkey}`);
+                // 获取注入模式
+                const injectionModeSelect = document.getElementById('injection-mode');
+                const injectionMode = injectionModeSelect?.value || 'append';
+                
+                updateDebugInfo(`正在保存设置 - 热键: ${currentHotkey}, 注入模式: ${injectionMode}`);
                 
                 // 调用Tauri后端保存设置
                 const result = await safeInvoke('apply_settings', {
                     hotkey: currentHotkey,
-                    uiaMode: null
+                    uiaMode: injectionMode
                 });
                 
                 updateDebugInfo(`保存设置成功: ${result}`);
@@ -372,12 +376,27 @@ async function initializeApp() {
         const settings = await safeInvoke('get_settings');
         updateDebugInfo('后端设置: ' + JSON.stringify(settings));
         
+        // 加载热键设置
         const hotkeyInput = document.getElementById('hotkey-input');
         if (hotkeyInput && settings.hotkey) {
             hotkeyInput.value = settings.hotkey;
             localStorage.setItem('recordedHotkey', settings.hotkey);
             updateDebugInfo(`已加载热键设置: ${settings.hotkey}`);
+            
+            // 更新使用帮助中的快捷键显示
+            const helpElement = document.getElementById('current-hotkey-help');
+            if (helpElement) {
+                helpElement.textContent = `2. 当前快捷键: ${settings.hotkey}`;
+            }
         }
+        
+        // 加载注入模式设置
+        const injectionModeSelect = document.getElementById('injection-mode');
+        if (injectionModeSelect && settings.uia_mode) {
+            injectionModeSelect.value = settings.uia_mode;
+            updateDebugInfo(`已加载注入模式设置: ${settings.uia_mode}`);
+        }
+        
     } catch (error) {
         updateDebugInfo('从后端加载设置失败: ' + error);
         
@@ -486,6 +505,58 @@ function bindFunctionButtons() {
             }
         });
         updateDebugInfo('已绑定清空日志按钮');
+    }
+    
+    // 主题切换功能
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        themeSelect.addEventListener('change', (e) => {
+            const selectedTheme = e.target.value;
+            updateDebugInfo(`切换主题: ${selectedTheme}`);
+            
+            const body = document.body;
+            body.classList.remove('theme-light', 'theme-dark');
+            body.classList.add(`theme-${selectedTheme}`);
+            
+            // 保存主题设置到localStorage
+            localStorage.setItem('selectedTheme', selectedTheme);
+            showNotification(`已切换到${selectedTheme === 'light' ? '浅色' : '深色'}主题`, 'info');
+        });
+        
+        // 加载保存的主题
+        const savedTheme = localStorage.getItem('selectedTheme') || 'light';
+        themeSelect.value = savedTheme;
+        document.body.classList.remove('theme-light', 'theme-dark');
+        document.body.classList.add(`theme-${savedTheme}`);
+        
+        updateDebugInfo('已绑定主题切换功能');
+    }
+    
+    // 搜索功能按钮
+    const marketSearchBtn = document.getElementById('market-search-btn');
+    if (marketSearchBtn) {
+        marketSearchBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const searchInput = document.getElementById('market-search');
+            const query = searchInput?.value?.trim();
+            updateDebugInfo(`市场搜索: ${query || '空查询'}`);
+            alert('搜索功能暂未实现');
+        });
+        updateDebugInfo('已绑定市场搜索按钮');
+    }
+    
+    const logsSearchBtn = document.getElementById('logs-search-btn');
+    if (logsSearchBtn) {
+        logsSearchBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const searchInput = document.getElementById('logs-search');
+            const query = searchInput?.value?.trim();
+            updateDebugInfo(`日志搜索: ${query || '空查询'}`);
+            alert('日志搜索功能暂未实现');
+        });
+        updateDebugInfo('已绑定日志搜索按钮');
     }
 }
 
@@ -678,10 +749,13 @@ async function loadPrompts() {
                     
                     // 调用后端设置选中的提示词ID
                     try {
-                        await safeInvoke('set_selected_prompt', selectedPromptId);
+                        await safeInvoke('set_selected_prompt', { id: selectedPromptId });
+                        localStorage.setItem('selectedPromptId', selectedPromptId);
                         updateDebugInfo(`已设置选中的提示词 ID: ${selectedPromptId}`);
+                        showNotification(`已选中提示词: ${prompt.name}`, 'info');
                     } catch (error) {
                         updateDebugInfo(`设置选中提示词失败: ${error}`);
+                        showNotification(`设置失败: ${error}`, 'error');
                     }
                 });
             });

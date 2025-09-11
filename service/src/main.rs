@@ -13,7 +13,7 @@ fn main() {
     // 初始化日志记录器
     env_logger::init();
     
-    log::info!("Prompt Manager service starting...");
+    log::info!("🎯 DEBUG VERSION: Prompt Manager service starting with DEBUG CODE...");
     
     // 加载配置
     let config = match config::Config::load() {
@@ -146,7 +146,7 @@ fn handle_injection_request(
     injector: &injector::Injector,
     context_manager: &context::ContextManager,
 ) {
-    log::debug!("Handling injection request");
+    log::info!("🚀 DEBUG: Starting injection request handler");
     
     // 获取上下文信息
     let context_info = match context_manager.get_foreground_context() {
@@ -169,27 +169,39 @@ fn handle_injection_request(
     // 获取所有提示词并选择要使用的提示词
     match database.get_all_prompts() {
         Ok(prompts) => {
+            log::info!("🔍 DEBUG: Starting prompt selection process");
+            log::info!("🔍 DEBUG: Found {} total prompts in database", prompts.len());
+            
             // 首先尝试获取选中的提示词
             let selected_prompt_id = match database.get_selected_prompt_id() {
                 Ok(id) => {
-                    log::debug!("Selected prompt ID from database: {}", id);
+                    log::info!("🔍 DEBUG: Selected prompt ID from database: {}", id);
                     id
                 },
                 Err(e) => {
-                    log::warn!("Failed to get selected prompt ID: {}, using first prompt", e);
+                    log::warn!("🔍 DEBUG: Failed to get selected prompt ID: {}, using first prompt", e);
                     0 // 使用默认值
                 }
             };
             
-            // 根据选中的ID查找提示词，如果没有选中或找不到则使用第一个提示词
-            let prompt_to_use = if selected_prompt_id > 0 {
-                prompts.iter().find(|p| p.id == Some(selected_prompt_id)).cloned()
+            // 根据选中的ID查找提示词
+            log::info!("🔍 DEBUG: Looking for prompt with selected_prompt_id={}", selected_prompt_id);
+            let prompt = if selected_prompt_id > 0 {
+                // 查找指定ID的提示词
+                if let Some(found_prompt) = prompts.iter().find(|p| p.id == Some(selected_prompt_id)) {
+                    log::info!("✅ DEBUG: Found selected prompt: {} (ID: {})", found_prompt.name, selected_prompt_id);
+                    Some(found_prompt.clone())
+                } else {
+                    log::warn!("❌ DEBUG: Selected prompt ID {} not found in {} prompts, using first prompt", selected_prompt_id, prompts.len());
+                    for p in &prompts {
+                        log::warn!("🔍 DEBUG: Available prompt: ID={}, Name={}", p.id.unwrap_or(-1), p.name);
+                    }
+                    prompts.first().cloned()
+                }
             } else {
-                None
+                log::info!("🔍 DEBUG: No prompt selected (ID=0), using first prompt");
+                prompts.first().cloned()
             };
-            
-            // 如果没有选中的提示词或者找不到选中的提示词，则使用第一个提示词
-            let prompt = prompt_to_use.or_else(|| prompts.first().cloned());
             
             if let Some(prompt) = prompt {
                 log::info!("Injecting prompt: {}", prompt.name);
