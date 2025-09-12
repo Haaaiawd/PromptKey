@@ -12,7 +12,7 @@ function updateDebugInfo(message) {
     const debugMsg = `${timestamp}: ${message}`;
     console.log(debugMsg);
     
-    const debugElement = document.getElementById('debug-content');
+    const debugElement = document.getElementById('debug-content-logs');
     if (debugElement) {
         const existingContent = debugElement.textContent || '';
         debugElement.textContent = existingContent + '\n' + debugMsg;
@@ -22,7 +22,7 @@ function updateDebugInfo(message) {
 
 // 清除调试信息
 function clearDebugInfo() {
-    const debugElement = document.getElementById('debug-content');
+    const debugElement = document.getElementById('debug-content-logs');
     if (debugElement) {
         debugElement.textContent = '';
     }
@@ -32,7 +32,7 @@ function clearDebugInfo() {
 
 // 复制调试日志到剪贴板
 function copyDebugLogs() {
-    const debugElement = document.getElementById('debug-content');
+    const debugElement = document.getElementById('debug-content-logs');
     if (debugElement) {
         const logs = debugElement.textContent;
         
@@ -155,19 +155,18 @@ async function safeInvoke(cmd, payload = {}) {
 async function initializeApp() {
     updateDebugInfo('=== 开始初始化应用 ===');
     
-    // 检查是否为调试模式，在发布模式下隐藏调试面板
-    try {
-        const isDebug = await safeInvoke('is_debug_mode');
-        const debugPanel = document.getElementById('debug-info');
-        if (debugPanel && !isDebug) {
-            debugPanel.classList.add('hidden');
-            console.log('发布模式：已隐藏调试面板');
-        } else if (debugPanel && isDebug) {
-            debugPanel.classList.remove('hidden');
-            console.log('调试模式：显示调试面板');
-        }
-    } catch (error) {
-        console.warn('无法检测调试模式:', error);
+    // 显示调试区域（现在集成在日志页面中）
+    const debugSection = document.getElementById('debug-section');
+    if (debugSection) {
+        debugSection.style.display = 'block';
+        updateDebugInfo('调试区域已显示在日志页面');
+        
+        // 添加测试日志来验证功能
+        updateDebugInfo('这是一条测试日志消息');
+        updateDebugInfo('调试功能正常工作');
+    } else {
+        console.warn('未找到debug-section元素');
+        console.log('DOM中所有带debug的元素:', document.querySelectorAll('[id*="debug"]'));
     }
     
     // 检查Tauri API状态

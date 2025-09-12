@@ -661,3 +661,38 @@ select:focus {
     flex-direction: column;
   }
 }
+
+/* Debug section styles */
+.debug-section {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.debug-header {
+  margin-bottom: 1rem;
+}
+
+.debug-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+.debug-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+#debug-content-logs {
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--text);
+  min-height: 50px;
+}
