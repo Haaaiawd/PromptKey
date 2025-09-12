@@ -235,6 +235,7 @@ impl Database {
     }
     
     // 新增方法：设置选中的提示词ID
+    #[allow(dead_code)]
     pub fn set_selected_prompt_id(&self, prompt_id: i32) -> Result<(), Box<dyn std::error::Error>> {
         self.conn.execute(
             "UPDATE selected_prompt SET prompt_id = ?1 WHERE id = 1",

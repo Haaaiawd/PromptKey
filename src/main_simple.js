@@ -155,6 +155,21 @@ async function safeInvoke(cmd, payload = {}) {
 async function initializeApp() {
     updateDebugInfo('=== 开始初始化应用 ===');
     
+    // 检查是否为调试模式，在发布模式下隐藏调试面板
+    try {
+        const isDebug = await safeInvoke('is_debug_mode');
+        const debugPanel = document.getElementById('debug-info');
+        if (debugPanel && !isDebug) {
+            debugPanel.classList.add('hidden');
+            console.log('发布模式：已隐藏调试面板');
+        } else if (debugPanel && isDebug) {
+            debugPanel.classList.remove('hidden');
+            console.log('调试模式：显示调试面板');
+        }
+    } catch (error) {
+        console.warn('无法检测调试模式:', error);
+    }
+    
     // 检查Tauri API状态
     updateDebugInfo('检查Tauri API状态...');
     updateDebugInfo('window对象存在: ' + (typeof window !== 'undefined'));
