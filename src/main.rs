@@ -148,10 +148,30 @@ fn resolve_service_exe_path() -> Result<String, String> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_fs::init());
+    
+    // 为桌面平台添加单实例插件
+    #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            println!("检测到新实例启动，聚焦到现有窗口");
+            
+            // 尝试显示和聚焦主窗口
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            } else {
+                // 如果主窗口不存在，创建并显示它
+                create_and_show_window(app);
+            }
+        }));
+    }
+    
+    builder
         .manage(Mutex::new(ServiceState::new()))
         // 关闭窗口改为隐藏到托盘
         .on_window_event(|app, event| {
