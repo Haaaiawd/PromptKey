@@ -1,7 +1,7 @@
 {
   "productName": "PromptKey", 
   "version": "0.1.0",
-  "identifier": "com.promptkey.app",
+  "identifier": "com.promptkey.manager",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
@@ -28,6 +28,24 @@
     "active": true,
     "targets": "all",
     "icon": [
+      "PromptKey.ico"
+    ],
+    "externalBin": [
+      "sidecar/service"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      },
+      "allowDowngrades": true,
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "template": null
+      }
+    },
+    "resources": [
       "PromptKey.ico"
     ]
   }

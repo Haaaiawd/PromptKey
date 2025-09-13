@@ -115,36 +115,66 @@ impl ServiceState {
 }
 
 fn resolve_service_exe_path() -> Result<String, String> {
-    // 尝试从 GUI 可执行文件所在目录推导 target/{profile}/service(.exe)
+    // 尝试从 GUI 可执行文件所在目录推导 service(.exe) 路径
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("无法获取当前可执行文件路径: {}", e))?;
     let exe_dir = current_exe.parent()
         .ok_or_else(|| "无法获取当前可执行文件目录".to_string())?;
 
-    // 典型 dev: target/debug/promptkey.exe => 同目录下 service.exe
-    let candidate_debug = exe_dir.join(if cfg!(windows) { "service.exe" } else { "service" });
-    if candidate_debug.exists() {
-        return Ok(candidate_debug.to_string_lossy().into_owned());
+    let service_name = if cfg!(windows) { "service.exe" } else { "service" };
+
+    // 1. 优先检查 Tauri 打包后的 sidecar 路径（安装后的位置）
+    // 在 Tauri 打包后，sidecar 二进制文件会与主程序放在同一目录
+    let packaged_service = exe_dir.join(service_name);
+    if packaged_service.exists() {
+        return Ok(packaged_service.to_string_lossy().into_owned());
     }
 
-    // 典型 release: target/release/promptkey.exe => 同目录下 service(.exe)
-    // 若当前不是 release 目录，尝试 sibling "release"
+    // 2. 检查开发环境 - 同级目录下的 service.exe (debug/release)
+    let candidate_same_dir = exe_dir.join(service_name);
+    if candidate_same_dir.exists() {
+        return Ok(candidate_same_dir.to_string_lossy().into_owned());
+    }
+
+    // 3. 尝试从当前 profile 切换到另一个 profile
     if let Some(target_dir) = exe_dir.parent() {
-        let candidate_release_dir = target_dir.join("release");
-        let candidate_release = candidate_release_dir.join(if cfg!(windows) { "service.exe" } else { "service" });
+        // 如果当前在 debug，尝试 release
+        let candidate_release = target_dir.join("release").join(service_name);
         if candidate_release.exists() {
             return Ok(candidate_release.to_string_lossy().into_owned());
         }
+        
+        // 如果当前在 release，尝试 debug  
+        let candidate_debug = target_dir.join("debug").join(service_name);
+        if candidate_debug.exists() {
+            return Ok(candidate_debug.to_string_lossy().into_owned());
+        }
     }
 
-    // 退化：尝试工作区 target/debug
+    // 4. 退化：尝试工作区 target/debug 和 target/release
     let cwd = std::env::current_dir().map_err(|e| format!("无法获取当前目录: {}", e))?;
-    let fallback_debug = cwd.join("target").join("debug").join(if cfg!(windows) { "service.exe" } else { "service" });
+    
+    let fallback_debug = cwd.join("target").join("debug").join(service_name);
     if fallback_debug.exists() {
         return Ok(fallback_debug.to_string_lossy().into_owned());
     }
+    
+    let fallback_release = cwd.join("target").join("release").join(service_name);
+    if fallback_release.exists() {
+        return Ok(fallback_release.to_string_lossy().into_owned());
+    }
 
-    Err("未找到 service 可执行文件，请先构建 service 或检查路径".to_string())
+    Err(format!(
+        "未找到 service 可执行文件。已尝试的路径:\n\
+         - 打包路径: {}\n\
+         - 开发路径: {}\n\
+         - 备用路径: {} 和 {}\n\
+         请先构建 service 或检查路径配置",
+        packaged_service.display(),
+        candidate_same_dir.display(),
+        fallback_debug.display(),
+        fallback_release.display()
+    ))
 }
 
 fn main() {
