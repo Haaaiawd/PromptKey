@@ -13,7 +13,7 @@ fn main() {
     // 初始化日志记录器
     env_logger::init();
     
-    log::info!("🎯 DEBUG VERSION: Prompt Manager service starting with DEBUG CODE...");
+    log::info!("🎯 DEBUG VERSION: PromptKey service starting with DEBUG CODE...");
     
     // 加载配置
     let config = match config::Config::load() {
@@ -118,7 +118,7 @@ fn main() {
     // 停止热键服务
     hotkey_service.stop();
     
-    log::info!("Prompt Manager service stopped");
+    log::info!("PromptKey service stopped");
 }
 
 fn run_main_loop(

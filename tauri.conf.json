@@ -1,7 +1,7 @@
 {
-  "productName": "prompt-manager", 
+  "productName": "PromptKey", 
   "version": "0.1.0",
-  "identifier": "com.prompt-manager.app",
+  "identifier": "com.promptkey.app",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Prompt Manager",
+        "title": "PromptKey",
         "width": 1000,
         "height": 700,
         "resizable": true,
@@ -28,7 +28,7 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "PM.ico"
+      "PromptKey.ico"
     ]
   }
 }

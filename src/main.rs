@@ -121,13 +121,13 @@ fn resolve_service_exe_path() -> Result<String, String> {
     let exe_dir = current_exe.parent()
         .ok_or_else(|| "无法获取当前可执行文件目录".to_string())?;
 
-    // 典型 dev: target/debug/prompt-manager.exe => 同目录下 service.exe
+    // 典型 dev: target/debug/promptkey.exe => 同目录下 service.exe
     let candidate_debug = exe_dir.join(if cfg!(windows) { "service.exe" } else { "service" });
     if candidate_debug.exists() {
         return Ok(candidate_debug.to_string_lossy().into_owned());
     }
 
-    // 典型 release: target/release/prompt-manager.exe => 同目录下 service(.exe)
+    // 典型 release: target/release/promptkey.exe => 同目录下 service(.exe)
     // 若当前不是 release 目录，尝试 sibling "release"
     if let Some(target_dir) = exe_dir.parent() {
         let candidate_release_dir = target_dir.join("release");
@@ -378,7 +378,7 @@ fn delete_prompt(id: i32) -> Result<(), String> {
 // 打开数据库并确保目录/表存在，设置 busy_timeout 与 WAL
 fn open_db() -> Result<rusqlite::Connection, String> {
     let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptManager\\promptmgr.db", appdata)
+        format!("{}\\PromptKey\\promptmgr.db", appdata)
     } else {
         return Err("无法获取APPDATA路径".to_string());
     };
@@ -492,7 +492,7 @@ fn create_and_show_window(app: &AppHandle) {
     
     // 创建新窗口
     let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-        .title("Prompt Manager")
+        .title("PromptKey")
         .inner_size(1000.0, 700.0)
         .min_inner_size(800.0, 600.0)
         .build()
@@ -543,7 +543,7 @@ fn default_uia_value_pattern_mode() -> String { "overwrite".into() }
 
 fn config_path() -> Result<std::path::PathBuf, String> {
     let appdata = std::env::var("APPDATA").map_err(|e| format!("读取APPDATA失败: {}", e))?;
-    let dir = std::path::Path::new(&appdata).join("PromptManager");
+    let dir = std::path::Path::new(&appdata).join("PromptKey");
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
     Ok(dir.join("config.yaml"))
 }
@@ -557,7 +557,7 @@ fn load_or_default_config() -> Result<AppConfig, String> {
     } else {
         // database_path 默认与服务一致
         let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-            format!("{}\\PromptManager\\promptmgr.db", appdata)
+            format!("{}\\PromptKey\\promptmgr.db", appdata)
         } else {
             "promptmgr.db".to_string()
         };

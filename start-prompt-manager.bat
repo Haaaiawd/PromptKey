@@ -1,16 +1,16 @@
 @echo off
-echo 正在启动 Prompt Manager...
+echo 正在启动 PromptKey...
 
 echo 启动后台服务...
-start "Prompt Manager Service" /min cmd /c "cargo run -p service || pause"
+start "PromptKey Service" /min cmd /c "cargo run -p service || pause"
 
 timeout /t 3 /nobreak >nul
 
 echo 启动GUI界面...
-start "Prompt Manager GUI" cmd /c "cargo run || pause"
+start "PromptKey GUI" cmd /c "cargo run --bin promptkey || pause"
 
 echo.
-echo Prompt Manager 已启动！
+echo PromptKey 已启动！
 echo.
 echo 使用方法：
 echo 1. 在任何文本编辑器中定位光标

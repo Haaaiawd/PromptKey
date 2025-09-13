@@ -165,7 +165,7 @@ impl Config {
     pub fn get_config_path() -> Result<String, Box<dyn std::error::Error>> {
         // 获取APPDATA路径
         let appdata = std::env::var("APPDATA")?;
-        let config_dir = format!("{}\\PromptManager", appdata);
+        let config_dir = format!("{}\\PromptKey", appdata);
         
         // 创建配置目录（如果不存在）
         fs::create_dir_all(&config_dir)?;
@@ -263,7 +263,7 @@ impl Default for Config {
     fn default() -> Self {
         // 获取默认数据库路径
         let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-            format!("{}\\PromptManager\\promptmgr.db", appdata)
+            format!("{}\\PromptKey\\promptmgr.db", appdata)
         } else {
             "promptmgr.db".to_string() // fallback
         };

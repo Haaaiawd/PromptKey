@@ -14,13 +14,13 @@ panic = "abort"
 strip = "symbols"
 
 [package]
-name = "prompt-manager"
+name = "promptkey"
 version = "0.1.0"
 edition = "2021"
-default-run = "prompt-manager"
+default-run = "promptkey"
 
 [[bin]]
-name = "prompt-manager"
+name = "promptkey"
 path = "src/main.rs"
 
 [[bin]]

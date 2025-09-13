@@ -3,7 +3,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    println!("正在启动 Prompt Manager...");
+    println!("正在启动 PromptKey...");
     
     // 启动服务进程
     let service_handle = thread::spawn(|| {
@@ -34,7 +34,7 @@ fn main() {
         }
     });
     
-    println!("Prompt Manager 已启动，后台服务和GUI界面正在运行中...");
+    println!("PromptKey 已启动，后台服务和GUI界面正在运行中...");
     println!("提示：请在文本编辑器中按下 Ctrl+Alt+Space 测试功能");
     
     // 等待线程完成

@@ -74,38 +74,6 @@ body {
   height: 100vh;
 }
 
-/* 头部 */
-.app-header {
-  display: flex;
-  justify-content: between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--card);
-}
-
-.header-left h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
-.app-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.status-label {
-  color: var(--muted-foreground);
-}
-
-.status-active {
-  color: var(--primary);
-  font-weight: 500;
-}
-
 /* 主内容 */
 .main-content {
   display: flex;
