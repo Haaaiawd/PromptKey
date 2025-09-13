@@ -17,53 +17,34 @@ const CF_UNICODETEXT_CONST: u32 = 13;
 
 #[derive(Debug)]
 pub struct InjectionContext {
-    #[allow(dead_code)]
-    pub target_text: String,
     pub app_name: String,
     pub window_title: String,
-    #[allow(dead_code)]
-    pub window_handle: windows::Win32::Foundation::HWND,
+    pub window_handle: HWND,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InjectionStrategy {
     UIA,
-    #[allow(dead_code)]
     Clipboard,
-    #[allow(dead_code)]
     SendInput,
 }
 
 #[derive(Debug, Clone)]
 pub enum EditorType {
     Generic,
-    #[allow(dead_code)]
     Scintilla,      // Notepad++
-    #[allow(dead_code)]
     Electron,       // VS Code, Atom
-    #[allow(dead_code)]
     WPF,           // Visual Studio
-    #[allow(dead_code)]
     Swing,         // IntelliJ IDEA, Eclipse
-    #[allow(dead_code)]
-    Qt,            // Qt-based editors
 }
 
 #[derive(Debug, Clone)]
 pub struct EditorDetection {
-    #[allow(dead_code)]
     pub editor_type: EditorType,
-    #[allow(dead_code)]
-    pub class_name: String,
-    #[allow(dead_code)]
-    pub framework_id: String,
-    #[allow(dead_code)]
     pub process_name: String,
 }
 
 pub struct Injector {
-    #[allow(dead_code)]
-    strategies: Vec<InjectionStrategy>,
     config: Config,
 }
 
@@ -83,13 +64,13 @@ fn describe_element(el: &IUIAutomationElement) -> String {
 }
 
 impl Injector {
-    pub fn new(strategies: Vec<InjectionStrategy>, config: Config) -> Self {
-        log::debug!("Creating injector with strategies: {:?}", strategies);
-        Injector { strategies, config }
+    pub fn new(_strategies: Vec<InjectionStrategy>, config: Config) -> Self {
+        log::debug!("Creating injector with config-driven strategies");
+        Injector { config }
     }
     
-    pub fn inject(&self, text: &str, context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
-    log::info!("Attempting to inject text using available strategies");
+    pub fn inject(&self, text: &str, context: &InjectionContext) -> StdResult<(String, u64), Box<dyn std::error::Error>> {
+        log::info!("Attempting to inject text using available strategies");
         log::debug!("Text to inject: {}", text);
         log::debug!("Context: app_name={}, window_title={}", context.app_name, context.window_title);
         log::debug!(
@@ -98,24 +79,33 @@ impl Injector {
             self.config.injection.allow_clipboard,
             self.config.injection.uia_value_pattern_mode
         );
-    let effective = self.effective_strategies_for(&context.app_name);
-    log::debug!("Effective strategy order: {:?}", effective);
+        let effective = self.effective_strategies_for(&context.app_name);
+        log::debug!("Effective strategy order: {:?}", effective);
 
-    for strategy in &effective {
+        for strategy in &effective {
             log::debug!("Trying injection strategy: {:?}", strategy);
+            
+            // 测量实际注入操作的时间
+            let start = std::time::Instant::now();
             let result = match strategy {
                 InjectionStrategy::UIA => self.inject_via_uia(text, context),
                 InjectionStrategy::Clipboard => self.inject_via_clipboard(text, context),
                 InjectionStrategy::SendInput => self.inject_via_sendinput(text, context),
             };
+            let injection_time = start.elapsed().as_millis() as u64;
             
             match result {
                 Ok(_) => {
-                    log::info!("Successfully injected text using {:?} strategy", strategy);
-                    return Ok(());
+                    let strategy_name = match strategy {
+                        InjectionStrategy::UIA => "UIA",
+                        InjectionStrategy::Clipboard => "Clipboard",
+                        InjectionStrategy::SendInput => "SendInput",
+                    };
+                    log::info!("Successfully injected text using {:?} strategy in {}ms", strategy, injection_time);
+                    return Ok((strategy_name.to_string(), injection_time));
                 }
                 Err(e) => {
-                    log::warn!("Failed to inject using {:?} strategy: {}", strategy, e);
+                    log::warn!("Failed to inject using {:?} strategy in {}ms: {}", strategy, injection_time, e);
                     // 继续尝试下一个策略
                 }
             }
@@ -177,8 +167,6 @@ impl Injector {
         // 应用一些编辑器特定的焦点处理
         let detection = self.detect_editor_type(&target_element, &context.app_name).unwrap_or(EditorDetection{
             editor_type: EditorType::Generic,
-            class_name: "Unknown".to_string(),
-            framework_id: "Unknown".to_string(),
             process_name: context.app_name.clone()
         });
     // insert 模式下尽量避免 SetFocus 触发某些控件的“全选”行为
@@ -520,9 +508,17 @@ impl Injector {
         Ok(())
     }
     
-    fn inject_via_sendinput(&self, _text: &str, _context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
-        log::debug!("SendInput injection skipped in MVP");
-        Err("SendInput injection not implemented in MVP".into())
+    fn inject_via_sendinput(&self, text: &str, context: &InjectionContext) -> StdResult<(), Box<dyn std::error::Error>> {
+        log::debug!("Attempting SendInput injection");
+        
+        // 将目标窗口置前
+        unsafe { let _ = SetForegroundWindow(context.window_handle); }
+        
+        // 等待焦点稳定
+        std::thread::sleep(Duration::from_millis(self.get_pre_inject_delay(&context.app_name)));
+        
+        // 直接使用 SendInput 模拟输入
+        self.type_text_via_sendinput(text)
     }
 
     fn get_pre_inject_delay(&self, app_name: &str) -> u64 {
@@ -551,8 +547,6 @@ impl Injector {
         
         Ok(EditorDetection {
             editor_type,
-            class_name,
-            framework_id,
             process_name: app_name.to_string(),
         })
     }

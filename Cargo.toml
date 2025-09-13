@@ -23,9 +23,7 @@ default-run = "promptkey"
 name = "promptkey"
 path = "src/main.rs"
 
-[[bin]]
-name = "launcher"
-path = "src/launcher.rs"
+
 
 [build-dependencies]
 tauri-build = { version = "2.0.0", features = [] }

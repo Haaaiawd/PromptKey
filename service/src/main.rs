@@ -148,6 +148,16 @@ fn handle_injection_request(
 ) {
     log::info!("🚀 DEBUG: Starting injection request handler");
     
+    // 获取配置以记录使用的热键
+    let config = match config::Config::load() {
+        Ok(config) => config,
+        Err(e) => {
+            log::error!("Failed to load config for logging: {}", e);
+            return;
+        }
+    };
+    let hotkey_used = config.hotkey.clone();
+    
     // 获取上下文信息
     let context_info = match context_manager.get_foreground_context() {
         Ok(context) => {
@@ -204,53 +214,83 @@ fn handle_injection_request(
             };
             
             if let Some(prompt) = prompt {
-                log::info!("Injecting prompt: {}", prompt.name);
-                log::debug!("Prompt content: {}", prompt.content);
+                log::info!("🔥 Injecting prompt: {} using hotkey: {}", prompt.name, hotkey_used);
+                log::info!("📝 Prompt content: {}", prompt.content);
+                log::info!("🎯 Target: {} - {}", context_info.process_name, context_info.window_title);
                 
-                // 创建注入上下文
+                // 创建注入上下文（与 injector::InjectionContext 定义匹配）
                 let context = injector::InjectionContext {
-                    target_text: prompt.content.clone(),
-                    app_name: context_info.process_name,
-                    window_title: context_info.window_title,
+                    app_name: context_info.process_name.clone(),
+                    window_title: context_info.window_title.clone(),
                     window_handle: context_info.window_handle,
                 };
                 
-                // 执行注入
-                let start = std::time::Instant::now();
+                // 执行注入并记录详细信息
                 let res = injector.inject(&prompt.content, &context);
-                let dur_ms = start.elapsed().as_millis();
+                
+                // 记录使用日志，包含热键信息和注入时间
                 match &res {
-                    Ok(_) => {
-                        log::info!("Injection successful");
+                    Ok((strategy_used, injection_time)) => {
+                        log::info!("✅ Injection successful in {}ms using hotkey: {} with strategy: {}", injection_time, hotkey_used, strategy_used);
                         let _ = database.log_usage(
                             prompt.id,
+                            &prompt.name,
                             &context.app_name,
                             &context.window_title,
-                            "UIA",
+                            &hotkey_used,
+                            strategy_used,
+                            *injection_time as u128,
                             true,
                             None,
-                            &format!("ok:{}ms", dur_ms),
+                            &format!("✅ 成功注入 {}ms - 策略: {}", injection_time, strategy_used),
                         );
                     }
                     Err(e) => {
-                        log::error!("Injection failed: {}", e);
+                        log::error!("❌ Injection failed using hotkey: {} - Error: {}", hotkey_used, e);
                         let _ = database.log_usage(
                             prompt.id,
+                            &prompt.name,
                             &context.app_name,
                             &context.window_title,
-                            "UIA",
+                            &hotkey_used,
+                            "FAILED",
+                            0,
                             false,
                             Some(&e.to_string()),
-                            &format!("fail:{}ms", dur_ms),
+                            &format!("❌ 注入失败: {}", e),
                         );
                     }
                 }
             } else {
-                log::warn!("No prompts found in database");
+                log::warn!("❌ No prompts found in database - logging empty attempt");
+                let _ = database.log_usage(
+                    None,
+                    "无可用提示词",
+                    &context_info.process_name,
+                    &context_info.window_title,
+                    &hotkey_used,
+                    "NO_PROMPT",
+                    0,
+                    false,
+                    Some("No prompts available"),
+                    "❌ 无可用提示词",
+                );
             }
         }
         Err(e) => {
-            log::error!("Failed to get prompts: {}", e);
+            log::error!("❌ Failed to get prompts: {} - logging error attempt", e);
+            let _ = database.log_usage(
+                None,
+                "数据库错误",
+                &context_info.process_name,
+                &context_info.window_title,
+                &hotkey_used,
+                "DB_ERROR",
+                0,
+                false,
+                Some(&e.to_string()),
+                &format!("❌ 数据库错误: {}", e),
+            );
         }
     }
 }

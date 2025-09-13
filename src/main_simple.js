@@ -209,6 +209,11 @@ async function initializeApp() {
             e.stopPropagation();
             updateDebugInfo('保存设置按钮被点击');
             
+            // 禁用按钮并显示加载状态
+            const originalText = elements.saveSettingsBtn.textContent;
+            elements.saveSettingsBtn.disabled = true;
+            elements.saveSettingsBtn.textContent = '保存中...';
+            
             try {
                 // 获取热键值
                 const hotkeyInput = document.getElementById('hotkey-input');
@@ -223,7 +228,7 @@ async function initializeApp() {
                 }
                 
                 if (!currentHotkey) {
-                    alert('请先录制一个热键！');
+                    showNotification('请先录制一个热键！', 'error');
                     updateDebugInfo('ERROR: 未设置热键，无法保存');
                     return;
                 }
@@ -241,11 +246,34 @@ async function initializeApp() {
                 });
                 
                 updateDebugInfo(`保存设置成功: ${result}`);
-                alert(`热键已保存并生效: ${currentHotkey}`);
+                
+                // 更新使用帮助中的快捷键显示
+                const helpElement = document.getElementById('current-hotkey-help');
+                if (helpElement) {
+                    helpElement.textContent = `2. 当前快捷键: ${currentHotkey}`;
+                }
+                
+                // 显示成功消息
+                showNotification(`✅ 设置保存成功！热键已更新为: ${currentHotkey}`, 'success');
+                
+                // 按钮显示成功状态
+                elements.saveSettingsBtn.textContent = '✅ 已保存';
+                elements.saveSettingsBtn.style.backgroundColor = '#28a745';
+                
+                // 2秒后恢复按钮状态
+                setTimeout(() => {
+                    elements.saveSettingsBtn.textContent = originalText;
+                    elements.saveSettingsBtn.style.backgroundColor = '';
+                    elements.saveSettingsBtn.disabled = false;
+                }, 2000);
                 
             } catch (error) {
                 updateDebugInfo(`保存设置失败: ${error}`);
-                alert(`保存失败: ${error}`);
+                showNotification(`❌ 保存失败: ${error}`, 'error');
+                
+                // 恢复按钮状态
+                elements.saveSettingsBtn.textContent = originalText;
+                elements.saveSettingsBtn.disabled = false;
             }
         });
         updateDebugInfo('已绑定保存设置按钮');
@@ -260,6 +288,16 @@ async function initializeApp() {
             e.stopPropagation();
             updateDebugInfo('重置设置按钮被点击');
             
+            // 显示确认对话框
+            if (!confirm('确定要重置所有设置为默认值吗？这将重启后台服务。')) {
+                return;
+            }
+            
+            // 禁用按钮并显示加载状态
+            const originalText = elements.resetSettingsBtn.textContent;
+            elements.resetSettingsBtn.disabled = true;
+            elements.resetSettingsBtn.textContent = '重置中...';
+            
             try {
                 // 调用Tauri后端重置设置
                 const result = await safeInvoke('reset_settings');
@@ -270,15 +308,36 @@ async function initializeApp() {
                 
                 const hotkeyInput = document.getElementById('hotkey-input');
                 if (hotkeyInput) {
-                    hotkeyInput.value = '';
+                    hotkeyInput.value = 'Ctrl+Alt+Space'; // 默认热键
+                }
+                
+                // 更新使用帮助中的快捷键显示
+                const helpElement = document.getElementById('current-hotkey-help');
+                if (helpElement) {
+                    helpElement.textContent = '2. 当前快捷键: Ctrl+Alt+Space';
                 }
                 
                 updateDebugInfo(`重置设置成功: ${result}`);
-                alert('设置已重置为默认值 (Ctrl+Alt+Space)');
+                showNotification('✅ 设置已重置为默认值！热键恢复为: Ctrl+Alt+Space', 'success');
+                
+                // 按钮显示成功状态
+                elements.resetSettingsBtn.textContent = '✅ 已重置';
+                elements.resetSettingsBtn.style.backgroundColor = '#28a745';
+                
+                // 2秒后恢复按钮状态
+                setTimeout(() => {
+                    elements.resetSettingsBtn.textContent = originalText;
+                    elements.resetSettingsBtn.style.backgroundColor = '';
+                    elements.resetSettingsBtn.disabled = false;
+                }, 2000);
                 
             } catch (error) {
                 updateDebugInfo(`重置设置失败: ${error}`);
-                alert(`重置失败: ${error}`);
+                showNotification(`❌ 重置失败: ${error}`, 'error');
+                
+                // 恢复按钮状态
+                elements.resetSettingsBtn.textContent = originalText;
+                elements.resetSettingsBtn.disabled = false;
             }
         });
         updateDebugInfo('已绑定重置设置按钮');
@@ -466,6 +525,11 @@ function bindNavigationButtons() {
                 if (targetPanel) {
                     targetPanel.classList.add('active');
                     updateDebugInfo(`已切换到面板: ${panel}`);
+                    
+                    // 如果切换到日志面板，自动加载日志
+                    if (panel === 'logs-panel') {
+                        loadUsageLogs();
+                    }
                 } else {
                     updateDebugInfo(`ERROR: 未找到面板: ${panel}`);
                 }
@@ -515,10 +579,30 @@ function bindFunctionButtons() {
             e.stopPropagation();
             updateDebugInfo('清空日志按钮被点击');
             if (confirm('确定要清空所有使用日志吗？')) {
+                // TODO: 实现清空日志功能
                 alert('日志清空功能暂未实现');
             }
         });
         updateDebugInfo('已绑定清空日志按钮');
+    }
+    
+    // 刷新日志按钮
+    const refreshLogsBtn = document.createElement('button');
+    refreshLogsBtn.id = 'refresh-logs-btn';
+    refreshLogsBtn.className = 'secondary-btn';
+    refreshLogsBtn.innerHTML = '<i class="icon-refresh"></i> 刷新日志';
+    refreshLogsBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateDebugInfo('刷新日志按钮被点击');
+        await loadUsageLogs();
+    });
+    
+    // 将刷新按钮添加到日志工具栏
+    const logsToolbar = document.querySelector('.logs-toolbar');
+    if (logsToolbar && clearLogsBtn) {
+        logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
+        updateDebugInfo('已添加刷新日志按钮');
     }
     
     // 主题切换功能
@@ -699,6 +783,125 @@ function showNotification(message, type = 'info') {
 // 将函数暴露到全局作用域
 window.closeAddPromptModal = closeAddPromptModal;
 window.submitPrompt = submitPrompt;
+
+// 加载使用日志
+async function loadUsageLogs() {
+    try {
+        updateDebugInfo('正在加载使用日志...');
+        const logs = await safeInvoke('get_usage_logs');
+        updateDebugInfo(`加载到 ${logs.length} 条使用日志`);
+        
+        const logsList = document.querySelector('.logs-list');
+        if (!logsList) {
+            updateDebugInfo('ERROR: 未找到.logs-list元素');
+            return;
+        }
+        
+        if (logs.length === 0) {
+            logsList.innerHTML = `
+                <div class="empty-state">
+                    <p>暂无使用日志</p>
+                    <p class="hint">使用提示词后会在这里显示记录</p>
+                </div>
+            `;
+        } else {
+            const logsHtml = logs.map((log, index) => {
+                const isSuccess = log.success;
+                const statusClass = isSuccess ? 'success' : 'error';
+                const timeFormatted = new Date(log.created_at).toLocaleString('zh-CN', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                return `
+                    <div class="log-card ${statusClass}" data-log-id="${index}">
+                        <div class="log-summary" onclick="toggleLogDetails(${index})">
+                            <div class="log-left">
+                                <span class="log-title">${log.prompt_name}</span>
+                                <span class="log-strategy-badge">${log.strategy}</span>
+                            </div>
+                            <div class="log-right">
+                                <span class="log-time-badge">${log.injection_time_ms}ms</span>
+                                <span class="log-timestamp">${timeFormatted}</span>
+                                <span class="expand-icon">▼</span>
+                            </div>
+                        </div>
+                        <div class="log-details" id="log-details-${index}" style="display: none;">
+                            <div class="details-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">热键</span>
+                                    <span class="detail-value">${log.hotkey_used}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">目标应用</span>
+                                    <span class="detail-value">${log.target_app}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">窗口标题</span>
+                                    <span class="detail-value">${log.window_title}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">注入策略</span>
+                                    <span class="detail-value">${log.strategy}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">执行时间</span>
+                                    <span class="detail-value">${log.injection_time_ms}ms</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">完整时间</span>
+                                    <span class="detail-value">${new Date(log.created_at).toLocaleString('zh-CN')}</span>
+                                </div>
+                                ${log.error ? `
+                                    <div class="detail-item error-item">
+                                        <span class="detail-label">错误信息</span>
+                                        <span class="detail-value">${log.error}</span>
+                                    </div>
+                                ` : ''}
+                                <div class="detail-item full-width">
+                                    <span class="detail-label">结果</span>
+                                    <span class="detail-value">${log.result}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            logsList.innerHTML = logsHtml;
+        }
+        
+    } catch (error) {
+        updateDebugInfo(`加载使用日志失败: ${error}`);
+        const logsList = document.querySelector('.logs-list');
+        if (logsList) {
+            logsList.innerHTML = `
+                <div class="empty-state error">
+                    <p>❌ 加载日志失败</p>
+                    <p class="hint">错误: ${error}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// 切换日志详情显示
+function toggleLogDetails(index) {
+    const detailsElement = document.getElementById(`log-details-${index}`);
+    const expandIcon = document.querySelector(`[data-log-id="${index}"] .expand-icon`);
+    
+    if (detailsElement.style.display === 'none') {
+        detailsElement.style.display = 'block';
+        expandIcon.textContent = '▲';
+        expandIcon.style.transform = 'rotate(180deg)';
+    } else {
+        detailsElement.style.display = 'none';
+        expandIcon.textContent = '▼';
+        expandIcon.style.transform = 'rotate(0deg)';
+    }
+}
 
 // 加载提示词列表
 async function loadPrompts() {

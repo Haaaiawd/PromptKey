@@ -203,12 +203,31 @@ fn main() {
     
     builder
         .manage(Mutex::new(ServiceState::new()))
-        // 关闭窗口改为隐藏到托盘
+        // 关闭窗口改为隐藏到托盘，支持退出确认
         .on_window_event(|app, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                
+                // 创建确认对话框 JavaScript 代码
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.hide();
+                    let js_code = r#"
+                        (function() {
+                            if (confirm('确定要退出 PromptKey 吗？\n\n点击"确定"退出程序\n点击"取消"最小化到系统托盘')) {
+                                window.__TAURI_INVOKE__('exit_application');
+                            } else {
+                                // 用户选择最小化到托盘
+                                window.close(); // 这会触发隐藏逻辑
+                            }
+                        })()
+                    "#;
+                    
+                    // 执行 JavaScript 确认对话框
+                    if let Err(_) = win.eval(js_code) {
+                        // 如果 JavaScript 执行失败，直接隐藏窗口
+                        let _ = win.hide();
+                    }
+                } else {
+                    // 如果窗口不存在，什么都不做
                 }
             }
         })
@@ -224,7 +243,9 @@ fn main() {
             delete_prompt,
             reset_settings,
             set_selected_prompt,
-            get_selected_prompt
+            get_selected_prompt,
+            get_usage_logs,
+            exit_application
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -530,6 +551,54 @@ fn get_selected_prompt() -> Result<i32, String> {
         println!("没有找到选中的提示词记录，返回默认值0");
         Ok(0)
     }
+}
+
+#[tauri::command]
+fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
+    let conn = open_db()?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, prompt_id, prompt_name, target_app, window_title, hotkey_used, strategy, injection_time_ms, success, error, result, created_at
+         FROM usage_logs ORDER BY created_at DESC LIMIT 100"
+    ).map_err(|e| format!("无法准备查询语句: {}", e))?;
+    
+    let log_iter = stmt.query_map([], |row| {
+        Ok(serde_json::json!({
+            "id": row.get::<_, i32>(0)?,
+            "prompt_id": row.get::<_, Option<i32>>(1)?,
+            "prompt_name": row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "未知".to_string()),
+            "target_app": row.get::<_, String>(3)?,
+            "window_title": row.get::<_, String>(4)?,
+            "hotkey_used": row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "未知".to_string()),
+            "strategy": row.get::<_, String>(6)?,
+            "injection_time_ms": row.get::<_, Option<i64>>(7)?.unwrap_or(0),
+            "success": row.get::<_, i32>(8)? == 1,
+            "error": row.get::<_, Option<String>>(9)?,
+            "result": row.get::<_, String>(10)?,
+            "created_at": row.get::<_, String>(11)?
+        }))
+    }).map_err(|e| format!("查询失败: {}", e))?;
+    
+    let mut logs = Vec::new();
+    for log in log_iter {
+        logs.push(log.map_err(|e| format!("获取日志失败: {}", e))?);
+    }
+    
+    Ok(logs)
+}
+
+#[tauri::command]
+fn exit_application(app: AppHandle) -> Result<(), String> {
+    // 停止服务
+    let service_state = app.state::<Mutex<ServiceState>>();
+    let mut service_state = service_state.lock().unwrap();
+    if let Err(e) = service_state.stop_service() {
+        eprintln!("停止服务时出错: {}", e);
+    }
+    
+    // 退出应用
+    app.exit(0);
+    Ok(())
 }
 
 fn create_and_show_window(app: &AppHandle) {
