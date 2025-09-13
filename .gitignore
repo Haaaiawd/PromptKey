@@ -6,6 +6,7 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+docs/
 
 ###############
 # Rust / Cargo #

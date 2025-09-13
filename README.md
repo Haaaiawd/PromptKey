@@ -174,21 +174,25 @@ cargo clean
 ```
 PromptKey/
 ├── src/                     # GUI 应用源码
-│   ├── main.rs                 # 主 GUI 应用
+│   ├── main.rs                 # 主 GUI 应用 (Tauri)
 │   ├── launcher.rs             # 启动器
 │   ├── index.html              # 前端界面
 │   ├── styles.css              # 界面样式
-│   └── main_simple.js          # 前端逻辑
+│   ├── main_simple.js          # 前端逻辑
+│   └── icons/                  # 应用图标
 ├── service/                 # 后台服务源码
 │   └── src/
 │       ├── main.rs             # 服务主程序
+│       ├── db.rs               # 数据库操作
+│       ├── win.rs              # Windows特定功能
 │       ├── config/             # 配置管理
 │       ├── hotkey/             # 热键处理
-│       ├── injector/           # 文本注入
-│       └── context/            # 应用上下文
+│       ├── injector/           # 文本注入 (UIA/Clipboard/SendInput)
+│       └── context/            # 应用上下文感知
 ├── target/                  # 构建输出
 │   ├── debug/                  # 开发版本
 │   └── release/                # 发布版本
+├── sidecar/                 # Tauri sidecar 二进制
 └── start-prompt-manager.*   # 启动脚本
 ```
 
