@@ -218,6 +218,10 @@ fn handle_injection_request(
                 log::info!("📝 Prompt content: {}", prompt.content);
                 log::info!("🎯 Target: {} - {}", context_info.process_name, context_info.window_title);
                 
+                // 调试：详细打印 prompt 对象
+                log::debug!("PROMPT DEBUG - ID: {:?}, Name: '{}', Content length: {}", 
+                          prompt.id, prompt.name, prompt.content.len());
+                
                 // 创建注入上下文（与 injector::InjectionContext 定义匹配）
                 let context = injector::InjectionContext {
                     app_name: context_info.process_name.clone(),
@@ -232,7 +236,12 @@ fn handle_injection_request(
                 match &res {
                     Ok((strategy_used, injection_time)) => {
                         log::info!("✅ Injection successful in {}ms using hotkey: {} with strategy: {}", injection_time, hotkey_used, strategy_used);
-                        let _ = database.log_usage(
+                        
+                        // 调试：打印即将记录的数据
+                        log::debug!("记录成功日志 - prompt_id: {:?}, prompt_name: '{}', strategy: '{}', time: {}ms", 
+                                  prompt.id, prompt.name, strategy_used, injection_time);
+                        
+                        let log_result = database.log_usage(
                             prompt.id,
                             &prompt.name,
                             &context.app_name,
@@ -244,10 +253,21 @@ fn handle_injection_request(
                             None,
                             &format!("✅ 成功注入 {}ms - 策略: {}", injection_time, strategy_used),
                         );
+                        
+                        if let Err(e) = log_result {
+                            log::error!("记录成功日志失败: {}", e);
+                        } else {
+                            log::debug!("成功记录日志到数据库");
+                        }
                     }
                     Err(e) => {
                         log::error!("❌ Injection failed using hotkey: {} - Error: {}", hotkey_used, e);
-                        let _ = database.log_usage(
+                        
+                        // 调试：打印即将记录的错误数据
+                        log::debug!("记录失败日志 - prompt_id: {:?}, prompt_name: '{}'", 
+                                  prompt.id, prompt.name);
+                        
+                        let log_result = database.log_usage(
                             prompt.id,
                             &prompt.name,
                             &context.app_name,
@@ -259,6 +279,12 @@ fn handle_injection_request(
                             Some(&e.to_string()),
                             &format!("❌ 注入失败: {}", e),
                         );
+                        
+                        if let Err(e) = log_result {
+                            log::error!("记录失败日志失败: {}", e);
+                        } else {
+                            log::debug!("成功记录失败日志到数据库");
+                        }
                     }
                 }
             } else {

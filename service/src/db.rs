@@ -216,11 +216,16 @@ impl Database {
         error: Option<&str>,
         result: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // 调试：打印接收到的参数
+        log::debug!("DB log_usage called with - prompt_id: {:?}, prompt_name: '{}', strategy: '{}', time: {}ms", 
+                   prompt_id, prompt_name, strategy, injection_time_ms);
+        
         let mut stmt = self.conn.prepare(
             "INSERT INTO usage_logs (prompt_id, prompt_name, target_app, window_title, hotkey_used, strategy, injection_time_ms, success, error, result)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
         )?;
-        stmt.execute(rusqlite::params![
+        
+        let result = stmt.execute(rusqlite::params![
             &prompt_id,
             &prompt_name,
             &target_app,
@@ -231,7 +236,18 @@ impl Database {
             &(if success { 1 } else { 0 }),
             &error,
             &result,
-        ])?;
+        ]);
+        
+        match &result {
+            Ok(rows_affected) => {
+                log::debug!("Successfully inserted usage log, {} rows affected", rows_affected);
+            }
+            Err(e) => {
+                log::error!("Failed to insert usage log: {}", e);
+            }
+        }
+        
+        result?;
         Ok(())
     }
     

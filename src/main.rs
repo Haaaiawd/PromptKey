@@ -557,13 +557,24 @@ fn get_selected_prompt() -> Result<i32, String> {
 fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
     let conn = open_db()?;
     
+    // 添加调试：检查表结构
+    let mut stmt = conn.prepare("PRAGMA table_info(usage_logs)")
+        .map_err(|e| format!("检查表结构失败: {}", e))?;
+    let columns: Vec<String> = stmt.query_map([], |row| {
+        Ok(row.get::<_, String>(1)?) // 获取列名
+    }).map_err(|e| format!("查询表结构失败: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("获取列名失败: {}", e))?;
+    
+    println!("数据库表结构 - 列名: {:?}", columns);
+    
     let mut stmt = conn.prepare(
         "SELECT id, prompt_id, prompt_name, target_app, window_title, hotkey_used, strategy, injection_time_ms, success, error, result, created_at
          FROM usage_logs ORDER BY created_at DESC LIMIT 100"
     ).map_err(|e| format!("无法准备查询语句: {}", e))?;
     
     let log_iter = stmt.query_map([], |row| {
-        Ok(serde_json::json!({
+        let log_entry = serde_json::json!({
             "id": row.get::<_, i32>(0)?,
             "prompt_id": row.get::<_, Option<i32>>(1)?,
             "prompt_name": row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "未知".to_string()),
@@ -576,13 +587,20 @@ fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
             "error": row.get::<_, Option<String>>(9)?,
             "result": row.get::<_, String>(10)?,
             "created_at": row.get::<_, String>(11)?
-        }))
+        });
+        
+        // 打印每条记录用于调试
+        println!("读取到日志记录: {}", log_entry);
+        
+        Ok(log_entry)
     }).map_err(|e| format!("查询失败: {}", e))?;
     
     let mut logs = Vec::new();
     for log in log_iter {
         logs.push(log.map_err(|e| format!("获取日志失败: {}", e))?);
     }
+    
+    println!("共读取到 {} 条日志记录", logs.len());
     
     Ok(logs)
 }

@@ -102,8 +102,8 @@ fn default_hotkey() -> String {
 }
 
 fn default_injection_order() -> Vec<String> {
-    // 按当前偏好固定为仅 UIA
-    vec!["uia".to_string()]
+    // 正确的优先级：UIA -> Clipboard -> SendInput
+    vec!["uia".to_string(), "clipboard".to_string(), "sendinput".to_string()]
 }
 
 fn default_allow_clipboard() -> bool {
@@ -141,7 +141,14 @@ fn default_use_accessibility_api() -> bool {
 impl Config {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         // 获取配置文件路径
-    let config_path = Self::get_config_path()?;
+        let config_path = Self::get_config_path()?;
+        
+        // 为了确保新的默认策略生效，暂时删除现有配置文件
+        // TODO: 在正式版本中应该使用配置版本号来管理升级
+        if Path::new(&config_path).exists() {
+            log::info!("删除现有配置文件以使用新的默认设置: {}", config_path);
+            let _ = fs::remove_file(&config_path);
+        }
         
         // 如果配置文件不存在，则创建默认配置
         if !Path::new(&config_path).exists() {
