@@ -552,8 +552,23 @@ fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
     println!("数据库表结构 - 列名: {:?}", columns);
     
     let mut stmt = conn.prepare(
-        "SELECT id, prompt_id, prompt_name, target_app, window_title, hotkey_used, strategy, injection_time_ms, success, error, result, created_at
-         FROM usage_logs ORDER BY created_at DESC LIMIT 100"
+        "SELECT 
+            u.id,
+            u.prompt_id,
+            COALESCE(u.prompt_name, p.name) AS prompt_name,
+            u.target_app,
+            u.window_title,
+            u.hotkey_used,
+            u.strategy,
+            u.injection_time_ms,
+            u.success,
+            u.error,
+            u.result,
+            u.created_at
+         FROM usage_logs u
+         LEFT JOIN prompts p ON p.id = u.prompt_id
+         ORDER BY u.created_at DESC
+         LIMIT 100"
     ).map_err(|e| format!("无法准备查询语句: {}", e))?;
     
     let log_iter = stmt.query_map([], |row| {

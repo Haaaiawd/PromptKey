@@ -240,7 +240,8 @@ fn handle_injection_request(
                         // 调试：打印即将记录的数据
                         log::debug!("记录成功日志 - prompt_id: {:?}, prompt_name: '{}', strategy: '{}', time: {}ms", 
                                   prompt.id, prompt.name, strategy_used, injection_time);
-                        
+                        // 将耗时转为至少 1ms，避免极快路径显示 0ms
+                        let injection_time_ms_to_log: u128 = std::cmp::max(1u64, *injection_time) as u128;
                         let log_result = database.log_usage(
                             prompt.id,
                             &prompt.name,
@@ -248,7 +249,7 @@ fn handle_injection_request(
                             &context.window_title,
                             &hotkey_used,
                             strategy_used,
-                            *injection_time as u128,
+                            injection_time_ms_to_log,
                             true,
                             None,
                             &format!("✅ 成功注入 {}ms - 策略: {}", injection_time, strategy_used),

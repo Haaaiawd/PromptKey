@@ -143,14 +143,7 @@ impl Config {
         // 获取配置文件路径
         let config_path = Self::get_config_path()?;
         
-        // 为了确保新的默认策略生效，暂时删除现有配置文件
-        // TODO: 在正式版本中应该使用配置版本号来管理升级
-        if Path::new(&config_path).exists() {
-            log::info!("删除现有配置文件以使用新的默认设置: {}", config_path);
-            let _ = fs::remove_file(&config_path);
-        }
-        
-        // 如果配置文件不存在，则创建默认配置
+        // 如果配置文件不存在，则创建默认配置（不再强制删除已有配置，避免路径漂移）
         if !Path::new(&config_path).exists() {
             let default_config = Config::default_with_predefined_apps();
             default_config.save(&config_path)?;
@@ -164,6 +157,18 @@ impl Config {
         // 如果应用配置为空，填充预定义配置
         if config.applications.is_empty() {
             config.applications = Self::get_predefined_applications();
+        }
+        
+        // 兼容性填充：如果某些字段缺失，应用默认值（避免用户配置被覆盖）
+        if config.injection.order.is_empty() {
+            config.injection.order = default_injection_order();
+        }
+        if config.injection.uia_value_pattern_mode.is_empty() {
+            config.injection.uia_value_pattern_mode = default_uia_value_pattern_mode();
+        }
+        // 如果 database_path 为空（历史文件），填充默认路径
+        if config.database_path.trim().is_empty() {
+            config.database_path = Config::default().database_path;
         }
         
         Ok(config)
