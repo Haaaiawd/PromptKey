@@ -213,6 +213,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_service,
             stop_service,
+            restart_service,
             check_service_status,
             apply_settings,
             get_settings,
@@ -552,7 +553,7 @@ fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
     println!("数据库表结构 - 列名: {:?}", columns);
     
     let mut stmt = conn.prepare(
-        "SELECT 
+                        "SELECT 
             u.id,
             u.prompt_id,
             COALESCE(u.prompt_name, p.name) AS prompt_name,
@@ -560,34 +561,41 @@ fn get_usage_logs() -> Result<Vec<serde_json::Value>, String> {
             u.window_title,
             u.hotkey_used,
             u.strategy,
-            u.injection_time_ms,
+                        CASE 
+                            WHEN u.success = 1 THEN 
+                                CASE WHEN u.injection_time_ms IS NULL OR u.injection_time_ms < 1 THEN 1 ELSE u.injection_time_ms END
+                            ELSE COALESCE(u.injection_time_ms, 0)
+                        END AS injection_time_ms,
             u.success,
             u.error,
-            u.result,
-            u.created_at
+                u.result,
+                                strftime('%s', u.created_at) AS created_at_epoch
          FROM usage_logs u
          LEFT JOIN prompts p ON p.id = u.prompt_id
          ORDER BY u.created_at DESC
          LIMIT 100"
     ).map_err(|e| format!("无法准备查询语句: {}", e))?;
     
-    let log_iter = stmt.query_map([], |row| {
-        let log_entry = serde_json::json!({
-            "id": row.get::<_, i32>(0)?,
-            "prompt_id": row.get::<_, Option<i32>>(1)?,
-            "prompt_name": row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "未知".to_string()),
-            "target_app": row.get::<_, String>(3)?,
-            "window_title": row.get::<_, String>(4)?,
-            "hotkey_used": row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "未知".to_string()),
-            "strategy": row.get::<_, String>(6)?,
-            "injection_time_ms": row.get::<_, Option<i64>>(7)?.unwrap_or(0),
-            "success": row.get::<_, i32>(8)? == 1,
-            "error": row.get::<_, Option<String>>(9)?,
-            "result": row.get::<_, String>(10)?,
-            "created_at": row.get::<_, String>(11)?
-        });
-        
-        // 打印每条记录用于调试
+        let log_iter = stmt.query_map([], |row| {
+            // Parse epoch string to milliseconds
+            let epoch_str: String = row.get(11)?;
+            let epoch_secs: i64 = epoch_str.parse().unwrap_or(0);
+            let created_at_ms = epoch_secs * 1000;
+            
+            let log_entry = serde_json::json!({
+                "id": row.get::<_, i32>(0)?,
+                "prompt_id": row.get::<_, Option<i32>>(1)?,
+                "prompt_name": row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "未知".to_string()),
+                "target_app": row.get::<_, String>(3)?,
+                "window_title": row.get::<_, String>(4)?,
+                "hotkey_used": row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "未知".to_string()),
+                "strategy": row.get::<_, String>(6)?,
+                "injection_time_ms": row.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                "success": row.get::<_, i32>(8)? == 1,
+                "error": row.get::<_, Option<String>>(9)?,
+                "result": row.get::<_, String>(10)?,
+                "created_at": created_at_ms
+            });        // 打印每条记录用于调试
         println!("读取到日志记录: {}", log_entry);
         
         Ok(log_entry)
@@ -835,4 +843,16 @@ fn clear_usage_logs() -> Result<(), String> {
     conn.execute("DELETE FROM usage_logs", [])
         .map_err(|e| format!("清空日志失败: {}", e))?;
     Ok(())
+}
+
+#[tauri::command]
+fn restart_service(app: AppHandle) -> Result<String, String> {
+    let service_state = app.state::<Mutex<ServiceState>>();
+    let mut service_state = service_state.lock().unwrap();
+    let _ = service_state.stop_service();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    match service_state.start_service() {
+        Ok(()) => Ok("服务已重启".to_string()),
+        Err(e) => Err(e)
+    }
 }

@@ -604,11 +604,30 @@ function bindFunctionButtons() {
         updateDebugInfo('刷新日志按钮被点击');
         await loadUsageLogs();
     });
+
+    // 重启服务按钮
+    const restartSvcBtn = document.createElement('button');
+    restartSvcBtn.id = 'restart-service-btn';
+    restartSvcBtn.className = 'secondary-btn';
+    restartSvcBtn.innerHTML = '<i class="icon-restart"></i> 重启服务';
+    restartSvcBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            updateDebugInfo('重启服务按钮被点击');
+            await safeInvoke('restart_service');
+            showNotification('✅ 服务已重启', 'success');
+        } catch (err) {
+            updateDebugInfo('重启服务失败: ' + err);
+            showNotification('❌ 重启服务失败: ' + err, 'error');
+        }
+    });
     
     // 将刷新按钮添加到日志工具栏
     const logsToolbar = document.querySelector('.logs-toolbar');
     if (logsToolbar && clearLogsBtn) {
         logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
+        logsToolbar.insertBefore(restartSvcBtn, clearLogsBtn);
         updateDebugInfo('已添加刷新日志按钮');
     }
     
@@ -815,7 +834,9 @@ async function loadUsageLogs() {
             const logsHtml = logs.map((log, index) => {
                 const isSuccess = log.success;
                 const statusClass = isSuccess ? 'success' : 'error';
-                const timeFormatted = new Date(log.created_at).toLocaleString('zh-CN', {
+                // log.created_at is epoch milliseconds (number)
+                const dt = new Date(log.created_at);
+                const timeFormatted = dt.toLocaleString('zh-CN', {
                     month: 'short',
                     day: 'numeric',
                     hour: '2-digit',
