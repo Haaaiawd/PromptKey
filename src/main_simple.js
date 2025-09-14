@@ -574,13 +574,20 @@ function bindFunctionButtons() {
     // 清空日志按钮
     const clearLogsBtn = document.getElementById('clear-logs-btn');
     if (clearLogsBtn) {
-        clearLogsBtn.addEventListener('click', (e) => {
+        clearLogsBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
             updateDebugInfo('清空日志按钮被点击');
             if (confirm('确定要清空所有使用日志吗？')) {
-                // TODO: 实现清空日志功能
-                alert('日志清空功能暂未实现');
+                try {
+                    await safeInvoke('clear_usage_logs');
+                    updateDebugInfo('日志已清空');
+                    showNotification('✅ 日志已清空', 'success');
+                    await loadUsageLogs();
+                } catch (err) {
+                    updateDebugInfo('清空日志失败: ' + err);
+                    showNotification('❌ 清空日志失败: ' + err, 'error');
+                }
             }
         });
         updateDebugInfo('已绑定清空日志按钮');

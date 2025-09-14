@@ -303,7 +303,7 @@ impl Injector {
                 // 执行插入：对 Chrome/Electron Edit 且无 TP2 的控件，优先 SendInput 以规避某些站点粘贴时的“全选替换”
                 let prefer_sendinput = is_chrome_like && !collapsed_by_tp2 && target_ct == UIA_EditControlTypeId.0;
                 if prefer_sendinput {
-                    log::debug!("[insert] Using UIA strategy with SendInput for Chrome-like Edit without TextPattern2");
+                    log::debug!("[insert] UIA strategy optimized for Chrome-like Edit");
                     self.type_text_via_sendinput(text)?;
                 } else {
                     if self.config.injection.allow_clipboard {

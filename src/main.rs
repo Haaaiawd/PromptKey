@@ -4,7 +4,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder, AppHandle
+    Manager, WebviewUrl, WebviewWindowBuilder, AppHandle,
 };
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -122,7 +122,6 @@ fn resolve_service_exe_path() -> Result<String, String> {
         .ok_or_else(|| "无法获取当前可执行文件目录".to_string())?;
 
     let service_name = if cfg!(windows) { "service.exe" } else { "service" };
-
     // 1. 优先检查 Tauri 打包后的 sidecar 路径（安装后的位置）
     // 在 Tauri 打包后，sidecar 二进制文件会与主程序放在同一目录
     let packaged_service = exe_dir.join(service_name);
@@ -136,7 +135,6 @@ fn resolve_service_exe_path() -> Result<String, String> {
         return Ok(candidate_same_dir.to_string_lossy().into_owned());
     }
 
-    // 3. 尝试从当前 profile 切换到另一个 profile
     if let Some(target_dir) = exe_dir.parent() {
         // 如果当前在 debug，尝试 release
         let candidate_release = target_dir.join("release").join(service_name);
@@ -203,31 +201,12 @@ fn main() {
     
     builder
         .manage(Mutex::new(ServiceState::new()))
-        // 关闭窗口改为隐藏到托盘，支持退出确认
+        // 关闭窗口：直接隐藏到托盘（避免反复触发 CloseRequested 导致“点击无效”）
         .on_window_event(|app, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                
-                // 创建确认对话框 JavaScript 代码
                 if let Some(win) = app.get_webview_window("main") {
-                    let js_code = r#"
-                        (function() {
-                            if (confirm('确定要退出 PromptKey 吗？\n\n点击"确定"退出程序\n点击"取消"最小化到系统托盘')) {
-                                window.__TAURI_INVOKE__('exit_application');
-                            } else {
-                                // 用户选择最小化到托盘
-                                window.close(); // 这会触发隐藏逻辑
-                            }
-                        })()
-                    "#;
-                    
-                    // 执行 JavaScript 确认对话框
-                    if let Err(_) = win.eval(js_code) {
-                        // 如果 JavaScript 执行失败，直接隐藏窗口
-                        let _ = win.hide();
-                    }
-                } else {
-                    // 如果窗口不存在，什么都不做
+                    let _ = win.hide();
                 }
             }
         })
@@ -245,7 +224,8 @@ fn main() {
             set_selected_prompt,
             get_selected_prompt,
             get_usage_logs,
-            exit_application
+            exit_application,
+            clear_usage_logs
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -448,11 +428,10 @@ fn delete_prompt(id: i32) -> Result<(), String> {
 
 // 打开数据库并确保目录/表存在，设置 busy_timeout 与 WAL
 fn open_db() -> Result<rusqlite::Connection, String> {
-    let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-        format!("{}\\PromptKey\\promptmgr.db", appdata)
-    } else {
-        return Err("无法获取APPDATA路径".to_string());
-    };
+    // 与 service 完全一致：从配置中读取 database_path，避免路径不一致导致“未知/0ms”
+    let cfg = load_or_default_config()?;
+    let database_path = cfg.database_path;
+    println!("[DB] 使用数据库路径: {}", database_path);
 
     // 确保目录存在
     if let Some(parent) = std::path::Path::new(&database_path).parent() {
@@ -485,6 +464,7 @@ fn open_db() -> Result<rusqlite::Connection, String> {
         [],
     ).map_err(|e| format!("创建 prompts 表失败: {}", e))?;
 
+    // 初始创建（可能是旧结构），后续用 ensure_usage_logs_schema 升级列
     conn.execute(
         "CREATE TABLE IF NOT EXISTS usage_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -499,6 +479,9 @@ fn open_db() -> Result<rusqlite::Connection, String> {
         )",
         [],
     ).map_err(|e| format!("创建 usage_logs 表失败: {}", e))?;
+
+    // 确保新列存在：prompt_name、hotkey_used、injection_time_ms
+    ensure_usage_logs_schema(&conn)?;
 
     // 创建selected_prompt表用于存储选中的提示词ID
     conn.execute(
@@ -793,4 +776,48 @@ fn reset_settings() -> Result<String, String> {
     let _ = load_or_default_config()?;
     
     Ok("设置已重置".into())
+}
+
+// 升级/补全 usage_logs 表结构，避免出现“未知/0ms”等显示问题
+fn ensure_usage_logs_schema(conn: &rusqlite::Connection) -> Result<(), String> {
+    // 读取当前列
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(usage_logs)")
+        .map_err(|e| format!("检查表结构失败: {}", e))?;
+    let cols: Vec<String> = stmt
+        .query_map([], |row| Ok(row.get::<_, String>(1)?))
+        .map_err(|e| format!("查询表结构失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("获取列名失败: {}", e))?;
+
+    let add_col = |name: &str, decl: &str| -> Result<(), String> {
+        let sql = format!("ALTER TABLE usage_logs ADD COLUMN {} {}", name, decl);
+        conn.execute(&sql, [])
+            .map(|_| ())
+            .or_else(|err| {
+                // 如果列已存在或其他非致命错误，记录并忽略
+                let msg = err.to_string();
+                if msg.contains("duplicate column name") { Ok(()) } else { Err(format!("添加列失败 ({}): {}", name, msg)) }
+            })
+    };
+
+    if !cols.iter().any(|c| c == "prompt_name") {
+        add_col("prompt_name", "TEXT")?;
+    }
+    if !cols.iter().any(|c| c == "hotkey_used") {
+        add_col("hotkey_used", "TEXT")?;
+    }
+    if !cols.iter().any(|c| c == "injection_time_ms") {
+        add_col("injection_time_ms", "INTEGER DEFAULT 0")?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_usage_logs() -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute("DELETE FROM usage_logs", [])
+        .map_err(|e| format!("清空日志失败: {}", e))?;
+    Ok(())
 }
