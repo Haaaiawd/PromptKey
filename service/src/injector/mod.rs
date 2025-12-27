@@ -10,6 +10,10 @@ use windows::{
 // windows 0.58 下方便使用的常量（CF_UNICODETEXT = 13）
 const CF_UNICODETEXT_CONST: u32 = 13;
 
+/// Maximum clipboard size to read (1M UTF-16 chars = 2MB)
+/// Prevents potential unsafe memory overflow attacks.
+const MAX_CLIPBOARD_SIZE: usize = 1_000_000;
+
 #[derive(Debug)]
 pub struct InjectionContext {
     pub app_name: String,
@@ -124,13 +128,22 @@ impl Injector {
                     if !ptr.is_null() {
                         let mut v = Vec::new();
                         let mut p = ptr;
+                        let mut len = 0usize;
                         loop {
+                            if len >= MAX_CLIPBOARD_SIZE {
+                                log::warn!(
+                                    "Clipboard backup exceeds max size ({}), truncating",
+                                    MAX_CLIPBOARD_SIZE
+                                );
+                                break;
+                            }
                             let ch = *p;
                             v.push(ch);
                             if ch == 0 {
                                 break;
                             }
                             p = p.add(1);
+                            len += 1;
                         }
                         prev_text = Some(v);
                         let _ = GlobalUnlock(hg);
