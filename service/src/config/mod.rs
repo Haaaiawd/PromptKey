@@ -162,6 +162,28 @@ impl Config {
         // 兼容性填充：如果某些字段缺失，应用默认值（避免用户配置被覆盖）
         if config.injection.order.is_empty() {
             config.injection.order = default_injection_order();
+        } else {
+            // 向后兼容: 过滤掉已废弃的 "uia" 和 "textpattern_enhanced" 策略
+            let original_len = config.injection.order.len();
+            config.injection.order.retain(|s| {
+                let sl = s.to_lowercase();
+                if sl == "uia" || sl == "textpattern_enhanced" {
+                    log::warn!(
+                        "Ignoring deprecated strategy '{}' in config (UIA removed)",
+                        s
+                    );
+                    false
+                } else {
+                    true
+                }
+            });
+            // 如果过滤后为空，使用默认值
+            if config.injection.order.is_empty() && original_len > 0 {
+                log::warn!(
+                    "All configured strategies were deprecated, using default: clipboard → sendinput"
+                );
+                config.injection.order = default_injection_order();
+            }
         }
         if config.injection.uia_value_pattern_mode.is_empty() {
             config.injection.uia_value_pattern_mode = default_uia_value_pattern_mode();
