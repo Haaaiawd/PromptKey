@@ -23,7 +23,6 @@ pub struct InjectionContext {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InjectionStrategy {
-    UIA,
     Clipboard,
     SendInput,
 }
