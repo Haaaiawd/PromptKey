@@ -56,114 +56,39 @@ impl Injector {
         text: &str,
         context: &InjectionContext,
     ) -> StdResult<(String, u64), Box<dyn std::error::Error>> {
-        log::info!("Attempting to inject text using available strategies");
-        log::debug!("Text to inject: {}", text);
+        log::info!("Injecting text using simplified strategy (Clipboard → SendInput)");
         log::debug!(
-            "Context: app_name={}, window_title={}",
+            "Text length: {}, app: {}, window_title: {}",
+            text.len(),
             context.app_name,
             context.window_title
         );
-        log::debug!(
-            "Config: order={:?}, allow_clipboard={}, mode={}",
-            self.config.injection.order,
-            self.config.injection.allow_clipboard,
-            self.config.injection.uia_value_pattern_mode
-        );
-        let effective = self.effective_strategies_for(&context.app_name);
-        log::debug!("Effective strategy order: {:?}", effective);
 
-        for strategy in &effective {
-            log::debug!("Trying injection strategy: {:?}", strategy);
+        let start = std::time::Instant::now();
 
-            // 测量实际注入操作的时间
-            let start = std::time::Instant::now();
-            let result = match strategy {
-                InjectionStrategy::UIA => self.inject_via_uia(text, context),
-                InjectionStrategy::Clipboard => self.inject_via_clipboard(text, context),
-                InjectionStrategy::SendInput => self.inject_via_sendinput(text, context),
-            };
-            let injection_time = start.elapsed().as_millis() as u64;
-
-            match result {
-                Ok(_) => {
-                    let strategy_name = match strategy {
-                        InjectionStrategy::UIA => "UIA",
-                        InjectionStrategy::Clipboard => "Clipboard",
-                        InjectionStrategy::SendInput => "SendInput",
-                    };
-                    log::info!(
-                        "Successfully injected text using {:?} strategy in {}ms",
-                        strategy,
-                        injection_time
-                    );
-                    return Ok((strategy_name.to_string(), injection_time));
-                }
-                Err(e) => {
-                    log::warn!(
-                        "Failed to inject using {:?} strategy in {}ms: {}",
-                        strategy,
-                        injection_time,
-                        e
-                    );
-                    // 继续尝试下一个策略
-                }
+        // Primary strategy: Clipboard (works in 99% of scenarios)
+        match self.inject_via_clipboard(text, context) {
+            Ok(_) => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                log::info!("Successfully injected text via Clipboard in {}ms", elapsed);
+                return Ok(("Clipboard".to_string(), elapsed));
+            }
+            Err(e) => {
+                log::warn!(
+                    "Clipboard injection failed: {}. Falling back to SendInput",
+                    e
+                );
             }
         }
 
-        log::error!("All injection strategies failed");
-        Err("All injection strategies failed".into())
+        // Fallback strategy: SendInput (for apps that block paste)
+        self.inject_via_sendinput(text, context)?;
+        let elapsed = start.elapsed().as_millis() as u64;
+        log::info!("Successfully injected text via SendInput in {}ms", elapsed);
+        Ok(("SendInput".to_string(), elapsed))
     }
 
-    fn effective_strategies_for(&self, app_name: &str) -> Vec<InjectionStrategy> {
-        // 优先使用应用级策略；否则使用全局顺序
-        let app_cfg = self.config.get_app_config(app_name);
-        let mut order: Vec<String> = Vec::new();
-        if !app_cfg.strategies.primary.is_empty() {
-            order.push(app_cfg.strategies.primary.to_lowercase());
-            for f in app_cfg.strategies.fallback {
-                order.push(f.to_lowercase());
-            }
-        } else {
-            order = self
-                .config
-                .injection
-                .order
-                .iter()
-                .map(|s| s.to_lowercase())
-                .collect();
-        }
-
-        // 去重并映射到枚举
-        let mut seen = std::collections::HashSet::new();
-        let mut mapped = Vec::new();
-        for s in order {
-            let key = s.as_str();
-            let variant = match key {
-                "uia" | "textpattern_enhanced" => Some(InjectionStrategy::UIA),
-                "clipboard" => Some(InjectionStrategy::Clipboard),
-                "sendinput" => Some(InjectionStrategy::SendInput),
-                _ => {
-                    log::debug!("Unknown strategy '{}' ignored", s);
-                    None
-                }
-            };
-            if let Some(v) = variant {
-                let name = match v {
-                    InjectionStrategy::UIA => "uia",
-                    InjectionStrategy::Clipboard => "clipboard",
-                    InjectionStrategy::SendInput => "sendinput",
-                };
-                if seen.insert(name.to_string()) {
-                    mapped.push(v);
-                }
-            }
-        }
-        if mapped.is_empty() {
-            mapped.push(InjectionStrategy::UIA);
-        }
-        mapped
-    }
-
+    // effective_strategies_for deleted (T0-003 - strategy now hardcoded)
 
     fn inject_via_clipboard(
         &self,
@@ -348,8 +273,6 @@ impl Injector {
         app_config.settings.pre_inject_delay
     }
 
-
-
     fn type_text_via_sendinput(&self, text: &str) -> StdResult<(), Box<dyn std::error::Error>> {
         log::debug!("Using SendInput to simulate typing: '{}'", text);
         // 小延时，避免与热键修饰键冲突或焦点切换未完成
@@ -392,8 +315,6 @@ impl Injector {
         }
         Ok(())
     }
-
-
 }
 
 // find_editable_element deleted (T0-002)
