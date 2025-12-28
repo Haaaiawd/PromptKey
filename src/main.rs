@@ -833,6 +833,14 @@ fn ensure_usage_logs_schema(conn: &rusqlite::Connection) -> Result<(), String> {
     if !cols.iter().any(|c| c == "injection_time_ms") {
         add_col("injection_time_ms", "INTEGER DEFAULT 0")?;
     }
+    
+    // T1-001: Add columns for Quick Selection Panel
+    if !cols.iter().any(|c| c == "action") {
+        add_col("action", "TEXT")?;
+    }
+    if !cols.iter().any(|c| c == "query") {
+        add_col("query", "TEXT")?;
+    }
 
     Ok(())
 }
