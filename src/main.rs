@@ -245,6 +245,7 @@ fn main() {
             get_all_prompts_for_selector,  // T1-002: Quick Selection Panel query
             log_selector_usage,            // T1-003: Quick Selection Panel usage logging
             get_selector_stats,            // T1-004: Quick Selection Panel statistics
+            show_selector_window,          // T1-011: Show selector panel window
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -286,6 +287,32 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            
+            // T1-020: Pre-create selector panel window (hidden state)
+            let selector_window = WebviewWindowBuilder::new(
+                app,
+                "selector-panel",
+                WebviewUrl::App("selector.html".into())
+            )
+            .title("Quick Selector")
+            .inner_size(700.0, 500.0)
+            .resizable(false)
+            .decorations(false)       // Borderless
+            .always_on_top(true)      // Always on top
+            .skip_taskbar(true)       // Don't show in taskbar
+            .visible(false)           // Start hidden
+            .center()                 // Center on screen
+            .build()?;
+            
+            // T1-021: Register focus lost event to auto-hide selector panel
+            selector_window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    // Auto-hide on blur
+                    let _ = event.window().hide();
+                }
+            });
+            
+            println!("✅ Selector panel window pre-created (hidden)");
             
             // 启动时自动创建并显示窗口
             create_and_show_window(&app.handle());
@@ -515,6 +542,23 @@ fn get_selector_stats() -> Result<SelectorStats, String> {
     }
     
     Ok(SelectorStats { top_prompts })
+}
+
+// T1-011: Show selector panel window command
+#[tauri::command]
+fn show_selector_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("selector-panel") {
+        window.show().map_err(|e| format!("Show window failed: {}", e))?;
+        window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
+        
+        // Emit reset-state event to frontend
+        window.emit("reset-state", ()).map_err(|e| format!("Emit reset failed: {}", e))?;
+        
+        println!("✅ Selector window shown and focused");
+        Ok(())
+    } else {
+        Err("Selector window not found".to_string())
+    }
 }
 
 #[tauri::command]
