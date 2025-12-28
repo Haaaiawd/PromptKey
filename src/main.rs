@@ -43,6 +43,18 @@ struct PromptForSelector {
     last_used_at: Option<i64>,    // Last used timestamp (Unix ms)
 }
 
+// T1-004: Quick Selection Panel statistics data structure
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct SelectorStats {
+    top_prompts: Vec<TopPromptStat>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct TopPromptStat {
+    name: String,
+    usage_count: i64,
+}
+
 impl ServiceState {
     fn new() -> Self {
         ServiceState { process: None }
@@ -232,6 +244,7 @@ fn main() {
             get_all_prompts,
             get_all_prompts_for_selector,  // T1-002: Quick Selection Panel query
             log_selector_usage,            // T1-003: Quick Selection Panel usage logging
+            get_selector_stats,            // T1-004: Quick Selection Panel statistics
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -469,6 +482,39 @@ fn log_selector_usage(
             Ok(())
         }
     }
+}
+
+// T1-004: Get Quick Selection Panel usage statistics (Top 2 most-used prompts)
+#[tauri::command]
+fn get_selector_stats() -> Result<SelectorStats, String> {
+    let conn = open_db()?;
+    
+    // Query Top 2 most-used prompts based on selector_select actions
+    let mut stmt = conn.prepare(
+        "SELECT 
+            p.name,
+            COUNT(u.id) as usage_count
+         FROM usage_logs u
+         INNER JOIN prompts p ON p.id = u.prompt_id
+         WHERE u.action = 'selector_select'
+         GROUP BY u.prompt_id
+         ORDER BY usage_count DESC
+         LIMIT 2"
+    ).map_err(|e| format!("Failed to prepare stats query: {}", e))?;
+    
+    let stats_iter = stmt.query_map([], |row| {
+        Ok(TopPromptStat {
+            name: row.get(0)?,
+            usage_count: row.get(1)?,
+        })
+    }).map_err(|e| format!("Stats query failed: {}", e))?;
+    
+    let mut top_prompts = Vec::new();
+    for stat in stats_iter {
+        top_prompts.push(stat.map_err(|e| format!("Failed to fetch stat: {}", e))?);
+    }
+    
+    Ok(SelectorStats { top_prompts })
 }
 
 #[tauri::command]
