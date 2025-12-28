@@ -2,9 +2,8 @@ use crate::config::Config;
 use std::result::Result as StdResult;
 use std::time::Duration;
 use windows::{
-    Win32::Foundation::*, Win32::System::Com::*, Win32::System::DataExchange::*,
-    Win32::System::Memory::*, Win32::UI::Accessibility::*, Win32::UI::Input::KeyboardAndMouse::*,
-    Win32::UI::WindowsAndMessaging::*, core::*,
+    Win32::Foundation::*, Win32::System::DataExchange::*, Win32::System::Memory::*,
+    Win32::UI::Input::KeyboardAndMouse::*, Win32::UI::WindowsAndMessaging::*,
 };
 
 // windows 0.58 下方便使用的常量（CF_UNICODETEXT = 13）
@@ -27,20 +26,7 @@ pub enum InjectionStrategy {
     SendInput,
 }
 
-#[derive(Debug, Clone)]
-pub enum EditorType {
-    Generic,
-    Scintilla, // Notepad++
-    Electron,  // VS Code, Atom
-    WPF,       // Visual Studio
-    Swing,     // IntelliJ IDEA, Eclipse
-}
-
-#[derive(Debug, Clone)]
-pub struct EditorDetection {
-    pub editor_type: EditorType,
-    pub process_name: String,
-}
+// EditorType and EditorDetection removed (UIA-specific, no longer used)
 
 pub struct Injector {
     config: Config,
