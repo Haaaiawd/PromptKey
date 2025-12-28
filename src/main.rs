@@ -4,7 +4,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder, AppHandle,
+    Manager, WebviewUrl, WebviewWindowBuilder, AppHandle, Emitter,
 };
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -305,10 +305,11 @@ fn main() {
             .build()?;
             
             // T1-021: Register focus lost event to auto-hide selector panel
+            let selector_window_clone = selector_window.clone();
             selector_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::Focused(false) = event {
                     // Auto-hide on blur
-                    let _ = event.window().hide();
+                    let _ = selector_window_clone.hide();
                 }
             });
             
