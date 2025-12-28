@@ -8,6 +8,7 @@ mod context;
 mod db;
 mod hotkey;
 mod injector;
+mod ipc; // T1-007: IPC client for Service → GUI communication
 
 fn main() {
     // 初始化日志记录器
