@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 // 服务进程句柄
+mod ipc_listener;
+
 struct ServiceState {
     process: Option<std::process::Child>,
 }
@@ -260,6 +262,9 @@ fn main() {
             // 创建系统托盘菜单
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
+            
+            // T1-010: Start IPC Listener
+            ipc_listener::start_ipc_listener(app.handle().clone());
             
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
             
