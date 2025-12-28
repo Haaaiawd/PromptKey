@@ -231,6 +231,7 @@ fn main() {
             get_settings,
             get_all_prompts,
             get_all_prompts_for_selector,  // T1-002: Quick Selection Panel query
+            log_selector_usage,            // T1-003: Quick Selection Panel usage logging
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -417,6 +418,57 @@ fn get_all_prompts_for_selector() -> Result<Vec<PromptForSelector>, String> {
     }
     
     Ok(prompts)
+}
+
+// T1-003: Log Quick Selection Panel usage events
+#[tauri::command]
+fn log_selector_usage(
+    prompt_id: i32,
+    prompt_name: String,
+    query: Option<String>,
+) -> Result<(), String> {
+    // Non-blocking: log errors but don't fail the UI
+    match open_db() {
+        Ok(conn) => {
+            let insert_result = conn.execute(
+                "INSERT INTO usage_logs (
+                    prompt_id, 
+                    prompt_name, 
+                    target_app, 
+                    window_title, 
+                    action, 
+                    query, 
+                    strategy, 
+                    success, 
+                    created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+                rusqlite::params![
+                    prompt_id,
+                    &prompt_name,
+                    "Selector Panel",         // target_app (fixed)
+                    "Quick Selection Panel",  // window_title
+                    "selector_select",        // action (T1-001 new column)
+                    &query,                   // query (T1-001 new column)
+                    "selector",               // strategy
+                    1,                        // success (always true for selection)
+                ],
+            );
+            
+            match insert_result {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    // Log error but don't fail UI
+                    eprintln!("Failed to log selector usage: {}", e);
+                    Ok(())
+                }
+            }
+        }
+        Err(e) => {
+            // Non-blocking: log error but return Ok
+            eprintln!("Failed to open DB for selector logging: {}", e);
+            Ok(())
+        }
+    }
 }
 
 #[tauri::command]
