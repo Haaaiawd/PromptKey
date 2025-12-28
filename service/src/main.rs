@@ -110,9 +110,18 @@ fn main() {
         }
     }
 
+    // T1-010: Create IPC client for selector communication
+    let ipc_client = ipc::IPCClient::default();
+
     // 主线程监听热键事件
     log::info!("Entering main loop...");
-    run_main_loop(&hotkey_service, database, injector, context_manager);
+    run_main_loop(
+        &hotkey_service,
+        database,
+        injector,
+        context_manager,
+        ipc_client,
+    );
 
     // 停止热键服务
     hotkey_service.stop();
@@ -125,14 +134,32 @@ fn run_main_loop(
     database: db::Database,
     injector: injector::Injector,
     context_manager: context::ContextManager,
+    ipc_client: ipc::IPCClient, // T1-010: IPC client parameter
 ) {
     log::debug!("Main loop started");
     loop {
-        // 检查是否有热键事件
-        let hotkey_pressed = hotkey_service.wait_for_hotkey();
-        if hotkey_pressed {
-            log::info!("Hotkey event detected, executing injection");
-            handle_injection_request(&database, &injector, &context_manager);
+        // T1-009: Check hotkey event and get ID
+        if let Some(hotkey_id) = hotkey_service.wait_for_hotkey() {
+            match hotkey_id {
+                1 | 2 => {
+                    // Injection hotkeys (ID=1 main, ID=2 fallback)
+                    log::info!(
+                        "Injection hotkey detected (ID={}), executing injection",
+                        hotkey_id
+                    );
+                    handle_injection_request(&database, &injector, &context_manager);
+                }
+                3 => {
+                    // T1-009: Selector hotkey (Ctrl+Shift+H)
+                    log::info!("Selector hotkey detected (ID=3), sending IPC to GUI");
+                    if let Err(e) = ipc_client.send_show_selector() {
+                        log::warn!("Failed to send selector IPC: {}", e);
+                    }
+                }
+                _ => {
+                    log::warn!("Unknown hotkey ID: {}", hotkey_id);
+                }
+            }
         }
 
         // 短暂休眠以避免过度占用CPU

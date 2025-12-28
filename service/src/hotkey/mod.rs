@@ -11,8 +11,8 @@ use windows::{
 use crate::config::Config;
 
 pub struct HotkeyManager {
-    pub tx: mpsc::Sender<()>,
-    pub rx: mpsc::Receiver<()>,
+    pub tx: mpsc::Sender<u32>, // T1-009: Send hotkey ID (1/2/3)
+    pub rx: mpsc::Receiver<u32>,
 }
 
 impl HotkeyManager {
@@ -197,13 +197,13 @@ impl HotkeyManager {
 
     // 移除了未使用的run_message_loop方法
 
-    pub fn wait_for_hotkey(&self) -> bool {
+    pub fn wait_for_hotkey(&self) -> Option<u32> {
         match self.rx.try_recv() {
-            Ok(_) => {
-                log::debug!("Received hotkey event in main thread");
-                true
+            Ok(hotkey_id) => {
+                log::debug!("Received hotkey event in main thread: ID={}", hotkey_id);
+                Some(hotkey_id)
             }
-            Err(_) => false,
+            Err(_) => None,
         }
     }
 }
@@ -365,8 +365,9 @@ impl HotkeyService {
                         && (msg.wParam.0 == 1 || msg.wParam.0 == 2 || msg.wParam.0 == 3)
                     {
                         log::info!("Hotkey pressed (ID: {})", msg.wParam.0);
-                        // 发送信号给主程序
-                        if let Err(e) = tx.send(()) {
+                        // T1-009: Send hotkey ID to main loop
+                        let hotkey_id = msg.wParam.0 as u32;
+                        if let Err(e) = tx.send(hotkey_id) {
                             log::error!("Failed to send hotkey event: {}", e);
                             return Err(Box::new(std::io::Error::new(
                                 std::io::ErrorKind::Other,
@@ -433,8 +434,8 @@ impl HotkeyService {
         log::debug!("Hotkey service stopped");
     }
 
-    /// 等待热键事件
-    pub fn wait_for_hotkey(&self) -> bool {
+    /// 等待热键事件，返回热键ID（1/2=注入，3=选择器）
+    pub fn wait_for_hotkey(&self) -> Option<u32> {
         self.hotkey_manager.wait_for_hotkey()
     }
 }
