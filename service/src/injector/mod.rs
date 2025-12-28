@@ -96,9 +96,17 @@ impl Injector {
     fn inject_via_clipboard(
         &self,
         text: &str,
-        _context: &InjectionContext,
+        context: &InjectionContext,
     ) -> StdResult<(), Box<dyn std::error::Error>> {
         log::debug!("Attempting clipboard injection");
+
+        // 0) 先将目标窗口置前，确保焦点正确
+        unsafe {
+            let _ = SetForegroundWindow(context.window_handle);
+        }
+        std::thread::sleep(Duration::from_millis(
+            self.get_pre_inject_delay(&context.app_name),
+        ));
 
         // 1) 打开剪贴板，最多尝试 5 次
         let mut opened = false;
@@ -175,7 +183,7 @@ impl Injector {
         }
 
         // 4) 等待一下，确保热键修饰键已释放，然后模拟 Ctrl+V 粘贴
-        std::thread::sleep(Duration::from_millis(80));
+        std::thread::sleep(Duration::from_millis(200));
         unsafe {
             let mut inputs = [
                 INPUT {
