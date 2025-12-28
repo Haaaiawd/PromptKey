@@ -31,6 +31,18 @@ struct Prompt {
     updated_at: Option<String>,
 }
 
+// T1-002: Quick Selection Panel prompt data structure
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PromptForSelector {
+    id: i32,
+    name: String,
+    content: String,              // Full content (frontend will truncate)
+    category: Option<String>,     // Extracted from tags[0]
+    tags: Option<Vec<String>>,    // Full tag list
+    usage_count: i64,             // Usage statistics
+    last_used_at: Option<i64>,    // Last used timestamp (Unix ms)
+}
+
 impl ServiceState {
     fn new() -> Self {
         ServiceState { process: None }
@@ -218,6 +230,7 @@ fn main() {
             apply_settings,
             get_settings,
             get_all_prompts,
+            get_all_prompts_for_selector,  // T1-002: Quick Selection Panel query
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -346,6 +359,61 @@ fn get_all_prompts() -> Result<Vec<Prompt>, String> {
     let mut prompts = Vec::new();
     for prompt in prompt_iter {
         prompts.push(prompt.map_err(|e| format!("获取提示词失败: {}", e))?);
+    }
+    
+    Ok(prompts)
+}
+
+// T1-002: Query all prompts with usage statistics for Quick Selection Panel
+#[tauri::command]
+fn get_all_prompts_for_selector() -> Result<Vec<PromptForSelector>, String> {
+    let conn = open_db()?;
+    
+    // SQL query with LEFT JOIN to usage_logs, filtering by action='selector_select'
+    let mut stmt = conn.prepare(
+        "SELECT 
+            p.id,
+            p.name,
+            p.content,
+            p.tags,
+            COUNT(u.id) as usage_count,
+            MAX(strftime('%s', u.created_at)) * 1000 as last_used_at_ms
+         FROM prompts p
+         LEFT JOIN usage_logs u ON u.prompt_id = p.id AND u.action = 'selector_select'
+         GROUP BY p.id
+         ORDER BY p.id ASC"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+    
+    let prompts_iter = stmt.query_map([], |row| {
+        // Parse tags JSON
+        let tags_str: Option<String> = row.get(3)?;
+        let tags = match tags_str {
+            Some(s) => match serde_json::from_str(&s) {
+                Ok(t) => Some(t),
+                Err(_) => None,
+            },
+            None => None,
+        };
+        
+        // Extract category from first tag
+        let category = tags.as_ref()
+            .and_then(|t: &Vec<String>| t.first())
+            .map(|s| s.clone());
+        
+        Ok(PromptForSelector {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            content: row.get(2)?,
+            category,
+            tags,
+            usage_count: row.get(4)?,
+            last_used_at: row.get::<_, Option<i64>>(5)?,
+        })
+    }).map_err(|e| format!("Query failed: {}", e))?;
+    
+    let mut prompts = Vec::new();
+    for prompt in prompts_iter {
+        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
     }
     
     Ok(prompts)
