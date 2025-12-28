@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Selector</title>
+    <link rel="stylesheet" href="selector.css">
+</head>
+<body>
+    <div class="selector-container">
+        <!-- Search Input -->
+        <div class="search-section">
+            <input 
+                type="text" 
+                id="search-box" 
+                placeholder="搜索 Prompt (名称/标签/分类)..."
+                autocomplete="off"
+                autofocus
+            />
+        </div>
+
+        <!-- Results Container -->
+        <div id="results-container" class="results-section">
+            <!-- Results will be dynamically rendered here -->
+        </div>
+
+        <!-- Stats Bar -->
+        <div id="stats-bar" class="stats-section">
+            <span class="stats-label">最常用:</span>
+            <span id="stats-content">加载中...</span>
+        </div>
+    </div>
+
+    <!-- Dependencies -->
+    <script src="fuse.min.js"></script>
+    <script type="module" src="selector.js"></script>
+</body>
+</html>
