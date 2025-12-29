@@ -250,6 +250,7 @@ fn main() {
             log_selector_usage,            // T1-003: Quick Selection Panel usage logging
             get_selector_stats,            // T1-004: Quick Selection Panel statistics
             show_selector_window,          // T1-011: Show selector panel window
+            trigger_wheel_injection,       // TW005: PromptWheel injection trigger
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -568,6 +569,15 @@ fn show_selector_window(app: AppHandle) -> Result<(), String> {
         Err("Selector window not found".to_string())
     }
 }
+
+// TW005: Trigger wheel injection command
+// Called by wheel UI when user selects a prompt
+#[tauri::command]
+fn trigger_wheel_injection(prompt_id: i32) -> Result<(), String> {
+    inject_pipe_client::send_inject_request(prompt_id)
+        .map_err(|e| format!("Failed to send inject request: {}", e))
+}
+
 
 #[tauri::command]
 fn create_prompt(prompt: Prompt) -> Result<i32, String> {
