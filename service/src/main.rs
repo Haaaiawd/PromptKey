@@ -352,6 +352,12 @@ fn handle_injection_request(
                         // 将耗时转为至少 1ms，避免极快路径显示 0ms
                         let injection_time_ms_to_log: u128 =
                             std::cmp::max(1u64, *injection_time) as u128;
+                        // TW007: Determine action based on force_prompt_id
+                        let action = if force_prompt_id.is_some() {
+                            "wheel_select"
+                        } else {
+                            "hotkey_inject"
+                        };
                         let log_result = database.log_usage(
                             prompt.id,
                             &prompt.name,
@@ -363,6 +369,7 @@ fn handle_injection_request(
                             true,
                             None,
                             &format!("✅ 成功注入 {}ms - 策略: {}", injection_time, strategy_used),
+                            action,
                         );
 
                         if let Err(e) = log_result {
@@ -385,6 +392,12 @@ fn handle_injection_request(
                             prompt.name
                         );
 
+                        // TW007: Use same action logic for failed cases
+                        let action = if force_prompt_id.is_some() {
+                            "wheel_select"
+                        } else {
+                            "hotkey_inject"
+                        };
                         let log_result = database.log_usage(
                             prompt.id,
                             &prompt.name,
@@ -396,6 +409,7 @@ fn handle_injection_request(
                             false,
                             Some(&e.to_string()),
                             &format!("❌ 注入失败: {}", e),
+                            action,
                         );
 
                         if let Err(e) = log_result {
@@ -407,6 +421,11 @@ fn handle_injection_request(
                 }
             } else {
                 log::warn!("❌ No prompts found in database - logging empty attempt");
+                let action = if force_prompt_id.is_some() {
+                    "wheel_select"
+                } else {
+                    "hotkey_inject"
+                };
                 let _ = database.log_usage(
                     None,
                     "无可用提示词",
@@ -418,11 +437,17 @@ fn handle_injection_request(
                     false,
                     Some("No prompts available"),
                     "❌ 无可用提示词",
+                    action,
                 );
             }
         }
         Err(e) => {
             log::error!("❌ Failed to get prompts: {} - logging error attempt", e);
+            let action = if force_prompt_id.is_some() {
+                "wheel_select"
+            } else {
+                "hotkey_inject"
+            };
             let _ = database.log_usage(
                 None,
                 "数据库错误",
@@ -434,6 +459,7 @@ fn handle_injection_request(
                 false,
                 Some(&e.to_string()),
                 &format!("❌ 数据库错误: {}", e),
+                action,
             );
         }
     }
