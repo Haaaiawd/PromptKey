@@ -60,6 +60,38 @@ impl IPCClient {
             }
         }
     }
+
+    /// TW013: Send "show wheel" command to GUI
+    /// Includes 500ms debounce to prevent spam
+    pub fn send_show_wheel(&self) -> Result<(), Box<dyn Error>> {
+        // Debounce: check if 500ms has passed since last send
+        {
+            let mut last = self.last_send.lock().unwrap();
+            if let Some(last_time) = *last {
+                let elapsed = last_time.elapsed();
+                if elapsed < Duration::from_millis(500) {
+                    log::debug!("IPC send debounced ({}ms since last)", elapsed.as_millis());
+                    return Ok(()); // Debounced, silently ignore
+                }
+            }
+            *last = Some(Instant::now());
+        }
+
+        // Send message via Named Pipe
+        match OpenOptions::new().write(true).open(&self.pipe_name) {
+            Ok(mut pipe) => {
+                let message = "SHOW_WHEEL\n";
+                pipe.write_all(message.as_bytes())?;
+                log::info!("IPC: Sent SHOW_WHEEL to GUI via {}", self.pipe_name);
+                Ok(())
+            }
+            Err(e) => {
+                // Non-critical: GUI might not be running or pipe not ready
+                log::warn!("IPC: Failed to open named pipe '{}': {}", self.pipe_name, e);
+                Err(Box::new(e))
+            }
+        }
+    }
 }
 
 #[cfg(test)]

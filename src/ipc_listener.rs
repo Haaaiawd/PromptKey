@@ -59,6 +59,18 @@ pub fn start_ipc_listener(app: AppHandle) {
                         } else {
                             eprintln!("[IPC] Selector window not found!");
                         }
+                    } else if msg_clean == "SHOW_WHEEL" {
+                        // TW013: Handle SHOW_WHEEL message
+                        if let Some(window) = app_handle.get_webview_window("wheel-panel") {
+                            // Show and focus window
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            // Reset frontend state
+                            let _ = window.emit("reset-state", ());
+                            println!("[IPC] Wheel window shown via IPC");
+                        } else {
+                            eprintln!("[IPC] Wheel window not found!");
+                        }
                     }
                 }
                 Ok(_) => { /* EOF or empty */ }

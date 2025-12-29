@@ -181,6 +181,13 @@ fn run_main_loop(
                         log::warn!("Failed to send selector IPC: {}", e);
                     }
                 }
+                4 => {
+                    // TW013: Wheel hotkey (Ctrl+Shift+W)
+                    log::info!("Wheel hotkey detected (ID=4), sending IPC to GUI");
+                    if let Err(e) = ipc_client.send_show_wheel() {
+                        log::warn!("Failed to send wheel IPC: {}", e);
+                    }
+                }
                 _ => {
                     log::warn!("Unknown hotkey ID: {}", hotkey_id);
                 }

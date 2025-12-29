@@ -269,6 +269,7 @@ fn main() {
             show_selector_window,          // T1-011: Show selector panel window
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
             get_top_prompts_paginated,     // TW006: PromptWheel paginated query
+            show_wheel_window,             // TW012: Show PromptWheel window
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -340,6 +341,33 @@ fn main() {
             });
             
             println!("✅ Selector panel window pre-created (hidden)");
+
+            // TW012: Pre-create PromptWheel window (hidden state)
+            let wheel_window = WebviewWindowBuilder::new(
+                app,
+                "wheel-panel",
+                WebviewUrl::App("wheel.html".into())
+            )
+            .title("PromptWheel")
+            .inner_size(600.0, 600.0)
+            .resizable(false)
+            .decorations(false)       // Borderless
+            .always_on_top(true)      // Always on top
+            .skip_taskbar(true)       // Don't show in taskbar
+            .visible(false)           // Start hidden
+            .center()                 // Center on screen
+            .build()?;
+            
+            // TW014: Register focus lost event to auto-hide wheel
+            let wheel_window_clone = wheel_window.clone();
+            wheel_window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    // Auto-hide on blur
+                    let _ = wheel_window_clone.hide();
+                }
+            });
+            
+            println!("✅ PromptWheel window pre-created (hidden)");
             
             // 启动时自动创建并显示窗口
             create_and_show_window(&app.handle());
@@ -594,6 +622,23 @@ fn show_selector_window(app: AppHandle) -> Result<(), String> {
 fn trigger_wheel_injection(prompt_id: i32) -> Result<(), String> {
     inject_pipe_client::send_inject_request(prompt_id)
         .map_err(|e| format!("Failed to send inject request: {}", e))
+}
+
+// TW012: Show wheel window command
+#[tauri::command]
+fn show_wheel_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("wheel-panel") {
+        window.show().map_err(|e| format!("Show window failed: {}", e))?;
+        window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
+        
+        // Emit reset-state event to frontend (optional, for future state management)
+        window.emit("reset-state", ()).map_err(|e| format!("Emit reset failed: {}", e))?;
+        
+        println!("✅ Wheel window shown and focused");
+        Ok(())
+    } else {
+        Err("Wheel window not found".to_string())
+    }
 }
 
 // TW006: Get top prompts with pagination for wheel display
