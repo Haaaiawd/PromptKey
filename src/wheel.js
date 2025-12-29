@@ -126,8 +126,9 @@ async function handlePetalClick(index) {
         // Visual feedback
         highlightPetal(index);
         
-        // Auto-hide window after selection (Tauri will handle this)
-        // The window should be hidden by the backend or window config
+        // TW014: Explicitly hide window after selection for better UX
+        const { getCurrentWindow } = window.__TAURI__.window;
+        await getCurrentWindow().hide();
     } catch (error) {
         console.error('Failed to trigger injection:', error);
         alert(`Injection failed: ${error}`);
