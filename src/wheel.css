@@ -1,0 +1,217 @@
+/* TW010: PromptWheel CSS - Radial Menu with Glassmorphism */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    color: #fff;
+}
+
+/* Wheel Container */
+.wheel-container {
+    position: relative;
+    width: 500px;
+    height: 500px;
+    margin-bottom: 40px;
+}
+
+/* Petal Base Styling */
+.petal {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Petal Positions (Radial Layout - 60° each) */
+.petal-1 {
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, 0) rotate(0deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+.petal-2 {
+    top: 25%;
+    right: 0;
+    transform: translate(0, -50%) rotate(60deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+.petal-3 {
+    bottom: 25%;
+    right: 0;
+    transform: translate(0, 50%) rotate(120deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+.petal-4 {
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 0) rotate(180deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+.petal-5 {
+    bottom: 25%;
+    left: 0;
+    transform: translate(0, 50%) rotate(240deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+.petal-6 {
+    top: 25%;
+    left: 0;
+    transform: translate(0, -50%) rotate(300deg);
+    clip-path: polygon(50% 0%, 85% 50%, 50% 100%, 15% 50%);
+}
+
+/* Petal Content (Text inside petals) */
+.petal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+/* Counter-rotate text to keep it upright */
+.petal-1 .petal-content { transform: translate(-50%, -50%) rotate(0deg); }
+.petal-2 .petal-content { transform: translate(-50%, -50%) rotate(-60deg); }
+.petal-3 .petal-content { transform: translate(-50%, -50%) rotate(-120deg); }
+.petal-4 .petal-content { transform: translate(-50%, -50%) rotate(-180deg); }
+.petal-5 .petal-content { transform: translate(-50%, -50%) rotate(-240deg); }
+.petal-6 .petal-content { transform: translate(-50%, -50%) rotate(-300deg); }
+
+.petal-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.petal-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Hover Effect */
+.petal:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translate(-50%, 0) rotate(0deg) scale(1.1);
+    box-shadow: 0 12px 48px rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.petal-2:hover { transform: translate(0, -50%) rotate(60deg) scale(1.1); }
+.petal-3:hover { transform: translate(0, 50%) rotate(120deg) scale(1.1); }
+.petal-4:hover { transform: translate(-50%, 0) rotate(180deg) scale(1.1); }
+.petal-5:hover { transform: translate(0, 50%) rotate(240deg) scale(1.1); }
+.petal-6:hover { transform: translate(0, -50%) rotate(300deg) scale(1.1); }
+
+/* Active/Selected State */
+.petal.active {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Center Overlay */
+.center-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 180px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
+.center-text {
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    padding: 20px;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Pagination Controls */
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pagination-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.page-indicator {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    min-width: 100px;
+    text-align: center;
+}
