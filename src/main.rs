@@ -59,6 +59,23 @@ struct TopPromptStat {
     usage_count: i64,
 }
 
+// TW006: PromptWheel data structures
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct WheelPromptsPage {
+    prompts: Vec<WheelPrompt>,
+    current_page: u32,
+    total_pages: u32,
+    total_count: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct WheelPrompt {
+    id: i32,
+    name: String,
+    content: String,
+}
+
+
 impl ServiceState {
     fn new() -> Self {
         ServiceState { process: None }
@@ -251,6 +268,7 @@ fn main() {
             get_selector_stats,            // T1-004: Quick Selection Panel statistics
             show_selector_window,          // T1-011: Show selector panel window
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
+            get_top_prompts_paginated,     // TW006: PromptWheel paginated query
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -576,6 +594,60 @@ fn show_selector_window(app: AppHandle) -> Result<(), String> {
 fn trigger_wheel_injection(prompt_id: i32) -> Result<(), String> {
     inject_pipe_client::send_inject_request(prompt_id)
         .map_err(|e| format!("Failed to send inject request: {}", e))
+}
+
+// TW006: Get top prompts with pagination for wheel display
+#[tauri::command]
+fn get_top_prompts_paginated(page: u32, per_page: u32) -> Result<WheelPromptsPage, String> {
+    let conn = open_db()?;
+    
+    // Calculate offset
+    let offset = page * per_page;
+    
+    // Query total count first
+    let total_count: u32 = conn
+        .query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))
+        .map_err(|e| format!("Failed to get total count: {}", e))?;
+    
+    // Calculate total_pages
+    let total_pages = if total_count == 0 {
+        0
+    } else {
+        (total_count + per_page - 1) / per_page
+    };
+    
+    // Query prompts ordered by usage (COUNT DESC) and recency (MAX created_at DESC)
+    let mut stmt = conn.prepare(
+        "SELECT 
+            p.id,
+            p.name,
+            p.content
+         FROM prompts p
+         LEFT JOIN usage_logs u ON u.prompt_id = p.id
+         GROUP BY p.id
+         ORDER BY COUNT(u.id) DESC, MAX(u.created_at) DESC
+         LIMIT ?1 OFFSET ?2"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+    
+    let prompts_iter = stmt.query_map([per_page, offset], |row| {
+        Ok(WheelPrompt {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            content: row.get(2)?,
+        })
+    }).map_err(|e| format!("Query failed: {}", e))?;
+    
+    let mut prompts = Vec::new();
+    for prompt in prompts_iter {
+        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
+    }
+    
+    Ok(WheelPromptsPage {
+        prompts,
+        current_page: page,
+        total_pages,
+        total_count,
+    })
 }
 
 
