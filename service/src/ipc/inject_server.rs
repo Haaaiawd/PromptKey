@@ -1,20 +1,21 @@
 // TW001: Inject Pipe Server
-// Listens on \\.\pipe\promptkey_inject for INJECT_PROMPT:{id}\n messages
+// Listens on \\.\\pipe\\promptkey_inject for INJECT_PROMPT:{id}\n messages
 
-use tokio::io::AsyncReadExt;
-use tokio::net::windows::named_pipe::ServerOptions;
-use tokio::sync::mpsc;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::sync::mpsc;
+use std::thread;
 
 const PIPE_NAME: &str = r"\\.\pipe\promptkey_inject";
 
-/// Start the inject pipe server in a background task
+/// Start the inject pipe server in a background thread
 /// Returns a receiver channel that yields prompt IDs when messages arrive
-pub fn start() -> mpsc::Receiver<i64> {
-    let (tx, rx) = mpsc::channel::<i64>(32);
+pub fn start() -> mpsc::Receiver<i32> {
+    let (tx, rx) = mpsc::channel::<i32>();
 
-    tokio::spawn(async move {
+    thread::spawn(move || {
         loop {
-            match listen_once(&tx).await {
+            match listen_once(&tx) {
                 Ok(_) => {}
                 Err(e) => log::error!("[InjectServer] Error: {}", e),
             }
@@ -25,21 +26,20 @@ pub fn start() -> mpsc::Receiver<i64> {
     rx
 }
 
-async fn listen_once(tx: &mpsc::Sender<i64>) -> Result<(), Box<dyn std::error::Error>> {
-    // Create named pipe server
-    let mut server = ServerOptions::new()
-        .first_pipe_instance(false)
-        .create(PIPE_NAME)?;
+fn listen_once(tx: &mpsc::Sender<i32>) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!(
+        "[InjectServer] Waiting for client connection on {}",
+        PIPE_NAME
+    );
 
-    log::info!("[InjectServer] Listening on {}", PIPE_NAME);
+    // Open named pipe (blocking until client connects)
+    let mut pipe = OpenOptions::new().read(true).open(PIPE_NAME)?;
 
-    // Wait for client connection
-    server.connect().await?;
     log::debug!("[InjectServer] Client connected");
 
     // Read message
     let mut buffer = vec![0u8; 256];
-    let n = server.read(&mut buffer).await?;
+    let n = pipe.read(&mut buffer)?;
     let message = String::from_utf8_lossy(&buffer[..n]);
 
     log::debug!("[InjectServer] Received: {}", message.trim());
@@ -47,7 +47,7 @@ async fn listen_once(tx: &mpsc::Sender<i64>) -> Result<(), Box<dyn std::error::E
     // Parse INJECT_PROMPT:{id}\n
     if let Some(prompt_id) = parse_message(&message) {
         log::info!("[InjectServer] Parsed prompt_id={}", prompt_id);
-        let _ = tx.send(prompt_id).await; // Send to main loop
+        let _ = tx.send(prompt_id); // Send to main loop
     } else {
         log::warn!("[InjectServer] Invalid message format: {}", message.trim());
     }
@@ -56,10 +56,10 @@ async fn listen_once(tx: &mpsc::Sender<i64>) -> Result<(), Box<dyn std::error::E
 }
 
 /// Parse "INJECT_PROMPT:123\n" -> Some(123)
-fn parse_message(msg: &str) -> Option<i64> {
+fn parse_message(msg: &str) -> Option<i32> {
     let trimmed = msg.trim();
     if let Some(id_str) = trimmed.strip_prefix("INJECT_PROMPT:") {
-        id_str.parse::<i64>().ok()
+        id_str.parse::<i32>().ok()
     } else {
         None
     }

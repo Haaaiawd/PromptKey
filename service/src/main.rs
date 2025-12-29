@@ -113,6 +113,11 @@ fn main() {
     // T1-010: Create IPC client for selector communication
     let ipc_client = ipc::IPCClient::default();
 
+    // TW002: Start inject pipe server to receive injection requests from GUI
+    log::info!("Starting inject pipe server...");
+    let inject_rx = ipc::inject_server::start();
+    log::info!("Inject pipe server started, listening on \\\\.\\pipe\\promptkey_inject");
+
     // 主线程监听热键事件
     log::info!("Entering main loop...");
     run_main_loop(
@@ -121,6 +126,7 @@ fn main() {
         injector,
         context_manager,
         ipc_client,
+        inject_rx,
     );
 
     // 停止热键服务
@@ -135,9 +141,28 @@ fn run_main_loop(
     injector: injector::Injector,
     context_manager: context::ContextManager,
     ipc_client: ipc::IPCClient, // T1-010: IPC client parameter
+    inject_rx: std::sync::mpsc::Receiver<i32>, // TW002: Inject request receiver (std, not tokio)
 ) {
     log::debug!("Main loop started");
     loop {
+        // TW002: Check for inject requests from GUI (non-blocking)
+        match inject_rx.try_recv() {
+            Ok(prompt_id) => {
+                log::info!(
+                    "🎯 Received inject request from GUI: prompt_id={}",
+                    prompt_id
+                );
+                handle_injection_request(&database, &injector, &context_manager, Some(prompt_id));
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                // No message, continue to hotkey check
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                log::error!("Inject channel disconnected, stopping service");
+                break;
+            }
+        }
+
         // T1-009: Check hotkey event and get ID
         if let Some(hotkey_id) = hotkey_service.wait_for_hotkey() {
             match hotkey_id {
@@ -147,7 +172,7 @@ fn run_main_loop(
                         "Injection hotkey detected (ID={}), executing injection",
                         hotkey_id
                     );
-                    handle_injection_request(&database, &injector, &context_manager);
+                    handle_injection_request(&database, &injector, &context_manager, None);
                 }
                 3 => {
                     // T1-009: Selector hotkey (Ctrl+Shift+H)
@@ -171,6 +196,7 @@ fn handle_injection_request(
     database: &db::Database,
     injector: &injector::Injector,
     context_manager: &context::ContextManager,
+    force_prompt_id: Option<i32>, // TW003: If Some, use this ID directly (from wheel)
 ) {
     log::info!("🚀 DEBUG: Starting injection request handler");
 
@@ -214,18 +240,27 @@ fn handle_injection_request(
                 prompts.len()
             );
 
-            // 首先尝试获取选中的提示词
-            let selected_prompt_id = match database.get_selected_prompt_id() {
-                Ok(id) => {
-                    log::info!("🔍 DEBUG: Selected prompt ID from database: {}", id);
-                    id
+            // TW003: Determine which prompt to use
+            let selected_prompt_id = match force_prompt_id {
+                Some(forced_id) => {
+                    log::info!("🎯 Using forced prompt ID from wheel: {}", forced_id);
+                    forced_id
                 }
-                Err(e) => {
-                    log::warn!(
-                        "🔍 DEBUG: Failed to get selected prompt ID: {}, using first prompt",
-                        e
-                    );
-                    0 // 使用默认值
+                None => {
+                    // Original logic: get selected_prompt_id from database
+                    match database.get_selected_prompt_id() {
+                        Ok(id) => {
+                            log::info!("🔍 DEBUG: Selected prompt ID from database: {}", id);
+                            id
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "🔍 DEBUG: Failed to get selected prompt ID: {}, using first prompt",
+                                e
+                            );
+                            0 // 使用默认值
+                        }
+                    }
                 }
             };
 
