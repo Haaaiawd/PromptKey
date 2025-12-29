@@ -1,6 +1,8 @@
 // IPC Client Module - Service → GUI Communication via Named Pipe
 // T1-006: Quick Selection Panel IPC Layer
 
+pub mod inject_server; // TW001: Inject pipe server
+
 use std::error::Error;
 use std::fs::OpenOptions;
 use std::io::Write;
