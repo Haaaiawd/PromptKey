@@ -74,22 +74,28 @@ function updatePaginationUI() {
 }
 
 // Setup event listeners
+// Setup event listeners
 function setupEventListeners() {
-    // Petal click
+    // Petal click (Target the clickable inner area)
     petals.forEach((petal, index) => {
-        petal.addEventListener('click', () => handlePetalClick(index));
+        const petalInner = petal.querySelector('.petal-inner');
         
-        // Hover: show full name in center
-        petal.addEventListener('mouseenter', () => {
-            const name = petal.dataset.promptName;
-            if (name && name !== '-') {
-                centerText.textContent = name;
-            }
-        });
-        
-        petal.addEventListener('mouseleave', () => {
-            centerText.textContent = 'PromptWheel';
-        });
+        // Handle click on the visual wedge
+        if (petalInner) {
+            petalInner.addEventListener('click', () => handlePetalClick(index));
+            
+            // Hover effects for center text
+            petalInner.addEventListener('mouseenter', () => {
+                const name = petal.dataset.promptName;
+                if (name && name !== '-') {
+                    centerText.textContent = name;
+                }
+            });
+            
+            petalInner.addEventListener('mouseleave', () => {
+                centerText.textContent = 'PromptWheel';
+            });
+        }
     });
     
     // Pagination buttons
@@ -137,44 +143,56 @@ async function handlePetalClick(index) {
 
 // Visual feedback for selection
 function highlightPetal(index) {
-    petals.forEach((p, i) => {
-        if (i === index) {
-            p.classList.add('active');
-            setTimeout(() => p.classList.remove('active'), 500);
-        }
-    });
+    const petal = petals[index];
+    const inner = petal.querySelector('.petal-inner');
+    if (inner) {
+        inner.style.background = 'var(--active-color, #00ffc8)'; // Fallback/Dynamic
+        setTimeout(() => inner.style.background = '', 300);
+    }
 }
 
 // Keyboard shortcuts
+// Keyboard shortcuts
 function handleKeyPress(event) {
     const key = event.key;
+    const code = event.code;
     
-    // Number keys 1-6 for petal selection
+    // Number keys 1-6 (Row and Numpad)
+    // Check both key value and code for robustness
+    let index = -1;
+    
     if (key >= '1' && key <= '6') {
-        const index = parseInt(key) - 1;
+        index = parseInt(key) - 1;
+    } else if (code.startsWith('Numpad') && code.length === 7) {
+        const num = parseInt(code[6]);
+        if (num >= 1 && num <= 6) {
+            index = num - 1;
+        }
+    }
+
+    if (index !== -1) {
         handlePetalClick(index);
         return;
     }
     
     // PageUp/PageDown for pagination
-    if (key === 'PageUp' && currentPage > 0) {
+    if ((key === 'PageUp' || key === 'ArrowLeft') && currentPage > 0) {
         event.preventDefault();
         currentPage--;
         loadPrompts();
         return;
     }
     
-    if (key === 'PageDown' && currentPage < totalPages - 1) {
+    if ((key === 'PageDown' || key === 'ArrowRight') && currentPage < totalPages - 1) {
         event.preventDefault();
         currentPage++;
         loadPrompts();
         return;
     }
     
-    // Escape to close (optional, window config will handle this)
+    // Escape to close
     if (key === 'Escape') {
-        console.log('Escape pressed, window should close');
-        // Window will auto-hide on blur (configured in Tauri)
+        window.__TAURI__.window.getCurrentWindow().hide();
     }
 }
 

@@ -1,473 +1,196 @@
-use db::Prompt;
-use env_logger;
+// Module declarations
+pub mod config;
+pub mod context;
+pub mod db;
+pub mod hotkey;
+pub mod injector;
+pub mod ipc;
+
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-mod config;
-mod context;
-mod db;
-mod hotkey;
-mod injector;
-mod ipc; // T1-007: IPC client for Service → GUI communication
+pub fn run_service() {
+    // 初始化日志
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    println!("🔥 [INTERNAL_ENGINE] 提示词引擎正在子线程启动...");
 
-fn main() {
-    // 初始化日志记录器
-    env_logger::init();
+    // 1. 初始化配置 (Moved up to get DB path)
+    let config = crate::config::Config::load().unwrap_or_default();
+    let hotkey_str = config.hotkey.clone();
 
-    log::info!("🎯 DEBUG VERSION: PromptKey service starting with DEBUG CODE...");
+    // 2. 初始化数据库
+    let database = db::Database::new(&config.database_path).expect("无法初始化数据库");
 
-    // 加载配置
-    let config = match config::Config::load() {
-        Ok(config) => {
-            log::info!("Configuration loaded successfully");
-            log::debug!(
-                "Config details: hotkey={}, database_path={}",
-                config.hotkey,
-                config.database_path
-            );
-            config
-        }
-        Err(e) => {
-            log::error!("Failed to load configuration: {}", e);
-            return;
-        }
-    };
+    // 3. 初始化注入器
+    let injector = injector::Injector::new(vec![], config.clone());
 
-    // 初始化数据库
-    let database = match db::Database::new(&config.database_path) {
-        Ok(database) => {
-            log::info!("Database initialized successfully");
-            log::debug!("Database path: {}", config.database_path);
-            database
-        }
-        Err(e) => {
-            log::error!("Failed to initialize database: {}", e);
-            return;
-        }
-    };
-
-    // 创建一个测试模板（如果数据库为空）
-    match database.get_all_prompts() {
-        Ok(prompts) => {
-            log::info!("Found {} existing prompts in database", prompts.len());
-            if prompts.is_empty() {
-                let test_prompt = Prompt {
-                    id: None,
-                    name: "Test Prompt".to_string(),
-                    tags: Some(vec!["test".to_string()]),
-                    content: "This is a test prompt for MVP.".to_string(),
-                    content_type: Some("text/plain".to_string()),
-                    variables_json: None,
-                    app_scopes_json: None,
-                    inject_order: None,
-                    version: Some(1),
-                    updated_at: None,
-                };
-
-                match database.create_prompt(&test_prompt) {
-                    Ok(id) => {
-                        log::info!("Created test prompt with ID: {}", id);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to create test prompt: {}", e);
-                    }
-                }
-            } else {
-                for prompt in &prompts {
-                    log::debug!(
-                        "Existing prompt: ID={}, Name={}",
-                        prompt.id.unwrap_or(0),
-                        prompt.name
-                    );
-                }
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to query prompts: {}", e);
-        }
-    }
-
-    // 创建注入器 (strategy is now hardcoded in injector: Clipboard -> SendInput)
-    let strategies = vec![]; // Empty vec, not used anymore
-
-    log::info!("Injection strategies: Clipboard → SendInput (hardcoded)");
-
-    let injector = injector::Injector::new(strategies, config.clone());
-
-    // 创建上下文管理器
+    // 3. 初始化上下文管理器
     let context_manager = context::ContextManager::new();
-    log::debug!("Context manager created");
 
-    // 创建热键服务并启动
-    let mut hotkey_service = hotkey::HotkeyService::new(config.hotkey.clone());
-    match hotkey_service.start() {
-        Ok(_) => {
-            log::info!("Hotkey service started successfully");
-        }
-        Err(e) => {
-            log::error!("Failed to start hotkey service: {}", e);
-            return;
-        }
+    // 5. 初始化热键服务
+    let mut hotkey_service = hotkey::HotkeyService::new(hotkey_str);
+    if let Err(e) = hotkey_service.start() {
+        log::error!("无法启动热键服务: {}", e);
     }
 
-    // T1-010: Create IPC client for selector communication
+    // 6. 初始化 IPC 客户端 (用于通知 GUI 显示窗口)
     let ipc_client = ipc::IPCClient::default();
 
-    // TW002: Start inject pipe server to receive injection requests from GUI
-    log::info!("Starting inject pipe server...");
-    let inject_rx = ipc::inject_server::start();
-    log::info!("Inject pipe server started, listening on \\\\.\\pipe\\promptkey_inject");
+    // 7. 初始化逻辑注入服务端 (接收来自 GUI 的直接注入请求)
+    let inject_rx = crate::ipc::inject_server::start();
 
-    // 主线程监听热键事件
-    log::info!("Entering main loop...");
-    run_main_loop(
-        &hotkey_service,
-        database,
-        injector,
-        context_manager,
-        ipc_client,
-        inject_rx,
-    );
+    // 8. 进入主循环
+    println!("✅ [INTERNAL_ENGINE] 引擎就绪，等待指令...");
 
-    // 停止热键服务
-    hotkey_service.stop();
+    // Store the context (window) that was active before opening the wheel/selector
+    let mut last_active_context: Option<context::AppContext> = None;
 
-    log::info!("PromptKey service stopped");
-}
-
-fn run_main_loop(
-    hotkey_service: &hotkey::HotkeyService,
-    database: db::Database,
-    injector: injector::Injector,
-    context_manager: context::ContextManager,
-    ipc_client: ipc::IPCClient, // T1-010: IPC client parameter
-    inject_rx: std::sync::mpsc::Receiver<i32>, // TW002: Inject request receiver (std, not tokio)
-) {
-    log::debug!("Main loop started");
     loop {
-        // TW002: Check for inject requests from GUI (non-blocking)
-        match inject_rx.try_recv() {
-            Ok(prompt_id) => {
-                log::info!(
-                    "🎯 Received inject request from GUI: prompt_id={}",
-                    prompt_id
-                );
-                handle_injection_request(&database, &injector, &context_manager, Some(prompt_id));
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                // No message, continue to hotkey check
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                log::error!("Inject channel disconnected, stopping service");
-                break;
-            }
+        // A. 检查来自 GUI 的点选注入请求
+        while let Ok(prompt_id) = inject_rx.try_recv() {
+            println!("🎯 [ENGINE] 收到 GUI 注入请求: ID={}", prompt_id);
+            // Use the captured context if available, otherwise try to get current (fallback)
+            handle_injection_request(
+                &database,
+                &injector,
+                &context_manager,
+                Some(prompt_id),
+                last_active_context.as_ref(),
+            );
         }
 
-        // T1-009: Check hotkey event and get ID
-        if let Some(hotkey_id) = hotkey_service.wait_for_hotkey() {
+        // B. 检查热键事件
+        while let Some(hotkey_id) = hotkey_service.try_wait_for_hotkey() {
             match hotkey_id {
                 1 | 2 => {
-                    // Injection hotkeys (ID=1 main, ID=2 fallback)
-                    log::info!(
-                        "Injection hotkey detected (ID={}), executing injection",
-                        hotkey_id
-                    );
-                    handle_injection_request(&database, &injector, &context_manager, None);
+                    println!("⌨️ [HOTKEY] 触发自动注入");
+                    handle_injection_request(&database, &injector, &context_manager, None, None);
                 }
                 3 => {
-                    // T1-009: Selector hotkey (Ctrl+Shift+H)
-                    log::info!("Selector hotkey detected (ID=3), sending IPC to GUI");
-                    if let Err(e) = ipc_client.send_show_selector() {
-                        log::warn!("Failed to send selector IPC: {}", e);
+                    println!("🔍 [HOTKEY] 触发搜索面板");
+                    // Capture context before showing GUI
+                    if let Ok(ctx) = context_manager.get_foreground_context() {
+                        println!(
+                            "💾 保存上下文: App={}, Title={}",
+                            ctx.process_name, ctx.window_title
+                        );
+                        last_active_context = Some(ctx);
                     }
+                    let _ = ipc_client.send_show_selector();
                 }
                 4 => {
-                    // TW013: Wheel hotkey (Ctrl+Shift+W)
-                    log::info!("Wheel hotkey detected (ID=4), sending IPC to GUI");
-                    if let Err(e) = ipc_client.send_show_wheel() {
-                        log::warn!("Failed to send wheel IPC: {}", e);
+                    println!("🎡 [HOTKEY] 触发提示词轮盘");
+                    // Capture context before showing GUI
+                    if let Ok(ctx) = context_manager.get_foreground_context() {
+                        println!(
+                            "💾 保存上下文: App={}, Title={}",
+                            ctx.process_name, ctx.window_title
+                        );
+                        last_active_context = Some(ctx);
                     }
+                    let _ = ipc_client.send_show_wheel();
                 }
-                _ => {
-                    log::warn!("Unknown hotkey ID: {}", hotkey_id);
-                }
+                _ => {}
             }
         }
 
-        // 短暂休眠以避免过度占用CPU
+        // 防止空转
         thread::sleep(Duration::from_millis(10));
     }
 }
 
 fn handle_injection_request(
-    database: &db::Database,
+    db: &db::Database,
     injector: &injector::Injector,
-    context_manager: &context::ContextManager,
-    force_prompt_id: Option<i32>, // TW003: If Some, use this ID directly (from wheel)
+    ctx: &context::ContextManager,
+    force_id: Option<i32>,
+    target_override: Option<&context::AppContext>,
 ) {
-    log::info!("🚀 DEBUG: Starting injection request handler");
-
-    // 获取配置以记录使用的热键
-    let config = match config::Config::load() {
-        Ok(config) => config,
-        Err(e) => {
-            log::error!("Failed to load config for logging: {}", e);
-            return;
-        }
-    };
-    let hotkey_used = config.hotkey.clone();
-
-    // 获取上下文信息
-    let context_info = match context_manager.get_foreground_context() {
-        Ok(context) => {
-            log::info!(
-                "Foreground context: process='{}', window='{}'",
-                context.process_name,
-                context.window_title
-            );
-            context
-        }
-        Err(e) => {
-            log::warn!("Failed to get foreground context: {}", e);
-            // 使用默认上下文
-            context::AppContext {
-                process_name: "unknown".to_string(),
-                window_title: "unknown".to_string(),
-                window_handle: windows::Win32::Foundation::HWND(0 as *mut std::ffi::c_void),
-            }
-        }
+    // 1. 获取目标上下文
+    // 如果有 override (来自轮盘/面板调用)，使用保存的上下文；否则获取当前上下文
+    let context = if let Some(override_ctx) = target_override {
+        log::info!("⚡ 使用保存的上下文: {}", override_ctx.window_title);
+        override_ctx.clone()
+    } else {
+        ctx.get_foreground_context()
+            .unwrap_or(crate::context::AppContext {
+                process_name: "Unknown".to_string(),
+                window_title: "Unknown".to_string(),
+                window_handle: windows::Win32::Foundation::HWND(std::ptr::null_mut()),
+            })
     };
 
-    // 获取所有提示词并选择要使用的提示词
-    match database.get_all_prompts() {
-        Ok(prompts) => {
-            log::info!("🔍 DEBUG: Starting prompt selection process");
-            log::info!(
-                "🔍 DEBUG: Found {} total prompts in database",
-                prompts.len()
-            );
+    let app_name = context.process_name.clone();
+    let window_title = context.window_title.clone();
 
-            // TW003: Determine which prompt to use
-            let selected_prompt_id = match force_prompt_id {
-                Some(forced_id) => {
-                    log::info!("🎯 Using forced prompt ID from wheel: {}", forced_id);
-                    forced_id
-                }
-                None => {
-                    // Original logic: get selected_prompt_id from database
-                    match database.get_selected_prompt_id() {
-                        Ok(id) => {
-                            log::info!("🔍 DEBUG: Selected prompt ID from database: {}", id);
-                            id
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "🔍 DEBUG: Failed to get selected prompt ID: {}, using first prompt",
-                                e
-                            );
-                            0 // 使用默认值
-                        }
-                    }
-                }
-            };
+    log::info!(
+        "⚡ 处理注入请求 | App: {} | Title: {} | ForceID: {:?}",
+        app_name,
+        window_title,
+        force_id
+    );
 
-            // 根据选中的ID查找提示词
-            log::info!(
-                "🔍 DEBUG: Looking for prompt with selected_prompt_id={}",
-                selected_prompt_id
-            );
-            let prompt = if selected_prompt_id > 0 {
-                // 查找指定ID的提示词
-                if let Some(found_prompt) =
-                    prompts.iter().find(|p| p.id == Some(selected_prompt_id))
-                {
-                    log::info!(
-                        "✅ DEBUG: Found selected prompt: {} (ID: {})",
-                        found_prompt.name,
-                        selected_prompt_id
-                    );
-                    Some(found_prompt.clone())
-                } else {
-                    log::warn!(
-                        "❌ DEBUG: Selected prompt ID {} not found in {} prompts, using first prompt",
-                        selected_prompt_id,
-                        prompts.len()
-                    );
-                    for p in &prompts {
-                        log::warn!(
-                            "🔍 DEBUG: Available prompt: ID={}, Name={}",
-                            p.id.unwrap_or(-1),
-                            p.name
-                        );
-                    }
-                    prompts.first().cloned()
-                }
-            } else {
-                log::info!("🔍 DEBUG: No prompt selected (ID=0), using first prompt");
-                prompts.first().cloned()
-            };
-
-            if let Some(prompt) = prompt {
-                log::info!(
-                    "🔥 Injecting prompt: {} using hotkey: {}",
-                    prompt.name,
-                    hotkey_used
-                );
-                log::info!("📝 Prompt content: {}", prompt.content);
-                log::info!(
-                    "🎯 Target: {} - {}",
-                    context_info.process_name,
-                    context_info.window_title
-                );
-
-                // 调试：详细打印 prompt 对象
-                log::debug!(
-                    "PROMPT DEBUG - ID: {:?}, Name: '{}', Content length: {}",
-                    prompt.id,
-                    prompt.name,
-                    prompt.content.len()
-                );
-
-                // 创建注入上下文（与 injector::InjectionContext 定义匹配）
-                let context = injector::InjectionContext {
-                    app_name: context_info.process_name.clone(),
-                    window_title: context_info.window_title.clone(),
-                    window_handle: context_info.window_handle,
-                };
-
-                // 执行注入并记录详细信息
-                let res = injector.inject(&prompt.content, &context);
-
-                // 记录使用日志，包含热键信息和注入时间
-                match &res {
-                    Ok((strategy_used, injection_time)) => {
-                        log::info!(
-                            "✅ Injection successful in {}ms using hotkey: {} with strategy: {}",
-                            injection_time,
-                            hotkey_used,
-                            strategy_used
-                        );
-
-                        // 调试：打印即将记录的数据
-                        log::debug!(
-                            "记录成功日志 - prompt_id: {:?}, prompt_name: '{}', strategy: '{}', time: {}ms",
-                            prompt.id,
-                            prompt.name,
-                            strategy_used,
-                            injection_time
-                        );
-                        // 将耗时转为至少 1ms，避免极快路径显示 0ms
-                        let injection_time_ms_to_log: u128 =
-                            std::cmp::max(1u64, *injection_time) as u128;
-                        // TW007: Determine action based on force_prompt_id
-                        let action = if force_prompt_id.is_some() {
-                            "wheel_select"
-                        } else {
-                            "hotkey_inject"
-                        };
-                        let log_result = database.log_usage(
-                            prompt.id,
-                            &prompt.name,
-                            &context.app_name,
-                            &context.window_title,
-                            &hotkey_used,
-                            strategy_used,
-                            injection_time_ms_to_log,
-                            true,
-                            None,
-                            &format!("✅ 成功注入 {}ms - 策略: {}", injection_time, strategy_used),
-                            action,
-                        );
-
-                        if let Err(e) = log_result {
-                            log::error!("记录成功日志失败: {}", e);
-                        } else {
-                            log::debug!("成功记录日志到数据库");
-                        }
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "❌ Injection failed using hotkey: {} - Error: {}",
-                            hotkey_used,
-                            e
-                        );
-
-                        // 调试：打印即将记录的错误数据
-                        log::debug!(
-                            "记录失败日志 - prompt_id: {:?}, prompt_name: '{}'",
-                            prompt.id,
-                            prompt.name
-                        );
-
-                        // TW007: Use same action logic for failed cases
-                        let action = if force_prompt_id.is_some() {
-                            "wheel_select"
-                        } else {
-                            "hotkey_inject"
-                        };
-                        let log_result = database.log_usage(
-                            prompt.id,
-                            &prompt.name,
-                            &context.app_name,
-                            &context.window_title,
-                            &hotkey_used,
-                            "FAILED",
-                            0,
-                            false,
-                            Some(&e.to_string()),
-                            &format!("❌ 注入失败: {}", e),
-                            action,
-                        );
-
-                        if let Err(e) = log_result {
-                            log::error!("记录失败日志失败: {}", e);
-                        } else {
-                            log::debug!("成功记录失败日志到数据库");
-                        }
-                    }
-                }
-            } else {
-                log::warn!("❌ No prompts found in database - logging empty attempt");
-                let action = if force_prompt_id.is_some() {
-                    "wheel_select"
-                } else {
-                    "hotkey_inject"
-                };
-                let _ = database.log_usage(
-                    None,
-                    "无可用提示词",
-                    &context_info.process_name,
-                    &context_info.window_title,
-                    &hotkey_used,
-                    "NO_PROMPT",
-                    0,
-                    false,
-                    Some("No prompts available"),
-                    "❌ 无可用提示词",
-                    action,
-                );
+    // 2. 确定要使用的 Prompt
+    let prompt_result = if let Some(id) = force_id {
+        // A. 强制指定模式 (来自 UI 选择)
+        db.get_prompt_by_id(id).map(|p| (p, "wheel_select"))
+    } else {
+        // B. 自动匹配模式 (来自快捷键)
+        match db.find_prompt_for_context(&app_name, &window_title) {
+            Ok(Some(p)) => Ok((p, "hotkey_inject")),
+            Ok(None) => {
+                println!("⚠️ 当前上下文没有匹配的提示词");
+                return;
             }
+            Err(e) => Err(e),
         }
-        Err(e) => {
-            log::error!("❌ Failed to get prompts: {} - logging error attempt", e);
-            let action = if force_prompt_id.is_some() {
-                "wheel_select"
-            } else {
-                "hotkey_inject"
-            };
-            let _ = database.log_usage(
-                None,
-                "数据库错误",
-                &context_info.process_name,
-                &context_info.window_title,
-                &hotkey_used,
-                "DB_ERROR",
+    };
+
+    // 3. 执行注入
+    match prompt_result {
+        Ok((prompt, action_type)) => {
+            println!("✨ 正在注入: [{}] {}", prompt.name, prompt.content);
+
+            // 记录使用日志
+            if let Err(e) = db.log_usage(
+                prompt.id,
+                &prompt.name,
+                &app_name,
+                &window_title,
+                "Internal",
+                "Internal",
                 0,
-                false,
-                Some(&e.to_string()),
-                &format!("❌ 数据库错误: {}", e),
-                action,
-            );
+                true,
+                None,
+                "Injected",
+                action_type,
+            ) {
+                log::error!("无法记录使用日志: {}", e);
+            }
+
+            // 构造注入上下文
+            let injection_ctx = injector::InjectionContext {
+                app_name: app_name.clone(),
+                window_title: window_title.clone(),
+                window_handle: context.window_handle,
+            };
+
+            // 调用注入器
+            if let Err(e) = injector.inject(&prompt.content, &injection_ctx) {
+                log::error!("❌ 注入失败: {}", e);
+                println!("❌ 注入失败: {}", e);
+            } else {
+                println!("✅ 注入成功");
+            }
+        }
+        Err(e) => {
+            log::error!("查询提示词失败: {}", e);
         }
     }
+}
+
+// 为了作为二进制文件运行时兼容
+fn main() {
+    run_service();
 }

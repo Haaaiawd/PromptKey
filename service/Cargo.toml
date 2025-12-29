@@ -3,6 +3,9 @@ name = "service"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "src/main.rs"
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -23,4 +26,5 @@ windows = { version = "0.58", features = [
     "Win32_System_ProcessStatus",
     "Win32_System_DataExchange",
     "Win32_System_Memory",
+    "Win32_System_Pipes",
 ] }

@@ -1,5 +1,4 @@
-// 隐藏控制台窗口（开发/发布均不弹出）
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -17,7 +16,7 @@ mod inject_pipe_client; // TW004: GUI → Service injection command client
 
 
 struct ServiceState {
-    process: Option<std::process::Child>,
+    is_active: bool,
 }
 
 // 提示词结构体
@@ -78,84 +77,36 @@ struct WheelPrompt {
 
 impl ServiceState {
     fn new() -> Self {
-        ServiceState { process: None }
+        ServiceState { is_active: false }
     }
     
     fn is_running(&mut self) -> bool {
-        if let Some(ref mut child) = self.process {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    // 进程已退出
-                    println!("服务进程已退出，退出状态: {:?}", status);
-                    self.process = None;
-                    false
-                }
-                Ok(None) => {
-                    // 进程仍在运行
-                    true
-                }
-                Err(e) => {
-                    // 检查进程状态时出错
-                    eprintln!("检查服务进程状态时出错: {}", e);
-                    self.process = None;
-                    false
-                }
-            }
-        } else {
-            false
-        }
+        self.is_active
     }
     
     fn start_service(&mut self) -> Result<(), String> {
-        if self.is_running() {
-            println!("服务已在运行中");
+        if self.is_active {
+            println!("✅ 内嵌服务已在运行中");
             return Ok(());
         }
         
-        // 获取服务可执行文件路径
-        let service_exe_path = resolve_service_exe_path()?;
-        println!("服务可执行文件路径: {}", service_exe_path);
+        println!("🚀 正在启动内嵌提示词引擎 (Embedded Thread)...");
         
-        // 启动服务进程（保持日志输出，但隐藏窗口）
-        let mut cmd = Command::new(&service_exe_path);
-        cmd.current_dir(std::env::current_dir().unwrap())
-            .stdin(Stdio::null())
-            .env("RUST_LOG", "info"); // 设置日志级别
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        match cmd.spawn() {
-                Ok(child) => {
-                    println!("服务启动成功，PID: {:?}", child.id());
-                    self.process = Some(child);
-                    Ok(())
-                }
-                Err(e) => {
-                    eprintln!("启动服务失败: {}", e);
-                    Err(format!("启动服务失败: {}", e))
-                }
-            }
+        // 启动后台线程运行 Service 逻辑
+        std::thread::spawn(|| {
+            // 注意：service::run_service 内部会处理循环
+            service::run_service();
+        });
+
+        // 设置为已激活
+        self.is_active = true;
+        Ok(())
     }
     
     fn stop_service(&mut self) -> Result<(), String> {
-        if let Some(mut child) = self.process.take() {
-            // 尝试优雅地终止进程
-            match child.kill() {
-                Ok(_) => {
-                    // 等待进程退出
-                    let _ = child.wait();
-                    Ok(())
-                }
-                Err(e) => {
-                    Err(format!("停止服务失败: {}", e))
-                }
-            }
-        } else {
-            Ok(())
-        }
+        println!("🛑 正在停止内嵌提示词引擎...");
+        self.is_active = false;
+        Ok(())
     }
 }
 
@@ -176,6 +127,7 @@ fn resolve_service_exe_path() -> Result<String, String> {
 
     // 2. 检查开发环境 - 同级目录下的 service.exe (debug/release)
     let candidate_same_dir = exe_dir.join(service_name);
+    println!("🔍 检查同级路径: {:?}", candidate_same_dir);
     if candidate_same_dir.exists() {
         return Ok(candidate_same_dir.to_string_lossy().into_owned());
     }
@@ -352,6 +304,8 @@ fn main() {
             .inner_size(600.0, 600.0)
             .resizable(false)
             .decorations(false)       // Borderless
+            .transparent(true)        // Transparent background (Crucial for Donut shape)
+            .shadow(false)            // CRITICAL: Connects to transparent? No, this removes the native window shadow artifact!
             .always_on_top(true)      // Always on top
             .skip_taskbar(true)       // Don't show in taskbar
             .visible(false)           // Start hidden

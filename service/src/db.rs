@@ -363,4 +363,53 @@ impl Database {
             Ok(0) // 默认返回0表示没有选中的提示词
         }
     }
+
+    pub fn get_prompt_by_id(&self, id: i32) -> Result<Prompt, Box<dyn std::error::Error>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, tags, content, content_type, variables_json, app_scopes_json, inject_order, version, updated_at
+             FROM prompts WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map([id], |row| {
+            let tags_str: Option<String> = row.get(2)?;
+            let tags = match tags_str {
+                Some(s) => serde_json::from_str(&s).ok(),
+                None => None,
+            };
+
+            Ok(Prompt {
+                id: Some(row.get(0)?),
+                name: row.get(1)?,
+                tags,
+                content: row.get(3)?,
+                content_type: row.get(4)?,
+                variables_json: row.get(5)?,
+                app_scopes_json: row.get(6)?,
+                inject_order: row.get(7)?,
+                version: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })?;
+
+        if let Some(prompt) = rows.next() {
+            Ok(prompt?)
+        } else {
+            Err("Prompt not found".into())
+        }
+    }
+
+    pub fn find_prompt_for_context(
+        &self,
+        _app_name: &str,
+        _window_title: &str,
+    ) -> Result<Option<Prompt>, Box<dyn std::error::Error>> {
+        let selected_id = self.get_selected_prompt_id()?;
+        if selected_id == 0 {
+            return Ok(None);
+        }
+        match self.get_prompt_by_id(selected_id) {
+            Ok(p) => Ok(Some(p)),
+            Err(_) => Ok(None),
+        }
+    }
 }

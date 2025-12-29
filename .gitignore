@@ -12,6 +12,7 @@ docs/
 # Rust / Cargo #
 ###############
 target/
+target_*/
 **/*.rs.bk
 Cargo.lock.bk
 
@@ -50,3 +51,15 @@ logs/
 .env.*
 .env.local
 *.local.yaml
+
+########################
+# Temporary / Junk     #
+########################
+debug_*/
+tmp/
+temp/
+nul
+*.tmp
+*.bak
+implementation_plan.md
+task.md
