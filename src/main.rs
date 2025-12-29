@@ -13,6 +13,8 @@ use std::time::Duration;
 
 // 服务进程句柄
 mod ipc_listener;
+mod inject_pipe_client; // TW004: GUI → Service injection command client
+
 
 struct ServiceState {
     process: Option<std::process::Child>,
