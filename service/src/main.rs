@@ -6,7 +6,6 @@ pub mod hotkey;
 pub mod injector;
 pub mod ipc;
 
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -63,22 +62,6 @@ pub fn run_service() {
         // B. 检查热键事件
         while let Some(hotkey_id) = hotkey_service.try_wait_for_hotkey() {
             match hotkey_id {
-                1 | 2 => {
-                    println!("⌨️ [HOTKEY] 触发自动注入");
-                    handle_injection_request(&database, &injector, &context_manager, None, None);
-                }
-                3 => {
-                    println!("🔍 [HOTKEY] 触发搜索面板");
-                    // Capture context before showing GUI
-                    if let Ok(ctx) = context_manager.get_foreground_context() {
-                        println!(
-                            "💾 保存上下文: App={}, Title={}",
-                            ctx.process_name, ctx.window_title
-                        );
-                        last_active_context = Some(ctx);
-                    }
-                    let _ = ipc_client.send_show_selector();
-                }
                 4 => {
                     println!("🎡 [HOTKEY] 触发提示词轮盘");
                     // Capture context before showing GUI
@@ -191,6 +174,7 @@ fn handle_injection_request(
 }
 
 // 为了作为二进制文件运行时兼容
+#[allow(dead_code)]
 fn main() {
     run_service();
 }

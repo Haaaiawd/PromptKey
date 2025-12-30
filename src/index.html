@@ -14,10 +14,13 @@
             <nav class="sidebar">
                 <ul class="nav-list">
                     <li><button id="prompts-btn" class="nav-btn active" type="button">提示词</button></li>
+                    <li><button id="wheel-btn" class="nav-btn" type="button">轮盘</button></li>
+
                     <li><button id="settings-btn" class="nav-btn" type="button">设置</button></li>
                     <li><button id="market-btn" class="nav-btn" type="button">市场</button></li>
                     <li><button id="logs-btn" class="nav-btn" type="button">日志</button></li>
                 </ul>
+
                 
                 <div class="help-section">
                     <h3>使用帮助</h3>
@@ -35,6 +38,24 @@
                 <div id="prompts-panel" class="panel active">
                     <div class="panel-header">
                         <h2>提示词管理</h2>
+                        <div class="segmented-control" id="view-toggle">
+                            <div class="segment-slider"></div>
+                            <button class="segment active" data-view="card" title="卡片视图">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <rect x="1" y="1" width="6" height="6" rx="1"/>
+                                    <rect x="9" y="1" width="6" height="6" rx="1"/>
+                                    <rect x="1" y="9" width="6" height="6" rx="1"/>
+                                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                                </svg>
+                            </button>
+                            <button class="segment" data-view="list" title="列表视图">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <rect x="1" y="2" width="14" height="2" rx="0.5"/>
+                                    <rect x="1" y="7" width="14" height="2" rx="0.5"/>
+                                    <rect x="1" y="12" width="14" height="2" rx="0.5"/>
+                                </svg>
+                            </button>
+                        </div>
                         <button id="add-prompt-btn" class="primary-btn" type="button">
                             <i class="icon-plus"></i> 添加提示词
                         </button>
@@ -67,15 +88,7 @@
                             </div>
                         </div>
                         
-                        <div class="settings-section">
-                            <h3>注入设置</h3>
-                            <div class="setting-item">
-                                <div class="coming-soon">
-                                    <p>敬请期待</p>
-                                    <p class="hint">此功能正在开发中，即将上线</p>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- 注入设置已移除 -->
                         
                         <div class="settings-section">
                             <h3>界面设置</h3>
@@ -120,6 +133,42 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- 轮盘配置面板 -->
+                <div id="wheel-panel" class="panel">
+                    <div class="panel-header">
+                        <h2>轮盘配置</h2>
+                    </div>
+                    <div class="panel-content">
+                        <!-- 当前轮盘槽位预览 -->
+                        <div class="wheel-slots-section">
+                            <h3>当前轮盘内容 (6 槽位)</h3>
+                            <p class="hint">置顶的提示词会优先显示在轮盘上</p>
+                            <div class="wheel-slots" id="wheel-slots">
+                                <div class="wheel-slot" data-slot="1"><span class="slot-number">1</span><span class="slot-name">-</span></div>
+                                <div class="wheel-slot" data-slot="2"><span class="slot-number">2</span><span class="slot-name">-</span></div>
+                                <div class="wheel-slot" data-slot="3"><span class="slot-number">3</span><span class="slot-name">-</span></div>
+                                <div class="wheel-slot" data-slot="4"><span class="slot-number">4</span><span class="slot-name">-</span></div>
+                                <div class="wheel-slot" data-slot="5"><span class="slot-number">5</span><span class="slot-name">-</span></div>
+                                <div class="wheel-slot" data-slot="6"><span class="slot-number">6</span><span class="slot-name">-</span></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 可用提示词列表 -->
+                        <div class="wheel-prompts-section">
+                            <h3>所有提示词</h3>
+                            <p class="hint">勾选以置顶到轮盘</p>
+                            <div class="wheel-prompts-list" id="wheel-prompts-list">
+                                <!-- 提示词列表将在这里显示 -->
+                                <div class="empty-state">
+                                    <p>加载中...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
                 
                 <div id="logs-panel" class="panel">
                     <div class="panel-header">

@@ -4,6 +4,8 @@ console.log('=== 简化版main.js开始加载 ===');
 
 let debugCounter = 0;
 let selectedPromptId = null; // 用于跟踪当前选中的提示词ID
+let viewMode = localStorage.getItem('promptViewMode') || 'card'; // T1-009: View Mode State
+
 
 // 调试信息更新函数
 function updateDebugInfo(message) {
@@ -233,17 +235,14 @@ async function initializeApp() {
                     return;
                 }
                 
-                // 获取注入模式
-                const injectionModeSelect = document.getElementById('injection-mode');
-                const injectionMode = injectionModeSelect?.value || 'append';
-                
-                updateDebugInfo(`正在保存设置 - 热键: ${currentHotkey}, 注入模式: ${injectionMode}`);
+                updateDebugInfo(`正在保存设置 - 热键: ${currentHotkey}`);
+
                 
                 // 调用Tauri后端保存设置
                 const result = await safeInvoke('apply_settings', {
-                    hotkey: currentHotkey,
-                    uiaMode: injectionMode
+                    hotkey: currentHotkey
                 });
+
                 
                 updateDebugInfo(`保存设置成功: ${result}`);
                 
@@ -463,12 +462,8 @@ async function initializeApp() {
             }
         }
         
-        // 加载注入模式设置
-        const injectionModeSelect = document.getElementById('injection-mode');
-        if (injectionModeSelect && settings.uia_mode) {
-            injectionModeSelect.value = settings.uia_mode;
-            updateDebugInfo(`已加载注入模式设置: ${settings.uia_mode}`);
-        }
+        // 注入模式设置加载逻辑已移除
+
         
     } catch (error) {
         updateDebugInfo('从后端加载设置失败: ' + error);
@@ -500,6 +495,7 @@ async function initializeApp() {
 function bindNavigationButtons() {
     const navButtons = [
         { id: 'prompts-btn', panel: 'prompts-panel' },
+        { id: 'wheel-btn', panel: 'wheel-panel' },
         { id: 'settings-btn', panel: 'settings-panel' },
         { id: 'market-btn', panel: 'market-panel' },
         { id: 'logs-btn', panel: 'logs-panel' }
@@ -529,6 +525,10 @@ function bindNavigationButtons() {
                     // 如果切换到日志面板，自动加载日志
                     if (panel === 'logs-panel') {
                         loadUsageLogs();
+                    }
+                    // 如果切换到轮盘面板，自动加载轮盘数据
+                    if (panel === 'wheel-panel') {
+                        loadWheelConfig();
                     }
                 } else {
                     updateDebugInfo(`ERROR: 未找到面板: ${panel}`);
@@ -605,29 +605,15 @@ function bindFunctionButtons() {
         await loadUsageLogs();
     });
 
-    // 重启服务按钮
-    const restartSvcBtn = document.createElement('button');
-    restartSvcBtn.id = 'restart-service-btn';
-    restartSvcBtn.className = 'secondary-btn';
-    restartSvcBtn.innerHTML = '<i class="icon-restart"></i> 重启服务';
-    restartSvcBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        try {
-            updateDebugInfo('重启服务按钮被点击');
-            await safeInvoke('restart_service');
-            showNotification('✅ 服务已重启', 'success');
-        } catch (err) {
-            updateDebugInfo('重启服务失败: ' + err);
-            showNotification('❌ 重启服务失败: ' + err, 'error');
-        }
-    });
+    // 重启服务按钮 removed
+
     
     // 将刷新按钮添加到日志工具栏
     const logsToolbar = document.querySelector('.logs-toolbar');
     if (logsToolbar && clearLogsBtn) {
         logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
-        logsToolbar.insertBefore(restartSvcBtn, clearLogsBtn);
+        logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
+
         updateDebugInfo('已添加刷新日志按钮');
     }
     
@@ -682,7 +668,70 @@ function bindFunctionButtons() {
         });
         updateDebugInfo('已绑定日志搜索按钮');
     }
+
+    // T1-009: View Mode Toggle (Segmented Control)
+    const viewToggle = document.getElementById('view-toggle');
+    const segments = viewToggle?.querySelectorAll('.segment');
+    
+    if (viewToggle && segments?.length) {
+        // Initialize UI state
+        updateViewModeUI();
+
+        segments.forEach(segment => {
+            segment.addEventListener('click', (e) => {
+                e.preventDefault();
+                const mode = segment.dataset.view;
+                if (mode) setViewMode(mode);
+            });
+        });
+        
+        updateDebugInfo('已绑定视图切换按钮 (Segmented Control)');
+    }
 }
+
+// T1-009: Set View Mode
+function setViewMode(mode) {
+    if (mode !== 'card' && mode !== 'list') return;
+    
+    viewMode = mode;
+    localStorage.setItem('promptViewMode', mode);
+    updateViewModeUI();
+    updateDebugInfo(`视图模式切换为: ${mode}`);
+}
+
+// T1-009: Update View Mode UI (Segmented Control)
+function updateViewModeUI() {
+    const viewToggle = document.getElementById('view-toggle');
+    const segments = viewToggle?.querySelectorAll('.segment');
+    const promptList = document.querySelector('.prompt-list');
+    
+    if (viewToggle && segments?.length) {
+        // Update active segment
+        segments.forEach(segment => {
+            if (segment.dataset.view === viewMode) {
+                segment.classList.add('active');
+            } else {
+                segment.classList.remove('active');
+            }
+        });
+        
+        // Move slider
+        if (viewMode === 'list') {
+            viewToggle.classList.add('list-active');
+        } else {
+            viewToggle.classList.remove('list-active');
+        }
+    }
+    
+    if (promptList) {
+        if (viewMode === 'list') {
+            promptList.classList.add('compact');
+        } else {
+            promptList.classList.remove('compact');
+        }
+    }
+}
+
 
 // 显示添加提示词模态框
 function showAddPromptModal() {
@@ -957,9 +1006,11 @@ async function loadPrompts() {
                     <div class="prompt-header">
                         <h3>${prompt.name}</h3>
                         <div class="prompt-actions">
+                            <button class="copy-btn" onclick="copyPrompt(${prompt.id}, event)">复制</button>
                             <button class="edit-btn" onclick="editPrompt(${prompt.id}, event)">编辑</button>
                             <button class="delete-btn" onclick="deletePrompt(${prompt.id}, event)">删除</button>
                         </div>
+
                     </div>
                     <div class="prompt-content">
                         <p>${prompt.content.substring(0, 100)}${prompt.content.length > 100 ? '...' : ''}</p>
@@ -974,36 +1025,10 @@ async function loadPrompts() {
             
             promptList.innerHTML = promptsHtml;
             
-            // 为每个提示词项添加点击事件监听器
-            document.querySelectorAll('.prompt-item').forEach(item => {
-                item.addEventListener('click', async (e) => {
-                    // 阻止编辑和删除按钮的事件冒泡
-                    if (e.target.classList.contains('edit-btn') || e.target.classList.contains('delete-btn')) {
-                        return;
-                    }
-                    
-                    // 清除之前选中的提示词的样式
-                    document.querySelectorAll('.prompt-item').forEach(i => {
-                        i.classList.remove('selected');
-                    });
-                    
-                    // 设置当前选中的提示词
-                    item.classList.add('selected');
-                    selectedPromptId = parseInt(item.dataset.id);
-                    updateDebugInfo(`选中提示词 ID: ${selectedPromptId}`);
-                    
-                    // 调用后端设置选中的提示词ID
-                    try {
-                        await safeInvoke('set_selected_prompt', { id: selectedPromptId });
-                        localStorage.setItem('selectedPromptId', selectedPromptId);
-                        updateDebugInfo(`已设置选中的提示词 ID: ${selectedPromptId}`);
-                        showNotification(`已选中提示词: ${prompt.name}`, 'info');
-                    } catch (error) {
-                        updateDebugInfo(`设置选中提示词失败: ${error}`);
-                        showNotification(`设置失败: ${error}`, 'error');
-                    }
-                });
-            });
+            promptList.innerHTML = promptsHtml;
+            
+            // Selection logic removed (T1-008)
+
         }
         
     } catch (error) {
@@ -1011,7 +1036,36 @@ async function loadPrompts() {
     }
 }
 
+// 复制提示词内容 (T1-007)
+window.copyPrompt = async (id, event) => {
+    if (event) event.stopPropagation();
+    
+    try {
+        const prompts = await safeInvoke('get_all_prompts');
+        const prompt = prompts.find(p => p.id === id);
+        
+        if (!prompt) {
+            showNotification('未找到提示词', 'error');
+            return;
+        }
+
+        const textToCopy = prompt.content;
+        
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(textToCopy);
+            showNotification('已复制到剪贴板', 'success');
+        } else {
+            fallbackCopyTextToClipboard(textToCopy);
+        }
+        
+    } catch (error) {
+        updateDebugInfo(`复制失败: ${error}`);
+        showNotification(`复制失败: ${error}`, 'error');
+    }
+};
+
 // 全局函数用于提示词操作
+
 window.editPrompt = async (id, event) => {
     // 阻止事件冒泡
     if (event) {
@@ -1207,3 +1261,105 @@ window.testButtonBinding = () => {
         updateDebugInfo('录制按钮存在，事件监听器已绑定');
     }
 };
+
+// ============ Wheel Configuration Panel ============
+
+// Load wheel configuration data
+async function loadWheelConfig() {
+    updateDebugInfo('加载轮盘配置...');
+    
+    try {
+        // Get all prompts with pin status
+        const prompts = await safeInvoke('get_all_prompts_with_pin');
+        updateDebugInfo(`获取到 ${prompts.length} 个提示词`);
+        
+        // Get top 6 for wheel slots preview
+        const wheelData = await safeInvoke('get_top_prompts_paginated', { page: 0, perPage: 6 });
+        updateDebugInfo(`轮盘预览: ${wheelData.prompts.length} 个`);
+        
+        // Render slots and list
+        renderWheelSlots(wheelData.prompts);
+        renderWheelPromptsList(prompts);
+        
+    } catch (error) {
+        updateDebugInfo(`加载轮盘配置失败: ${error}`);
+        showNotification('加载轮盘配置失败', 'error');
+    }
+}
+
+// Render wheel slots preview
+function renderWheelSlots(prompts) {
+    const slotsContainer = document.getElementById('wheel-slots');
+    if (!slotsContainer) return;
+    
+    const slots = slotsContainer.querySelectorAll('.wheel-slot');
+    slots.forEach((slot, index) => {
+        const prompt = prompts[index];
+        const nameSpan = slot.querySelector('.slot-name');
+        
+        if (prompt) {
+            slot.classList.add('filled');
+            nameSpan.textContent = prompt.name;
+        } else {
+            slot.classList.remove('filled');
+            nameSpan.textContent = '-';
+        }
+    });
+}
+
+// Render prompts list with checkboxes
+function renderWheelPromptsList(prompts) {
+    const listContainer = document.getElementById('wheel-prompts-list');
+    if (!listContainer) return;
+    
+    if (prompts.length === 0) {
+        listContainer.innerHTML = `
+            <div class="empty-state">
+                <p>暂无提示词</p>
+                <p class="hint">先在"提示词"页面添加提示词</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = prompts.map(prompt => `
+        <div class="wheel-prompt-item ${prompt.is_pinned ? 'pinned' : ''}" data-id="${prompt.id}">
+            <input type="checkbox" 
+                   class="wheel-prompt-checkbox" 
+                   ${prompt.is_pinned ? 'checked' : ''} 
+                   onchange="togglePromptPin(${prompt.id}, this.checked)">
+            <div class="wheel-prompt-info">
+                <div class="wheel-prompt-name">${escapeHtml(prompt.name)}</div>
+                <div class="wheel-prompt-preview">${escapeHtml(prompt.content.substring(0, 60))}${prompt.content.length > 60 ? '...' : ''}</div>
+            </div>
+            ${prompt.is_pinned ? '<span class="wheel-prompt-badge">📌 置顶</span>' : ''}
+        </div>
+    `).join('');
+    
+    listContainer.innerHTML = html;
+}
+
+// Toggle prompt pin status
+window.togglePromptPin = async (id, checked) => {
+    updateDebugInfo(`切换置顶状态: ID=${id}, checked=${checked}`);
+    
+    try {
+        const newPinned = await safeInvoke('toggle_prompt_pin', { id });
+        updateDebugInfo(`置顶状态已更新: ${newPinned}`);
+        
+        // Reload wheel config to update UI
+        await loadWheelConfig();
+        
+        showNotification(newPinned ? '已置顶到轮盘' : '已取消置顶', 'success');
+    } catch (error) {
+        updateDebugInfo(`切换置顶失败: ${error}`);
+        showNotification('操作失败', 'error');
+    }
+};
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
