@@ -240,6 +240,63 @@ body {
   color: var(--accent-foreground);
 }
 
+/* iOS-style Segmented Control */
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  background: var(--muted);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 0;
+  margin-right: 1rem;
+}
+
+.segment-slider {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--background);
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+}
+
+.segmented-control.list-active .segment-slider {
+  transform: translateX(100%);
+}
+
+.segment {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.2s ease;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.segment:hover {
+  color: var(--foreground);
+}
+
+.segment.active {
+  color: var(--foreground);
+}
+
+.segment svg {
+  display: block;
+}
+
+
 /* 提示词列表 */
 .prompt-list {
   display: flex;
@@ -301,6 +358,20 @@ body {
   color: var(--destructive-foreground);
 }
 
+.prompt-actions .copy-btn {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.prompt-actions .copy-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+
 .prompt-content {
   background: var(--muted);
   border-radius: calc(var(--radius) - 2px);
@@ -330,6 +401,39 @@ body {
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
 }
+
+/* Compact Mode Styles (T1-010) */
+.prompt-list.compact .prompt-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+}
+
+.prompt-list.compact .prompt-header {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.prompt-list.compact .prompt-header h3 {
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+.prompt-list.compact .prompt-content {
+  display: none;
+}
+
+.prompt-list.compact .prompt-meta {
+  margin-left: auto;
+  margin-right: 1rem;
+}
+
 
 /* 表单组件 */
 .settings-section {
@@ -897,4 +1001,150 @@ select:focus {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* Wheel Configuration Panel */
+.wheel-slots-section,
+.wheel-prompts-section {
+  margin-bottom: 2rem;
+}
+
+.wheel-slots-section h3,
+.wheel-prompts-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.5rem;
+}
+
+.wheel-slots {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.wheel-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 80px;
+  background: var(--muted);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  transition: all 0.2s ease;
+}
+
+.wheel-slot.filled {
+  background: var(--card);
+  border: 2px solid var(--primary);
+  border-style: solid;
+}
+
+.wheel-slot .slot-number {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted-foreground);
+  background: var(--background);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+}
+
+.wheel-slot.filled .slot-number {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.wheel-slot .slot-name {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wheel-slot.filled .slot-name {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* Wheel Prompts List */
+.wheel-prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 1rem;
+}
+
+.wheel-prompt-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wheel-prompt-item:hover {
+  border-color: var(--ring);
+  background: var(--accent);
+}
+
+.wheel-prompt-item.pinned {
+  border-color: var(--primary);
+  background: rgba(24, 24, 27, 0.05);
+}
+
+.theme-dark .wheel-prompt-item.pinned {
+  background: rgba(250, 250, 250, 0.05);
+}
+
+.wheel-prompt-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.wheel-prompt-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wheel-prompt-name {
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: 0.125rem;
+}
+
+.wheel-prompt-preview {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wheel-prompt-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 9999px;
+  text-transform: uppercase;
 }

@@ -3,10 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
-use windows::{
-    Win32::Foundation::*, Win32::System::Threading::*, Win32::UI::Input::KeyboardAndMouse::*,
-    Win32::UI::WindowsAndMessaging::*,
-};
+use windows::{Win32::UI::Input::KeyboardAndMouse::*, Win32::UI::WindowsAndMessaging::*};
 
 /// 热键管理器
 pub struct HotkeyManager {
@@ -103,23 +100,13 @@ impl HotkeyService {
                     rx: mpsc::channel().1,
                 }; // dummy rx
 
-                // 注册主注入热键
-                if let Err(e) = manager.register(1, &hotkey_str) {
-                    log::error!("注册主热键失败: {}", e);
-                } else {
-                    log::info!("✅ 主注入热键注册成功: {}", hotkey_str);
-                }
+                // ID 1 (Inject) and ID 3 (Selector) removed.
 
-                // 注册选择器热键 (Ctrl+Shift+H)
-                if let Err(e) = manager.register(3, "Ctrl+Shift+H") {
-                    log::error!("注册选择器热键失败: {}", e);
-                }
-
-                // 注册轮盘热键 (Ctrl+Alt+Q)
-                if let Err(e) = manager.register(4, "Ctrl+Alt+Q") {
+                // 注册轮盘热键 (From Config)
+                if let Err(e) = manager.register(4, &hotkey_str) {
                     log::error!("注册轮盘热键失败: {}", e);
                 } else {
-                    println!("✅ [HOTKEY] 轮盘触发热键已注册: Ctrl+Alt+Q");
+                    println!("✅ [HOTKEY] 轮盘触发热键已注册: {}", hotkey_str);
                 }
 
                 let mut msg = MSG::default();
@@ -129,7 +116,7 @@ impl HotkeyService {
                             if msg.message == WM_HOTKEY {
                                 let _ = tx.send(msg.wParam.0 as u32);
                             }
-                            TranslateMessage(&msg);
+                            let _ = TranslateMessage(&msg);
                             DispatchMessageW(&msg);
                         }
                     }

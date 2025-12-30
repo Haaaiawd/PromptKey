@@ -5,7 +5,6 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder, AppHandle, Emitter,
 };
-use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -110,6 +109,7 @@ impl ServiceState {
     }
 }
 
+#[allow(dead_code)]
 fn resolve_service_exe_path() -> Result<String, String> {
     // 尝试从 GUI 可执行文件所在目录推导 service(.exe) 路径
     let current_exe = std::env::current_exe()
@@ -230,7 +230,9 @@ fn main() {
             get_selected_prompt,
             get_usage_logs,
             exit_application,
-            clear_usage_logs
+            clear_usage_logs,
+            toggle_prompt_pin,              // Wheel: Toggle pin status
+            get_all_prompts_with_pin        // Wheel: Get prompts with pin status
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -615,7 +617,7 @@ fn get_top_prompts_paginated(page: u32, per_page: u32) -> Result<WheelPromptsPag
         (total_count + per_page - 1) / per_page
     };
     
-    // Query prompts ordered by usage (COUNT DESC) and recency (MAX created_at DESC)
+    // Query prompts ordered by: Pinned first, then Most Recent Use, then Usage Frequency
     let mut stmt = conn.prepare(
         "SELECT 
             p.id,
@@ -624,9 +626,13 @@ fn get_top_prompts_paginated(page: u32, per_page: u32) -> Result<WheelPromptsPag
          FROM prompts p
          LEFT JOIN usage_logs u ON u.prompt_id = p.id
          GROUP BY p.id
-         ORDER BY COUNT(u.id) DESC, MAX(u.created_at) DESC
+         ORDER BY 
+            COALESCE(p.is_pinned, 0) DESC,
+            MAX(COALESCE(u.created_at, 0)) DESC,
+            COUNT(u.id) DESC
          LIMIT ?1 OFFSET ?2"
     ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+
     
     let prompts_iter = stmt.query_map([per_page, offset], |row| {
         Ok(WheelPrompt {
@@ -647,6 +653,61 @@ fn get_top_prompts_paginated(page: u32, per_page: u32) -> Result<WheelPromptsPag
         total_pages,
         total_count,
     })
+}
+
+// Wheel: Toggle prompt pin status
+#[tauri::command]
+fn toggle_prompt_pin(id: i32) -> Result<bool, String> {
+    let conn = open_db()?;
+    
+    // Get current pin status
+    let current_pin: i32 = conn
+        .query_row("SELECT COALESCE(is_pinned, 0) FROM prompts WHERE id = ?1", [id], |row| row.get(0))
+        .map_err(|e| format!("Failed to get pin status: {}", e))?;
+    
+    // Toggle
+    let new_pin = if current_pin == 0 { 1 } else { 0 };
+    
+    conn.execute("UPDATE prompts SET is_pinned = ?1 WHERE id = ?2", [new_pin, id])
+        .map_err(|e| format!("Failed to update pin status: {}", e))?;
+    
+    Ok(new_pin == 1)
+}
+
+// Wheel: Get all prompts with pin status for wheel config panel
+#[derive(serde::Serialize)]
+struct PromptWithPin {
+    id: i32,
+    name: String,
+    content: String,
+    is_pinned: bool,
+}
+
+#[tauri::command]
+fn get_all_prompts_with_pin() -> Result<Vec<PromptWithPin>, String> {
+    let conn = open_db()?;
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, name, content, COALESCE(is_pinned, 0) as is_pinned 
+         FROM prompts 
+         ORDER BY COALESCE(is_pinned, 0) DESC, id ASC"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+    
+    let prompts_iter = stmt.query_map([], |row| {
+        Ok(PromptWithPin {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            content: row.get(2)?,
+            is_pinned: row.get::<_, i32>(3)? == 1,
+        })
+    }).map_err(|e| format!("Query failed: {}", e))?;
+    
+    let mut prompts = Vec::new();
+    for prompt in prompts_iter {
+        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
+    }
+    
+    Ok(prompts)
 }
 
 
@@ -759,10 +820,15 @@ fn open_db() -> Result<rusqlite::Connection, String> {
             app_scopes_json TEXT,
             inject_order TEXT,
             version INTEGER DEFAULT 1,
+            is_pinned INTEGER DEFAULT 0,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         [],
     ).map_err(|e| format!("创建 prompts 表失败: {}", e))?;
+
+    // Ensure is_pinned column exists (for migration)
+    let _ = conn.execute("ALTER TABLE prompts ADD COLUMN is_pinned INTEGER DEFAULT 0", []);
+
 
     // 初始创建（可能是旧结构），后续用 ensure_usage_logs_schema 升级列
     conn.execute(
@@ -1012,7 +1078,7 @@ fn load_or_default_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-fn apply_settings(app: AppHandle, hotkey: Option<String>, uia_mode: Option<String>) -> Result<String, String> {
+fn apply_settings(app: AppHandle, hotkey: Option<String>) -> Result<String, String> {
     // 1) 读取现有配置
     let mut cfg = load_or_default_config()?;
 
@@ -1055,12 +1121,6 @@ fn apply_settings(app: AppHandle, hotkey: Option<String>, uia_mode: Option<Strin
         cfg.hotkey = "Ctrl+Alt+Space".into();
     }
 
-    // 3) 写入 UIA 模式（append/overwrite），GUI 的 replace 映射为 overwrite
-    if let Some(mode) = uia_mode {
-        let norm = match mode.as_str() { "append"=>"append", "overwrite"|"replace"=>"overwrite", _=>"overwrite" };
-        cfg.injection.uia_value_pattern_mode = norm.into();
-    }
-
     // 4) 保存 YAML
     let path = config_path()?;
     let yaml = serde_yaml::to_string(&cfg).map_err(|e| format!("序列化配置失败: {}", e))?;
@@ -1082,7 +1142,6 @@ fn get_settings() -> Result<serde_json::Value, String> {
     let cfg = load_or_default_config()?;
     Ok(serde_json::json!({
         "hotkey": cfg.hotkey,
-        "uia_mode": cfg.injection.uia_value_pattern_mode,
     }))
 }
 
