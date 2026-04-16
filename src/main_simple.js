@@ -612,8 +612,6 @@ function bindFunctionButtons() {
     const logsToolbar = document.querySelector('.logs-toolbar');
     if (logsToolbar && clearLogsBtn) {
         logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
-        logsToolbar.insertBefore(refreshLogsBtn, clearLogsBtn);
-
         updateDebugInfo('已添加刷新日志按钮');
     }
     
@@ -667,6 +665,118 @@ function bindFunctionButtons() {
             alert('日志搜索功能暂未实现');
         });
         updateDebugInfo('已绑定日志搜索按钮');
+    }
+
+    // === Prompt Search ===
+    const promptSearchBtn = document.getElementById('prompt-search-btn');
+    const promptSearchInput = document.getElementById('prompt-search');
+    if (promptSearchBtn && promptSearchInput) {
+        const doSearch = async () => {
+            const query = promptSearchInput.value.trim();
+            if (!query) {
+                await loadPrompts();
+                return;
+            }
+            updateDebugInfo(`搜索提示词: ${query}`);
+            try {
+                const prompts = await safeInvoke('search_prompts', { query });
+                updateDebugInfo(`搜索到 ${prompts.length} 个结果`);
+                const promptList = document.querySelector('.prompt-list');
+                if (!promptList) return;
+                if (prompts.length === 0) {
+                    promptList.innerHTML = `<div class="empty-state"><p>未找到匹配的提示词</p></div>`;
+                } else {
+                    const promptsHtml = prompts.map(prompt => `
+                        <div class="prompt-item" data-id="${prompt.id}">
+                            <div class="prompt-header">
+                                <h3>${escapeHtml(prompt.name)}</h3>
+                                <div class="prompt-actions">
+                                    <button class="copy-btn" onclick="copyPrompt(${prompt.id}, event)">复制</button>
+                                    <button class="edit-btn" onclick="editPrompt(${prompt.id}, event)">编辑</button>
+                                    <button class="delete-btn" onclick="deletePrompt(${prompt.id}, event)">删除</button>
+                                </div>
+                            </div>
+                            <div class="prompt-content">
+                                <p>${escapeHtml(prompt.content.substring(0, 100))}${prompt.content.length > 100 ? '...' : ''}</p>
+                            </div>
+                            ${prompt.tags && prompt.tags.length > 0 ? `
+                            <div class="prompt-meta">
+                                ${prompt.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                            </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                    promptList.innerHTML = promptsHtml;
+                }
+            } catch (err) {
+                updateDebugInfo(`搜索失败: ${err}`);
+                showNotification('搜索失败: ' + err, 'error');
+            }
+        };
+        promptSearchBtn.addEventListener('click', doSearch);
+        promptSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') doSearch();
+        });
+        // Clear search restores full list
+        promptSearchInput.addEventListener('input', (e) => {
+            if (!e.target.value.trim()) loadPrompts();
+        });
+        updateDebugInfo('已绑定提示词搜索功能');
+    }
+
+    // === Export ===
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            updateDebugInfo('导出提示词按钮被点击');
+            try {
+                const jsonStr = await safeInvoke('export_prompts');
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `promptkey-export-${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showNotification('导出成功', 'success');
+            } catch (err) {
+                updateDebugInfo('导出失败: ' + err);
+                showNotification('导出失败: ' + err, 'error');
+            }
+        });
+        updateDebugInfo('已绑定导出按钮');
+    }
+
+    // === Import ===
+    const importBtn = document.getElementById('import-btn');
+    const importFileInput = document.getElementById('import-file-input');
+    if (importBtn && importFileInput) {
+        importBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            importFileInput.click();
+        });
+        importFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            updateDebugInfo(`导入文件: ${file.name}`);
+            try {
+                const text = await file.text();
+                const result = await safeInvoke('import_prompts', { jsonData: text });
+                showNotification(result, 'success');
+                updateDebugInfo(`导入结果: ${result}`);
+                await loadPrompts();
+            } catch (err) {
+                updateDebugInfo('导入失败: ' + err);
+                showNotification('导入失败: ' + err, 'error');
+            }
+            importFileInput.value = '';
+        });
+        updateDebugInfo('已绑定导入按钮');
     }
 
     // T1-009: View Mode Toggle (Segmented Control)
@@ -1004,7 +1114,7 @@ async function loadPrompts() {
             const promptsHtml = prompts.map(prompt => `
                 <div class="prompt-item" data-id="${prompt.id}">
                     <div class="prompt-header">
-                        <h3>${prompt.name}</h3>
+                        <h3>${escapeHtml(prompt.name)}</h3>
                         <div class="prompt-actions">
                             <button class="copy-btn" onclick="copyPrompt(${prompt.id}, event)">复制</button>
                             <button class="edit-btn" onclick="editPrompt(${prompt.id}, event)">编辑</button>
@@ -1013,17 +1123,15 @@ async function loadPrompts() {
 
                     </div>
                     <div class="prompt-content">
-                        <p>${prompt.content.substring(0, 100)}${prompt.content.length > 100 ? '...' : ''}</p>
+                        <p>${escapeHtml(prompt.content.substring(0, 100))}${prompt.content.length > 100 ? '...' : ''}</p>
                     </div>
                     ${prompt.tags && prompt.tags.length > 0 ? `
                     <div class="prompt-meta">
-                        ${prompt.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                        ${prompt.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                     </div>
                     ` : ''}
                 </div>
             `).join('');
-            
-            promptList.innerHTML = promptsHtml;
             
             promptList.innerHTML = promptsHtml;
             
@@ -1123,38 +1231,44 @@ function showEditPromptModal(prompt) {
     // 创建模态框HTML
     const tagsString = prompt.tags ? prompt.tags.join(', ') : '';
     
-    const modalHtml = `
-        <div id="edit-prompt-modal" class="modal-overlay">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>编辑提示词</h3>
-                    <button class="modal-close" onclick="closeEditPromptModal()">&times;</button>
+    // Use DOM APIs instead of innerHTML to prevent XSS
+    const modal = document.createElement('div');
+    modal.id = 'edit-prompt-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑提示词</h3>
+                <button class="modal-close" onclick="closeEditPromptModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="prompt-id" value="">
+                <div class="form-group">
+                    <label for="prompt-name">提示词名称*</label>
+                    <input type="text" id="prompt-name" class="form-input" placeholder="请输入提示词名称" maxlength="100" value="">
                 </div>
-                <div class="modal-body">
-                    <input type="hidden" id="prompt-id" value="${prompt.id}">
-                    <div class="form-group">
-                        <label for="prompt-name">提示词名称*</label>
-                        <input type="text" id="prompt-name" class="form-input" placeholder="请输入提示词名称" maxlength="100" value="${prompt.name}">
-                    </div>
-                    <div class="form-group">
-                        <label for="prompt-content">提示词内容*</label>
-                        <textarea id="prompt-content" class="form-textarea" placeholder="请输入提示词内容" rows="8">${prompt.content}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="prompt-tags">标签 (可选)</label>
-                        <input type="text" id="prompt-tags" class="form-input" placeholder="用逗号分隔多个标签，如：工作,邮件,AI" value="${tagsString}">
-                    </div>
+                <div class="form-group">
+                    <label for="prompt-content">提示词内容*</label>
+                    <textarea id="prompt-content" class="form-textarea" placeholder="请输入提示词内容" rows="8"></textarea>
                 </div>
-                <div class="modal-footer">
-                    <button class="secondary-btn" onclick="closeEditPromptModal()">取消</button>
-                    <button class="primary-btn" onclick="updatePrompt()">保存</button>
+                <div class="form-group">
+                    <label for="prompt-tags">标签 (可选)</label>
+                    <input type="text" id="prompt-tags" class="form-input" placeholder="用逗号分隔多个标签，如：工作,邮件,AI" value="">
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" onclick="closeEditPromptModal()">取消</button>
+                <button class="primary-btn" onclick="updatePrompt()">保存</button>
             </div>
         </div>
     `;
     
-    // 添加到页面
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    // Set values safely via DOM properties (not string interpolation)
+    document.body.appendChild(modal);
+    document.getElementById('prompt-id').value = prompt.id;
+    document.getElementById('prompt-name').value = prompt.name;
+    document.getElementById('prompt-content').value = prompt.content;
+    document.getElementById('prompt-tags').value = tagsString;
     
     // 聚焦到名称输入框
     setTimeout(() => {
