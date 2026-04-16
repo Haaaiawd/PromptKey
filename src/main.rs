@@ -1265,9 +1265,18 @@ fn export_prompts() -> Result<String, String> {
 
     let prompts: Vec<Prompt> = stmt.query_map([], |row| {
         let tags_str: Option<String> = row.get(2)?;
-        let tags = tags_str.map(|s| {
-            s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
-        });
+        let tags = match tags_str {
+            Some(s) => Some(
+                serde_json::from_str::<Vec<String>>(&s).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?
+            ),
+            None => None,
+        };
         Ok(Prompt {
             id: row.get(0)?,
             name: row.get(1)?,
