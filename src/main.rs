@@ -1372,8 +1372,8 @@ fn search_prompts(query: String) -> Result<Vec<Prompt>, String> {
             updated_at: row.get(9)?,
         })
     }).map_err(|e| format!("查询失败: {}", e))?
-    .filter_map(|r| r.ok())
-    .collect();
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("查询失败: {}", e))?;
 
     Ok(prompts)
 }
