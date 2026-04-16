@@ -91,10 +91,31 @@ impl ServiceState {
         
         println!("🚀 正在启动内嵌提示词引擎 (Embedded Thread)...");
         
-        // 启动后台线程运行 Service 逻辑
+        // 启动后台线程运行 Service 逻辑（带 panic 保护）
         std::thread::spawn(|| {
-            // 注意：service::run_service 内部会处理循环
-            service::run_service();
+            loop {
+                let result = std::panic::catch_unwind(|| {
+                    service::run_service();
+                });
+                match result {
+                    Ok(_) => {
+                        eprintln!("⚠️ [ENGINE] 服务线程正常退出，尝试重启...");
+                    }
+                    Err(e) => {
+                        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else if let Some(s) = e.downcast_ref::<String>() {
+                            s.clone()
+                        } else {
+                            "未知错误".to_string()
+                        };
+                        eprintln!("❌ [ENGINE] 服务线程崩溃: {}，3秒后自动重启...", msg);
+                    }
+                }
+                // 短暂等待后自动重启
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                eprintln!("🔄 [ENGINE] 正在重启服务线程...");
+            }
         });
 
         // 设置为已激活
@@ -232,7 +253,10 @@ fn main() {
             exit_application,
             clear_usage_logs,
             toggle_prompt_pin,              // Wheel: Toggle pin status
-            get_all_prompts_with_pin        // Wheel: Get prompts with pin status
+            get_all_prompts_with_pin,       // Wheel: Get prompts with pin status
+            export_prompts,                 // Import/Export: Export all prompts
+            import_prompts,                 // Import/Export: Import prompts from JSON
+            search_prompts                  // Search: Search prompts by keyword
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -1221,4 +1245,126 @@ fn restart_service(app: AppHandle) -> Result<String, String> {
         Ok(()) => Ok("服务已重启".to_string()),
         Err(e) => Err(e)
     }
+}
+
+// === Import/Export ===
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ExportData {
+    version: String,
+    exported_at: String,
+    prompts: Vec<Prompt>,
+}
+
+#[tauri::command]
+fn export_prompts() -> Result<String, String> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, tags, content, content_type, variables_json, app_scopes_json, inject_order, version, updated_at FROM prompts"
+    ).map_err(|e| format!("查询失败: {}", e))?;
+
+    let prompts: Vec<Prompt> = stmt.query_map([], |row| {
+        let tags_str: Option<String> = row.get(2)?;
+        let tags = tags_str.map(|s| {
+            s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
+        });
+        Ok(Prompt {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            tags,
+            content: row.get(3)?,
+            content_type: row.get(4)?,
+            variables_json: row.get(5)?,
+            app_scopes_json: row.get(6)?,
+            inject_order: row.get(7)?,
+            version: row.get(8)?,
+            updated_at: row.get(9)?,
+        })
+    }).map_err(|e| format!("查询失败: {}", e))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    let export_data = ExportData {
+        version: "1.0".to_string(),
+        exported_at: chrono_now_string(),
+        prompts,
+    };
+
+    serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("序列化失败: {}", e))
+}
+
+#[tauri::command]
+fn import_prompts(json_data: String) -> Result<String, String> {
+    let export_data: ExportData = serde_json::from_str(&json_data)
+        .map_err(|e| format!("JSON 解析失败: {}", e))?;
+
+    let conn = open_db()?;
+    let mut imported = 0;
+    let mut skipped = 0;
+
+    for prompt in &export_data.prompts {
+        let tags_str = prompt.tags.as_ref().map(|t| t.join(","));
+        let result = conn.execute(
+            "INSERT INTO prompts (name, tags, content, content_type, variables_json, app_scopes_json, inject_order, version, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                prompt.name,
+                tags_str,
+                prompt.content,
+                prompt.content_type,
+                prompt.variables_json,
+                prompt.app_scopes_json,
+                prompt.inject_order,
+                prompt.version,
+                prompt.updated_at,
+            ],
+        );
+        match result {
+            Ok(_) => imported += 1,
+            Err(_) => skipped += 1,
+        }
+    }
+
+    Ok(format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped))
+}
+
+fn chrono_now_string() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("{}", now.as_secs())
+}
+
+// === Search ===
+
+#[tauri::command]
+fn search_prompts(query: String) -> Result<Vec<Prompt>, String> {
+    let conn = open_db()?;
+    let search_pattern = format!("%{}%", query);
+    let mut stmt = conn.prepare(
+        "SELECT id, name, tags, content, content_type, variables_json, app_scopes_json, inject_order, version, updated_at FROM prompts WHERE name LIKE ?1 OR content LIKE ?1 OR tags LIKE ?1"
+    ).map_err(|e| format!("查询失败: {}", e))?;
+
+    let prompts: Vec<Prompt> = stmt.query_map([&search_pattern], |row| {
+        let tags_str: Option<String> = row.get(2)?;
+        let tags = tags_str.map(|s| {
+            s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
+        });
+        Ok(Prompt {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            tags,
+            content: row.get(3)?,
+            content_type: row.get(4)?,
+            variables_json: row.get(5)?,
+            app_scopes_json: row.get(6)?,
+            inject_order: row.get(7)?,
+            version: row.get(8)?,
+            updated_at: row.get(9)?,
+        })
+    }).map_err(|e| format!("查询失败: {}", e))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    Ok(prompts)
 }

@@ -3126,7 +3126,6 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
  "tokio",
- "windows 0.52.0",
  "winres",
 ]
 

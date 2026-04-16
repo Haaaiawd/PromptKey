@@ -38,6 +38,20 @@
                 <div id="prompts-panel" class="panel active">
                     <div class="panel-header">
                         <h2>提示词管理</h2>
+                        <div class="prompt-toolbar">
+                            <div class="search-box">
+                                <input type="text" id="prompt-search" placeholder="搜索提示词...">
+                                <button id="prompt-search-btn" class="btn-icon" type="button" title="搜索" aria-label="搜索">
+                                    <i class="icon-search"></i>
+                                </button>
+                            </div>
+                            <button id="export-btn" class="secondary-btn" type="button" title="导出提示词">
+                                导出
+                            </button>
+                            <button id="import-btn" class="secondary-btn" type="button" title="导入提示词">
+                                导入
+                            </button>
+                        </div>
                         <div class="segmented-control" id="view-toggle">
                             <div class="segment-slider"></div>
                             <button class="segment active" data-view="card" title="卡片视图">
@@ -208,6 +222,9 @@
             </div>
         </main>
     </div>
+    
+    <!-- 隐藏的文件选择器用于导入 -->
+    <input type="file" id="import-file-input" accept=".json" style="display:none">
     
     <!-- 模态框将由JavaScript动态创建 -->
     
