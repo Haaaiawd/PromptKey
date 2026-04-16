@@ -1290,8 +1290,8 @@ fn export_prompts() -> Result<String, String> {
             updated_at: row.get(9)?,
         })
     }).map_err(|e| format!("查询失败: {}", e))?
-    .filter_map(|r| r.ok())
-    .collect();
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("查询失败: {}", e))?;
 
     let export_data = ExportData {
         version: "1.0".to_string(),
