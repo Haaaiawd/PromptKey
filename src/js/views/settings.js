@@ -15,9 +15,9 @@ export async function renderSettings() {
     const s = await ipc('get_settings', {}, { silent: true });
     if ($('#hotkeyInput')) $('#hotkeyInput').value = s.hotkey || '';
     if ($('#quickHotkeyInput')) $('#quickHotkeyInput').value = s.quick_hotkey || '';
-    if ($('#swClipboard')) $('#swClipboard').classList.toggle('on', s.injection?.allow_clipboard !== false);
-    if ($('#swRestore')) $('#swRestore').classList.toggle('on', s.injection?.restore_clipboard !== false);
-    if ($('#swGate')) $('#swGate').classList.toggle('on', s.injection?.secure_gate !== false);
+    if ($('#swClipboard')) $('#swClipboard').classList.toggle('on', s.allow_clipboard !== false);
+    if ($('#swRestore')) $('#swRestore').classList.toggle('on', s.restore_clipboard !== false);
+    if ($('#swGate')) $('#swGate').classList.toggle('on', s.secure_gate !== false);
   } catch { /* leave defaults */ }
 
   // default prompt selector
