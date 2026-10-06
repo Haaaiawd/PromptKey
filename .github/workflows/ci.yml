@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: cargo check / clippy / test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      # service/ uses edition 2024 — needs a recent stable toolchain.
+      - name: cargo check (workspace, all targets)
+        run: cargo check --workspace --all-targets
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
+
+      - name: cargo test
+        run: cargo test --workspace
+
+  frontend:
+    name: frontend static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Syntax-check all JS files
+        run: |
+          set -e
+          find src -name '*.js' -print0 | while IFS= read -r -d '' f; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
+      - name: Validate JSON configs
+        run: |
+          set -e
+          for f in tauri.conf.json src/packs/*.json; do
+            echo "validating $f"
+            node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$f"
+          done
