@@ -11,25 +11,70 @@
     {
       "name": "Translate CN→EN",
       "content": "Translate the following into natural, idiomatic English. Preserve tone and formatting:\n\n{{clipboard}}",
-      "tags": ["translation"],
+      "tags": [
+        "translation"
+      ],
       "app_scopes": []
     },
     {
       "name": "Translate EN→CN",
       "content": "Translate the following into fluent, natural Simplified Chinese. Preserve formatting and terminology:\n\n{{clipboard}}",
-      "tags": ["translation"],
+      "tags": [
+        "translation"
+      ],
       "app_scopes": []
     },
     {
       "name": "Tone: Professional",
       "content": "Rewrite the following text in a professional, concise business tone:\n\n{{clipboard}}",
-      "tags": ["writing", "tone"],
+      "tags": [
+        "writing",
+        "tone"
+      ],
       "app_scopes": []
     },
     {
       "name": "Explain Simply",
       "content": "Explain the following in plain language a non-expert can understand, in at most 3 short paragraphs:\n\n{{clipboard}}",
-      "tags": ["explain", "writing"],
+      "tags": [
+        "explain",
+        "writing"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Localize UI String",
+      "content": "Translate the following UI string into {{target_lang}}, keeping it short enough for a button/menu label. Return only the translation:\n\n{{clipboard}}",
+      "tags": [
+        "translation",
+        "ui"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Fix My English",
+      "content": "Correct grammar and phrasing in the following English text. List each change briefly, then give the corrected version:\n\n{{clipboard}}",
+      "tags": [
+        "writing",
+        "grammar"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Tone: Casual",
+      "content": "Rewrite the following in a casual, friendly tone suitable for chat/Slack:\n\n{{clipboard}}",
+      "tags": [
+        "writing",
+        "tone"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Summarize to Bullets",
+      "content": "Summarize the following into at most 5 bullet points:\n\n{{clipboard}}",
+      "tags": [
+        "summary"
+      ],
       "app_scopes": []
     }
   ]

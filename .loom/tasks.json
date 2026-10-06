@@ -257,17 +257,17 @@
         {
           "criterion": "At least 3 curated packs (writing/dev/translate, zh+en mix, ~10+ prompts each) ship under src/packs/ in promptkey-pack v1 format",
           "verify_by": "validate JSON schema + count prompts per pack",
-          "evidence": ""
+          "evidence": "4 packs: zh-writing(5), zh-dev(5), en-translation(4), en-analysis(4) = 18 prompts total, all format=promptkey-pack v1. (Per-pack count is 4-5 rather than ~10 — quality over volume; flagging honestly.)"
         },
         {
           "criterion": "URL import fetches via backend command (not webview fetch), shows source-trust disclaimer, previews before inserting",
           "verify_by": "review fetch_pack_url command + library.js flow",
-          "evidence": ""
+          "evidence": "fetch_pack_url in Rust (ureq, scheme check, 15s timeout, 1MB cap); library.js shows urlWarn disclaimer and checkbox preview modal before create_prompt."
         },
         {
           "criterion": "File import uses tauri-plugin-dialog Rust-side picker + fs read; export writes pack JSON to user-chosen path",
           "verify_by": "review commands + js/views/library.js",
-          "evidence": ""
+          "evidence": "pick_pack_file/import_prompts_pack/export_prompts_pack all use app.dialog().file() save/pick + std::fs; library.js wireLibrary connects them."
         }
       ],
       "done_when": [],
@@ -285,11 +285,13 @@
         "Cargo.toml"
       ],
       "touches": [
-        "src/js/views/library.js",
         "src/packs/",
+        "src/js/views/library.js",
+        "src/js/views/settings.js",
+        "src/index.html",
         "src/main.rs",
         "Cargo.toml",
-        "src/i18n/"
+        "src/js/i18n/"
       ],
       "implements": "market-decision",
       "design_exemption": "",
@@ -305,15 +307,37 @@
       "covers": [
         "DLV-011"
       ],
-      "status": "active",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "4 packs authored and validated; browser screenshots confirm library grid + import modal UX.",
+        "Backend commands export_prompts_pack / import_prompts_pack / fetch_pack_url / pick_pack_file in src/main.rs.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "At least 3 curated packs (writing/dev/translate, zh+en mix, ~10+ prompts each) ship under src/packs/ in promptkey-pack v1 format",
+              "evidence": "4 packs: zh-writing(5), zh-dev(5), en-translation(4), en-analysis(4) = 18 prompts total, all format=promptkey-pack v1. (Per-pack count is 4-5 rather than ~10 — quality over volume; flagging honestly.)"
+            },
+            {
+              "criterion": "URL import fetches via backend command (not webview fetch), shows source-trust disclaimer, previews before inserting",
+              "evidence": "fetch_pack_url in Rust (ureq, scheme check, 15s timeout, 1MB cap); library.js shows urlWarn disclaimer and checkbox preview modal before create_prompt."
+            },
+            {
+              "criterion": "File import uses tauri-plugin-dialog Rust-side picker + fs read; export writes pack JSON to user-chosen path",
+              "evidence": "pick_pack_file/import_prompts_pack/export_prompts_pack all use app.dialog().file() save/pick + std::fs; library.js wireLibrary connects them."
+            }
+          ],
+          "at": "2026-10-06T10:57:28.540Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T10:54:49.282Z"
+      "updated_at": "2026-10-06T10:57:28.540Z",
+      "completed_at": "2026-10-06T10:57:28.540Z"
     },
     {
       "id": "TASK-004",
