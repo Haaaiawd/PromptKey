@@ -1,4 +1,5 @@
-#![windows_subsystem = "windows"]
+// Task8: gate the Windows GUI subsystem so the crate builds on other platforms
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -11,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 // 服务进程句柄
-mod ipc_listener;
+#[cfg(windows)]
+mod ipc_listener; // named pipes (tokio::net::windows) are Windows-only
 mod inject_pipe_client; // TW004: GUI → Service injection command client
 
 
@@ -89,69 +91,6 @@ impl ServiceState {
     }
 }
 
-#[allow(dead_code)]
-fn resolve_service_exe_path() -> Result<String, String> {
-    // 尝试从 GUI 可执行文件所在目录推导 service(.exe) 路径
-    let current_exe = std::env::current_exe()
-        .map_err(|e| format!("无法获取当前可执行文件路径: {}", e))?;
-    let exe_dir = current_exe.parent()
-        .ok_or_else(|| "无法获取当前可执行文件目录".to_string())?;
-
-    let service_name = if cfg!(windows) { "service.exe" } else { "service" };
-    // 1. 优先检查 Tauri 打包后的 sidecar 路径（安装后的位置）
-    // 在 Tauri 打包后，sidecar 二进制文件会与主程序放在同一目录
-    let packaged_service = exe_dir.join(service_name);
-    if packaged_service.exists() {
-        return Ok(packaged_service.to_string_lossy().into_owned());
-    }
-
-    // 2. 检查开发环境 - 同级目录下的 service.exe (debug/release)
-    let candidate_same_dir = exe_dir.join(service_name);
-    println!("🔍 检查同级路径: {:?}", candidate_same_dir);
-    if candidate_same_dir.exists() {
-        return Ok(candidate_same_dir.to_string_lossy().into_owned());
-    }
-
-    if let Some(target_dir) = exe_dir.parent() {
-        // 如果当前在 debug，尝试 release
-        let candidate_release = target_dir.join("release").join(service_name);
-        if candidate_release.exists() {
-            return Ok(candidate_release.to_string_lossy().into_owned());
-        }
-        
-        // 如果当前在 release，尝试 debug  
-        let candidate_debug = target_dir.join("debug").join(service_name);
-        if candidate_debug.exists() {
-            return Ok(candidate_debug.to_string_lossy().into_owned());
-        }
-    }
-
-    // 4. 退化：尝试工作区 target/debug 和 target/release
-    let cwd = std::env::current_dir().map_err(|e| format!("无法获取当前目录: {}", e))?;
-    
-    let fallback_debug = cwd.join("target").join("debug").join(service_name);
-    if fallback_debug.exists() {
-        return Ok(fallback_debug.to_string_lossy().into_owned());
-    }
-    
-    let fallback_release = cwd.join("target").join("release").join(service_name);
-    if fallback_release.exists() {
-        return Ok(fallback_release.to_string_lossy().into_owned());
-    }
-
-    Err(format!(
-        "未找到 service 可执行文件。已尝试的路径:\n\
-         - 打包路径: {}\n\
-         - 开发路径: {}\n\
-         - 备用路径: {} 和 {}\n\
-         请先构建 service 或检查路径配置",
-        packaged_service.display(),
-        candidate_same_dir.display(),
-        fallback_debug.display(),
-        fallback_release.display()
-    ))
-}
-
 fn main() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -222,7 +161,8 @@ fn main() {
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
             
-            // T1-010: Start IPC Listener
+            // T1-010: Start IPC Listener (named pipe → Windows-only)
+            #[cfg(windows)]
             ipc_listener::start_ipc_listener(app.handle().clone());
             
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;

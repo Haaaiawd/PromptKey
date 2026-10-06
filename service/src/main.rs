@@ -22,14 +22,14 @@ pub fn run_service() {
     // 2. 初始化数据库
     let database = db::Database::new(&config.database_path).expect("无法初始化数据库");
 
-    // 3. 初始化注入器
-    let injector = injector::Injector::new(vec![], config.clone());
+    // 3. 初始化注入器 (platform trait object — Task8)
+    let injector = injector::create(config.clone());
 
-    // 3. 初始化上下文管理器
-    let context_manager = context::ContextManager::new();
+    // 3. 初始化上下文管理器 (platform trait object)
+    let context_manager = context::create();
 
-    // 5. 初始化热键服务
-    let mut hotkey_service = hotkey::HotkeyService::new(hotkey_str, quick_hotkey_str);
+    // 5. 初始化热键服务 (platform trait object)
+    let mut hotkey_service = hotkey::create(hotkey_str, quick_hotkey_str);
     if let Err(e) = hotkey_service.start() {
         log::error!("无法启动热键服务: {}", e);
     }
@@ -53,8 +53,8 @@ pub fn run_service() {
             // Use the captured context if available, otherwise try to get current (fallback)
             handle_injection_request(
                 &database,
-                &injector,
-                &context_manager,
+                injector.as_ref(),
+                context_manager.as_ref(),
                 Some(req.prompt_id),
                 req.vars_json.as_deref(),
                 last_active_context.as_ref(),
@@ -82,8 +82,8 @@ pub fn run_service() {
                     let ctx = context_manager.get_foreground_context().ok();
                     handle_injection_request(
                         &database,
-                        &injector,
-                        &context_manager,
+                        injector.as_ref(),
+                        context_manager.as_ref(),
                         None,
                         None,
                         ctx.as_ref(),
@@ -155,8 +155,8 @@ fn utc_now_strings() -> (String, String) {
 
 fn handle_injection_request(
     db: &db::Database,
-    injector: &injector::Injector,
-    ctx: &context::ContextManager,
+    injector: &dyn injector::Injector,
+    ctx: &dyn context::Context,
     force_id: Option<i32>,
     vars_json: Option<&str>,
     target_override: Option<&context::AppContext>,
@@ -171,7 +171,7 @@ fn handle_injection_request(
             .unwrap_or(crate::context::AppContext {
                 process_name: "Unknown".to_string(),
                 window_title: "Unknown".to_string(),
-                window_handle: windows::Win32::Foundation::HWND(std::ptr::null_mut()),
+                window_handle: 0,
             })
     };
 
