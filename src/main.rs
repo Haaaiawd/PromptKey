@@ -678,7 +678,7 @@ fn validate_pack_url(raw: &str) -> Result<url::Url, String> {
 fn public_resolver() -> impl Fn(&str) -> std::io::Result<Vec<std::net::SocketAddr>> + Send + Sync {
     |addr: &str| {
         use std::net::ToSocketAddrs;
-        let resolved: Vec<std::net::SocketAddr> = addr.to_socket_addrs()?;
+        let resolved: Vec<std::net::SocketAddr> = addr.to_socket_addrs()?.collect();
         let public: Vec<_> = resolved.into_iter().filter(|a| ip_is_public(&a.ip())).collect();
         if public.is_empty() {
             return Err(std::io::Error::new(
