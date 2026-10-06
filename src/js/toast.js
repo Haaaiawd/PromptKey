@@ -19,17 +19,18 @@ let modalState = null;
 export function confirmModal({ title, body, okText, danger = true }) {
   return new Promise(resolve => {
     const mask = $('#modalMask');
-    if (!mask) { console.warn('[confirmModal] no #modalMask, defaulting to cancel'); resolve(false); return; }
-    $('#modalTitle').textContent = title || '';
-    $('#modalBody').textContent = body || '';
-    const ok = $('#modalOk');
+    const ok = $('#modalOk'), cancel = $('#modalCancel');
+    if (!mask || !ok || !cancel) { console.warn('[confirmModal] modal DOM missing, defaulting to cancel'); resolve(false); return; }
+    const titleEl = $('#modalTitle'), bodyEl = $('#modalBody');
+    if (titleEl) titleEl.textContent = title || '';
+    if (bodyEl) bodyEl.textContent = body || '';
     ok.textContent = okText || 'OK';
     ok.className = danger ? 'btn btn-danger' : 'btn btn-primary';
     mask.classList.add('show');
     const done = v => { mask.classList.remove('show'); modalState = null; resolve(v); };
     modalState = done;
-    $('#modalOk').onclick = () => done(true);
-    $('#modalCancel').onclick = () => done(false);
+    ok.onclick = () => done(true);
+    cancel.onclick = () => done(false);
     mask.onclick = e => { if (e.target === mask) done(false); };
   });
 }

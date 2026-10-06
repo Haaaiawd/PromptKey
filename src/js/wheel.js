@@ -32,7 +32,8 @@ function syncPrefs() {
 
 async function prepare() {
   syncPrefs();
-  $('#centerTxt').textContent = t('wh.esc');
+  const ct = $('#centerTxt');
+  if (ct) ct.textContent = t('wh.esc');
   try {
     await loadPrompts();
   } catch (e) {
@@ -47,6 +48,7 @@ async function prepare() {
   query = ''; page = 0;
   await clampToViewport();
   const w = $('#wheel');
+  if (!w) return;
   w.classList.remove('closing');
   w.classList.add('show');
   open = true;
@@ -123,6 +125,7 @@ function hide() {
   if (!open || hiding) return;
   hiding = true;
   const w = $('#wheel');
+  if (!w) { hiding = false; open = false; return; }
   w.classList.remove('show');
   w.classList.add('closing');
   setTimeout(() => { w.classList.remove('closing'); }, 130);
@@ -177,12 +180,20 @@ function fillAndInject(p) {
         } catch (err) { panel.remove(); reject(err); }
       }
     });
+    // keys inside the form must not feed the wheel filter; Enter submits, Esc cancels
+    panel.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); panel.querySelector('[data-act="go"]')?.click(); }
+      if (e.key === 'Escape') { e.preventDefault(); panel.querySelector('[data-act="cancel"]')?.click(); }
+    });
   });
 }
 
 /* ---- keyboard ---- */
 document.addEventListener('keydown', e => {
   if (!open) return;
+  // while the variable form (or any input) is focused, don't steal keys
+  if ($('.var-fill') || e.target.closest?.('input,textarea,[contenteditable]')) return;
   if (e.key === 'Escape') { e.preventDefault(); hide(); return; }
   if (e.key === 'Backspace') { query = query.slice(0, -1); page = 0; render(); return; }
   if (e.key === 'Enter') { const el = $$('.petal')[0]; if (el && matches[0]) pick(el, matches[0]); return; }

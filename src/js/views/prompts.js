@@ -66,24 +66,29 @@ function renderTags() {
 
 /* ---- drawer ---- */
 export function openDrawer(id) {
+  const drawer = $('#drawer');
+  if (!drawer) { console.warn('[prompts] #drawer missing'); return; }
+  const setV = (sel, v) => { const n = $(sel); if (n) n.value = v; };
   const p = state.prompts.find(x => x.id === id) || null;
   editingId = id;
-  $('#drawerTitle').textContent = p ? t('drawer.edit') : t('drawer.new');
-  $('#fName').value = p?.name || '';
-  $('#fContent').value = p?.content || '';
-  $('#fTags').value = (p?.tags || []).join(', ');
-  $('#fPin').classList.toggle('on', !!p?.is_pinned);
-  const apps = p?.app_scopes_json ? JSON.parse(p.app_scopes_json || '[]') : [];
-  $('#fApps').value = Array.isArray(apps) ? apps.join(', ') : '';
-  $('#fOrder').value = p?.inject_order || '';
+  const title = $('#drawerTitle');
+  if (title) title.textContent = p ? t('drawer.edit') : t('drawer.new');
+  setV('#fName', p?.name || '');
+  setV('#fContent', p?.content || '');
+  setV('#fTags', (p?.tags || []).join(', '));
+  $('#fPin')?.classList.toggle('on', !!p?.is_pinned);
+  let apps = [];
+  try { apps = p?.app_scopes_json ? JSON.parse(p.app_scopes_json) : []; } catch { apps = []; }
+  setV('#fApps', Array.isArray(apps) ? apps.join(', ') : '');
+  setV('#fOrder', p?.inject_order || '');
   const meta = $('#fMeta');
-  meta.innerHTML = p ? `<span>${esc(t('f.version', { v: p.version || 1, t: p.updated_at || '—' }))}</span>` : '';
+  if (meta) meta.innerHTML = p ? `<span>${esc(t('f.version', { v: p.version || 1, t: p.updated_at || '—' }))}</span>` : '';
   updateVarHint();
   dirty = false;
-  $('#drawer').classList.add('show');
-  $('#drawerMask').classList.add('show');
-  $('#drawer').setAttribute('aria-hidden', 'false');
-  $('#fName').focus();
+  drawer.classList.add('show');
+  $('#drawerMask')?.classList.add('show');
+  drawer.setAttribute('aria-hidden', 'false');
+  $('#fName')?.focus();
 }
 
 export function drawerOpen() { return $('#drawer')?.classList.contains('show'); }
@@ -107,9 +112,10 @@ export function forceCloseDrawer() {
 
 function updateVarHint() {
   const hint = $('#varHint');
-  if (!hint) return;
-  const vars = extractVars($('#fContent').value);
-  const custom = customVars($('#fContent').value);
+  const contentEl = $('#fContent');
+  if (!hint || !contentEl) return;
+  const vars = extractVars(contentEl.value);
+  const custom = customVars(contentEl.value);
   hint.innerHTML = vars.length
     ? `<span>${esc(t('f.vars'))}:</span> ${vars.map(v => `<code>{{${esc(v)}}}</code>`).join(' ')}`
       + (custom.length ? ` <span class="dim">·</span> <span>${esc(t('f.autoVars'))}</span>` : ` <span>${esc(t('f.autoVars'))}</span>`)
@@ -117,11 +123,13 @@ function updateVarHint() {
 }
 
 async function saveDrawer() {
-  const name = $('#fName').value.trim();
-  const content = $('#fContent').value;
+  const nameEl = $('#fName'), contentEl = $('#fContent');
+  if (!nameEl || !contentEl) return;
+  const name = nameEl.value.trim();
+  const content = contentEl.value;
   if (!name || !content.trim()) { toast('warn', t('err.generic', { e: t('f.name') + ' / ' + t('f.content') })); return; }
-  const tags = $('#fTags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
-  const apps = $('#fApps').value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+  const tags = ($('#fTags')?.value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
+  const apps = ($('#fApps')?.value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
   const p = state.prompts.find(x => x.id === editingId);
   const payload = {
     id: editingId,
@@ -131,14 +139,14 @@ async function saveDrawer() {
     content_type: p?.content_type || 'text',
     variables_json: p?.variables_json || null,
     app_scopes_json: JSON.stringify(apps),
-    inject_order: $('#fOrder').value.trim() || null,
+    inject_order: ($('#fOrder')?.value || '').trim() || null,
     version: (p?.version || 0) + (editingId ? 1 : 0) || 1,
     updated_at: null,
   };
   try {
     if (editingId) await ipc('update_prompt', { prompt: payload });
     else editingId = await ipc('create_prompt', { prompt: payload });
-    const pinOn = $('#fPin').classList.contains('on');
+    const pinOn = !!$('#fPin')?.classList.contains('on');
     if (!!p?.is_pinned !== pinOn) await ipc('toggle_prompt_pin', { id: editingId });
     forceCloseDrawer();
     await loadPrompts(); rebuildIndex(); renderPrompts();

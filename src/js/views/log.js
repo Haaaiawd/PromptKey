@@ -21,11 +21,13 @@ export async function renderLog() {
   logs.forEach(l => { stratCount[l.strategy] = (stratCount[l.strategy] || 0) + 1; });
   const topStrat = Object.entries(stratCount).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-  $('#stTotal').textContent = String(total);
-  $('#stRate').textContent = total ? `${Math.round(okN / total * 1000) / 10}%` : '–';
-  $('#stRate').style.color = total && okN / total < 0.95 ? 'var(--danger)' : 'var(--success)';
-  $('#stAvg').textContent = times.length ? `${Math.round(times.reduce((a, b) => a + b, 0) / times.length)}ms` : '–';
-  $('#stStrategy').textContent = topStrat || '–';
+  const setTxt = (id, v) => { const n = $(id); if (n) n.textContent = v; };
+  setTxt('#stTotal', String(total));
+  setTxt('#stRate', total ? `${Math.round(okN / total * 1000) / 10}%` : '–');
+  const rate = $('#stRate');
+  if (rate) rate.style.color = total && okN / total < 0.95 ? 'var(--danger)' : 'var(--success)';
+  setTxt('#stAvg', times.length ? `${Math.round(times.reduce((a, b) => a + b, 0) / times.length)}ms` : '–');
+  setTxt('#stStrategy', topStrat || '–');
 
   $('#logEmpty')?.classList.toggle('hidden', total > 0);
   body.innerHTML = logs.map(r => `<tr>
