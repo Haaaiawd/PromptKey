@@ -78,33 +78,35 @@ export async function renderLibrary() {
 }
 
 function openPackPreview(meta, prompts, { warn = true } = {}) {
-  const mask = $('#packMask');
-  if (!mask) return;
-  $('#packTitle').textContent = meta.name || t('lib.import');
-  $('#packBody').innerHTML = (warn ? `<div class="import-note"><span class="ico ico-sm">${icon('shield-check', 14)}</span><span>${esc(t('lib.urlWarn'))}</span></div>` : '') +
+  const mask = $('#packMask'), body = $('#packBody'), ok = $('#packImport');
+  if (!mask || !body || !ok) { console.warn('[library] pack modal DOM missing'); return; }
+  const title = $('#packTitle');
+  if (title) title.textContent = meta.name || t('lib.import');
+  body.innerHTML = (warn ? `<div class="import-note"><span class="ico ico-sm">${icon('shield-check', 14)}</span><span>${esc(t('lib.urlWarn'))}</span></div>` : '') +
     `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">` +
     prompts.map((p, i) => `
       <label class="pack-item"><input type="checkbox" data-pi="${i}" checked>
       <span><span class="pi-name">${esc(p.name)}</span>
       ${p.tags?.length ? ` <span class="ctag">${p.tags.map(esc).join('</span> <span class="ctag">')}</span>` : ''}
       <div class="pi-content">${esc(p.content.slice(0, 160))}</div></span></label>`).join('') + '</div>';
-  const ok = $('#packImport');
   const updateOk = () => {
     const n = $$('#packBody [data-pi]:checked').length;
     ok.textContent = n === prompts.length ? t('lib.importAll', { n }) : t('lib.importSelected', { n });
     ok.disabled = n === 0;
   };
   updateOk();
-  $('#packBody').onchange = updateOk;
-  $('#packSelAll').onclick = () => {
+  body.onchange = updateOk;
+  const selAll = $('#packSelAll');
+  if (selAll) selAll.onclick = () => {
     const boxes = $$('#packBody [data-pi]');
     const all = boxes.every(b => b.checked);
     boxes.forEach(b => b.checked = !all);
     updateOk();
-    $('#packSelAll').textContent = all ? t('lib.selAll') : t('lib.selNone');
+    selAll.textContent = all ? t('lib.selAll') : t('lib.selNone');
   };
   mask.classList.add('show');
-  $('#packCancel').onclick = () => mask.classList.remove('show');
+  const cancel = $('#packCancel');
+  if (cancel) cancel.onclick = () => mask.classList.remove('show');
   mask.onclick = e => { if (e.target === mask) mask.classList.remove('show'); };
   ok.onclick = async () => {
     const idx = $$('#packBody [data-pi]:checked').map(b => +b.dataset.pi);
@@ -144,7 +146,7 @@ export function wireLibrary() {
 
   // URL import — needs backend fetch command (Task 5 branch completes the fetch path)
   $('#urlImportBtn')?.addEventListener('click', async () => {
-    const url = $('#urlInput').value.trim();
+    const url = ($('#urlInput')?.value || '').trim();
     if (!url) return;
     try {
       const text = await ipc('fetch_pack_url', { url });
@@ -155,11 +157,14 @@ export function wireLibrary() {
   $('#filePickBtn')?.addEventListener('click', async () => {
     try {
       const r = await ipc('pick_pack_file');
-      if (r) { $('#packText').value = r.text; $('#fileName').textContent = r.name || ''; }
+      if (r) {
+        const ta = $('#packText'); if (ta) ta.value = r.text;
+        const fn = $('#fileName'); if (fn) fn.textContent = r.name || '';
+      }
     } catch { /* toasted */ }
   });
   $('#textImportBtn')?.addEventListener('click', () => {
-    const txt = $('#packText').value.trim();
+    const txt = ($('#packText')?.value || '').trim();
     if (!txt) { toast('warn', t('lib.badPack')); return; }
     previewPackJson(txt);
   });

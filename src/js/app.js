@@ -23,7 +23,8 @@ function switchView(name) {
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const nav = $(`.nav-item[data-view="${name}"] [data-i18n]`);
-  $('#pageTitle').textContent = nav ? nav.textContent : name;
+  const pt = $('#pageTitle');
+  if (pt) pt.textContent = nav ? nav.textContent : name;
   VIEW_RENDER[name]?.();
 }
 
@@ -31,8 +32,10 @@ function syncShell() {
   // sidebar segmented controls
   $$('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.theme === getThemeMode()));
   $$('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === getLangPref() || (getLangPref() === 'auto' && b.dataset.lang === (navigator.language?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'))));
-  $('#topHint').textContent = '';
-  $('#pageTitle').textContent = $(`.nav-item[data-view="${currentView}"] [data-i18n]`)?.textContent || '';
+  const hint = $('#topHint');
+  if (hint) hint.textContent = '';
+  const pt = $('#pageTitle');
+  if (pt) pt.textContent = $(`.nav-item[data-view="${currentView}"] [data-i18n]`)?.textContent || '';
 }
 
 /* ---- rendered preview (D3) ---- */
@@ -45,24 +48,31 @@ async function openPreview({ name, content }) {
 
 function showInfoModal(title, text) {
   const mask = $('#packMask');
-  $('#packTitle').textContent = title;
-  $('#packBody').innerHTML = `<div class="preview-render">${esc(text)}</div>`;
-  $('#packImport').style.display = 'none';
-  $('#packSelAll').style.display = 'none';
-  $('#packCancel').textContent = t('common.close');
+  if (!mask) return;
+  const setTxt = (id, v) => { const n = $(id); if (n) n.textContent = v; };
+  const setDisp = (id, v) => { const n = $(id); if (n) n.style.display = v; };
+  setTxt('#packTitle', title);
+  const body = $('#packBody');
+  if (body) body.innerHTML = `<div class="preview-render">${esc(text)}</div>`;
+  setDisp('#packImport', 'none');
+  setDisp('#packSelAll', 'none');
+  setTxt('#packCancel', t('common.close'));
   mask.classList.add('show');
-  $('#packCancel').onclick = () => { mask.classList.remove('show'); restorePackModal(); };
+  const cancel = $('#packCancel');
+  if (cancel) cancel.onclick = () => { mask.classList.remove('show'); restorePackModal(); };
   mask.onclick = e => { if (e.target === mask) { mask.classList.remove('show'); restorePackModal(); } };
 }
 function restorePackModal() {
-  $('#packImport').style.display = '';
-  $('#packSelAll').style.display = '';
-  $('#packCancel').textContent = t('common.cancel');
+  const setDisp = (id) => { const n = $(id); if (n) n.style.display = ''; };
+  setDisp('#packImport'); setDisp('#packSelAll');
+  const cancel = $('#packCancel');
+  if (cancel) cancel.textContent = t('common.cancel');
 }
 
 /* ---- service status dot ---- */
 async function checkService() {
   const dot = $('#serviceDot'), txt = $('#serviceTxt');
+  if (!dot || !txt) return;
   try {
     const ok = await ipc('check_service_status', {}, { silent: true, timeout: 5000 });
     dot.classList.toggle('ok', !!ok);
