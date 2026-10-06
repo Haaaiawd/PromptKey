@@ -7,6 +7,8 @@ use std::path::Path;
 pub struct Config {
     #[serde(default = "default_hotkey")]
     pub hotkey: String,
+    #[serde(default = "default_quick_hotkey")]
+    pub quick_hotkey: String,
     pub database_path: String,
     #[serde(default)]
     pub injection: InjectionConfig,
@@ -26,6 +28,11 @@ pub struct InjectionConfig {
     pub debug_mode: bool,
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
+    // Phase 2 Task6 toggles (written by the settings UI; consumed by injector)
+    #[serde(default = "default_true")]
+    pub restore_clipboard: bool,
+    #[serde(default = "default_true")]
+    pub secure_gate: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -63,6 +70,8 @@ impl Default for InjectionConfig {
             uia_value_pattern_mode: default_uia_value_pattern_mode(), // 默认为 append
             debug_mode: default_debug_mode(),
             max_retries: default_max_retries(),
+            restore_clipboard: true,
+            secure_gate: true,
         }
     }
 }
@@ -99,6 +108,14 @@ impl Default for ApplicationSettings {
 
 fn default_hotkey() -> String {
     "Ctrl+Alt+Space".to_string()
+}
+
+fn default_quick_hotkey() -> String {
+    "Ctrl+Alt+A".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_injection_order() -> Vec<String> {
@@ -316,6 +333,7 @@ impl Default for Config {
 
         Config {
             hotkey: default_hotkey(),
+            quick_hotkey: default_quick_hotkey(),
             database_path,
             injection: InjectionConfig::default(),
             applications: HashMap::new(),

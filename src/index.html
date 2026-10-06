@@ -1,216 +1,233 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" id="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PromptKey</title>
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromptKey</title>
+<link rel="stylesheet" href="styles.css">
 </head>
-<body class="theme-light">
-    <div class="app-container">
-        <!-- 主要内容区域 -->
-        <main class="main-content">
-            <!-- 侧边栏导航 -->
-            <nav class="sidebar">
-                <ul class="nav-list">
-                    <li><button id="prompts-btn" class="nav-btn active" type="button">提示词</button></li>
-                    <li><button id="wheel-btn" class="nav-btn" type="button">轮盘</button></li>
-
-                    <li><button id="settings-btn" class="nav-btn" type="button">设置</button></li>
-                    <li><button id="market-btn" class="nav-btn" type="button">市场</button></li>
-                    <li><button id="logs-btn" class="nav-btn" type="button">日志</button></li>
-                </ul>
-
-                
-                <div class="help-section">
-                    <h3>使用帮助</h3>
-                    <ul>
-                        <li>1. 使用快捷键调用提示词</li>
-                        <li id="current-hotkey-help">2. 当前快捷键: 加载中...</li>
-                        <li>3. 在任何文本编辑器中使用</li>
-                    </ul>
-                </div>
-            </nav>
-            
-            <!-- 内容面板 -->
-            <div class="content-area">
-                <!-- 提示词面板 -->
-                <div id="prompts-panel" class="panel active">
-                    <div class="panel-header">
-                        <h2>提示词管理</h2>
-                        <div class="segmented-control" id="view-toggle">
-                            <div class="segment-slider"></div>
-                            <button class="segment active" data-view="card" title="卡片视图">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <rect x="1" y="1" width="6" height="6" rx="1"/>
-                                    <rect x="9" y="1" width="6" height="6" rx="1"/>
-                                    <rect x="1" y="9" width="6" height="6" rx="1"/>
-                                    <rect x="9" y="9" width="6" height="6" rx="1"/>
-                                </svg>
-                            </button>
-                            <button class="segment" data-view="list" title="列表视图">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <rect x="1" y="2" width="14" height="2" rx="0.5"/>
-                                    <rect x="1" y="7" width="14" height="2" rx="0.5"/>
-                                    <rect x="1" y="12" width="14" height="2" rx="0.5"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <button id="add-prompt-btn" class="primary-btn" type="button">
-                            <i class="icon-plus"></i> 添加提示词
-                        </button>
-                    </div>
-                    <div class="panel-content">
-                        <div class="prompt-list">
-                            <!-- 提示词列表将在这里显示 -->
-                            <div class="empty-state">
-                                <p>暂无提示词</p>
-                                <p class="hint">点击"添加提示词"按钮创建第一个提示词</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 设置面板 -->
-                <div id="settings-panel" class="panel">
-                    <div class="panel-header">
-                        <h2>设置</h2>
-                    </div>
-                    <div class="panel-content">
-                        <div class="settings-section">
-                            <h3>快捷键设置</h3>
-                            <div class="setting-item">
-                                <label for="hotkey-input">触发快捷键</label>
-                                <div class="hotkey-input-group">
-                                    <input type="text" id="hotkey-input" class="form-input" readonly>
-                                    <button id="hotkey-record-btn" class="secondary-btn" type="button">录制</button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- 注入设置已移除 -->
-                        
-                        <div class="settings-section">
-                            <h3>界面设置</h3>
-                            <div class="setting-item">
-                                <label for="theme-select">主题</label>
-                                <select id="theme-select">
-                                    <option value="light">浅色主题</option>
-                                    <option value="dark">深色主题</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="settings-actions">
-                            <button id="save-settings-btn" class="primary-btn" type="button">保存设置</button>
-                            <button id="reset-settings-btn" class="secondary-btn" type="button">重置</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="market-panel" class="panel">
-                    <div class="panel-header">
-                        <h2>提示词市场</h2>
-                    </div>
-                    <div class="panel-content">
-                        <div class="market-toolbar">
-                            <div class="search-box">
-                                <input type="text" id="market-search" placeholder="搜索提示词模板...">
-                                <button id="market-search-btn" class="btn-icon" type="button" title="搜索" aria-label="搜索">
-                                    <i class="icon-search"></i>
-                                </button>
-                            </div>
-                            <button id="refresh-market-btn" class="secondary-btn" type="button" title="刷新" aria-label="刷新">
-                                <i class="icon-refresh"></i> 刷新
-                            </button>
-                        </div>
-                        <div class="market-list" id="market-list">
-                            <!-- 市场提示词模板将在这里显示 -->
-                            <div class="empty-state">
-                                <p>暂无提示词模板</p>
-                                <p class="hint">点击刷新按钮获取最新模板</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 轮盘配置面板 -->
-                <div id="wheel-panel" class="panel">
-                    <div class="panel-header">
-                        <h2>轮盘配置</h2>
-                    </div>
-                    <div class="panel-content">
-                        <!-- 当前轮盘槽位预览 -->
-                        <div class="wheel-slots-section">
-                            <h3>当前轮盘内容 (6 槽位)</h3>
-                            <p class="hint">置顶的提示词会优先显示在轮盘上</p>
-                            <div class="wheel-slots" id="wheel-slots">
-                                <div class="wheel-slot" data-slot="1"><span class="slot-number">1</span><span class="slot-name">-</span></div>
-                                <div class="wheel-slot" data-slot="2"><span class="slot-number">2</span><span class="slot-name">-</span></div>
-                                <div class="wheel-slot" data-slot="3"><span class="slot-number">3</span><span class="slot-name">-</span></div>
-                                <div class="wheel-slot" data-slot="4"><span class="slot-number">4</span><span class="slot-name">-</span></div>
-                                <div class="wheel-slot" data-slot="5"><span class="slot-number">5</span><span class="slot-name">-</span></div>
-                                <div class="wheel-slot" data-slot="6"><span class="slot-number">6</span><span class="slot-name">-</span></div>
-                            </div>
-                        </div>
-                        
-                        <!-- 可用提示词列表 -->
-                        <div class="wheel-prompts-section">
-                            <h3>所有提示词</h3>
-                            <p class="hint">勾选以置顶到轮盘</p>
-                            <div class="wheel-prompts-list" id="wheel-prompts-list">
-                                <!-- 提示词列表将在这里显示 -->
-                                <div class="empty-state">
-                                    <p>加载中...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-
-                
-                <div id="logs-panel" class="panel">
-                    <div class="panel-header">
-                        <h2>使用日志</h2>
-                    </div>
-                    <div class="panel-content">
-                        <div class="logs-toolbar">
-                            <div class="search-box">
-                                <input type="text" id="logs-search" placeholder="搜索日志...">
-                                <button id="logs-search-btn" class="btn-icon" type="button" title="搜索日志" aria-label="搜索日志">
-                                    <i class="icon-search"></i>
-                                </button>
-                            </div>
-                            <button id="clear-logs-btn" class="secondary-btn" type="button" title="清空日志" aria-label="清空日志">
-                                <i class="icon-delete"></i> 清空日志
-                            </button>
-                        </div>
-                        <div class="logs-list" id="logs-list">
-                            <!-- 日志条目将在这里显示 -->
-                            <div class="empty-state">
-                                <p>暂无使用日志</p>
-                                <p class="hint">使用提示词后会在这里显示记录</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Debug section -->
-                        <div id="debug-section" class="debug-section">
-                            <div class="debug-header">
-                                <h3>调试日志</h3>
-                            </div>
-                            <div class="debug-content">
-                                <div id="debug-content-logs"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <img class="logo-mark" src="icons/brand/logo-56.png" alt="PromptKey">
+      <div>
+        <div class="logo-name">PromptKey</div>
+        <div class="logo-tag" data-i18n="nav.tagline">Prompt Manager</div>
+      </div>
     </div>
-    
-    <!-- 模态框将由JavaScript动态创建 -->
-    
-    <script type="module" src="main_simple.js"></script>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="prompts"><span class="ico" data-icon="layers"></span><span data-i18n="nav.prompts">提示词</span></button>
+      <button class="nav-item" data-view="library"><span class="ico" data-icon="library"></span><span data-i18n="nav.library">模板库</span></button>
+      <button class="nav-item" data-view="log"><span class="ico" data-icon="history"></span><span data-i18n="nav.log">记录</span></button>
+      <button class="nav-item" data-view="settings"><span class="ico" data-icon="settings"></span><span data-i18n="nav.settings">设置</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+        <button data-theme="light" title="Light"><span class="ico" data-icon="sun"></span></button>
+        <button data-theme="dark" title="Dark"><span class="ico" data-icon="moon"></span></button>
+        <button data-theme="auto" title="Auto"><span class="ico" data-icon="sun-moon"></span></button>
+      </div>
+      <div class="seg" id="langSeg" role="group" aria-label="Language">
+        <button data-lang="zh-CN">中文</button>
+        <button data-lang="en-US">EN</button>
+      </div>
+      <div class="status-dot" id="serviceDot" title="Service"><span class="dot"></span><span class="status-txt" id="serviceTxt"></span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="page-title" id="pageTitle">提示词</div>
+      <div class="topbar-right"><span class="pill-hint" id="topHint"></span></div>
+    </div>
+
+    <!-- Prompts -->
+    <section class="view active" id="view-prompts">
+      <div class="view-col">
+        <div class="toolbar">
+          <div class="search"><span class="ico" data-icon="search"></span><input id="searchInput" data-i18n-ph="search.placeholder" placeholder="搜索提示词… (#标签 / @名称 / c:全文)"></div>
+          <select id="sortSel" aria-label="Sort">
+            <option value="recent" data-i18n="sort.recent">最近使用</option>
+            <option value="freq" data-i18n="sort.freq">使用频率</option>
+            <option value="name" data-i18n="sort.name">名称</option>
+          </select>
+          <div class="seg seg-icon" role="group" aria-label="View mode">
+            <button id="viewCard" class="on" data-i18n-title="view.card" title="卡片视图"><span class="ico" data-icon="layout-grid"></span></button>
+            <button id="viewList" data-i18n-title="view.list" title="列表视图"><span class="ico" data-icon="list"></span></button>
+          </div>
+          <button class="btn" id="previewWheel"><span class="ico" data-icon="loader-pinwheel"></span><span data-i18n="wheel.preview">轮盘预览</span></button>
+          <button class="btn btn-primary" id="newBtn"><span class="ico" data-icon="plus"></span><span data-i18n="prompt.new">新建</span></button>
+        </div>
+        <div class="content">
+          <div class="leftcol">
+            <div>
+              <div class="sec-title"><span class="ico ico-sm" data-icon="loader-pinwheel"></span><span data-i18n="wheel.section">轮盘</span></div>
+              <div class="wheel-mirror" id="wheelMirror"></div>
+              <div class="wheel-sort-row">
+                <button class="mini-link" id="wheelSortBtn"></button>
+              </div>
+            </div>
+            <div>
+              <div class="sec-title"><span class="ico ico-sm" data-icon="tags"></span><span data-i18n="tags.section">标签</span></div>
+              <div class="tags-cloud" id="tagsCloud"></div>
+            </div>
+          </div>
+          <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Library -->
+    <section class="view" id="view-library">
+      <div class="pane">
+        <div class="lib-tabs" id="libTabs">
+          <button class="lib-tab on" data-lib="builtin" data-i18n="lib.builtin">内置精选</button>
+          <button class="lib-tab" data-lib="url" data-i18n="lib.url">链接导入</button>
+          <button class="lib-tab" data-lib="file" data-i18n="lib.file">文件导入</button>
+          <button class="btn btn-ghost lib-export" id="libExport"><span class="ico" data-icon="download"></span><span data-i18n="lib.export">导出我的提示词</span></button>
+        </div>
+        <div class="lib-pane" id="lib-builtin">
+          <div class="pack-grid" id="packGrid"></div>
+        </div>
+        <div class="lib-pane hidden" id="lib-url">
+          <div class="import-box">
+            <div class="field">
+              <label data-i18n="lib.urlLabel">包 URL（promptkey-pack JSON）</label>
+              <input type="text" id="urlInput" placeholder="https://example.com/pack.json" spellcheck="false">
+            </div>
+            <div class="import-note"><span class="ico ico-sm" data-icon="shield-check"></span><span data-i18n="lib.urlWarn">从外部 URL 导入的提示词由你自行负责其来源与内容安全。</span></div>
+            <div class="row-end"><button class="btn btn-primary" id="urlImportBtn"><span class="ico" data-icon="link"></span><span data-i18n="lib.fetch">获取并预览</span></button></div>
+          </div>
+        </div>
+        <div class="lib-pane hidden" id="lib-file">
+          <div class="import-box">
+            <div class="field">
+              <label data-i18n="lib.fileLabel">本地文件或粘贴 JSON</label>
+              <div class="row-gap">
+                <button class="btn" id="filePickBtn"><span class="ico" data-icon="folder-open"></span><span data-i18n="lib.pickFile">选择文件</span></button>
+                <span class="import-note-inline" id="fileName"></span>
+              </div>
+              <textarea id="packText" class="pack-text" data-i18n-ph="lib.pastePh" placeholder="或直接粘贴 pack JSON 到此处…" spellcheck="false"></textarea>
+            </div>
+            <div class="row-end"><button class="btn btn-primary" id="textImportBtn"><span class="ico" data-icon="file-json"></span><span data-i18n="lib.parse">解析并预览</span></button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Log -->
+    <section class="view" id="view-log">
+      <div class="pane">
+        <div class="stat-row">
+          <div class="stat"><div class="v" id="stTotal">–</div><div class="k" data-i18n="log.total">总注入次数</div></div>
+          <div class="stat"><div class="v" id="stRate">–</div><div class="k" data-i18n="log.rate">成功率</div></div>
+          <div class="stat"><div class="v" id="stAvg">–</div><div class="k" data-i18n="log.avg">平均耗时</div></div>
+          <div class="stat"><div class="v" id="stStrategy">–</div><div class="k" data-i18n="log.strategy">主策略</div></div>
+        </div>
+        <div class="log-head">
+          <button class="btn" id="logRefresh"><span class="ico" data-icon="refresh-cw"></span><span data-i18n="log.refresh">刷新</span></button>
+          <button class="btn btn-ghost" id="logClear"><span class="ico" data-icon="trash-2"></span><span data-i18n="log.clear">清空</span></button>
+        </div>
+        <table class="log"><thead><tr>
+          <th data-i18n="log.t">时间</th><th data-i18n="log.p">提示词</th><th data-i18n="log.app">应用</th>
+          <th data-i18n="log.s">策略</th><th data-i18n="log.d">耗时</th><th data-i18n="log.st">状态</th>
+        </tr></thead><tbody id="logBody"></tbody></table>
+        <div class="empty hidden" id="logEmpty" data-i18n="log.empty">暂无记录</div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" id="view-settings">
+      <div class="pane pane-narrow">
+        <div class="set-group"><h4 data-i18n="set.general">通用</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="set.lang">界面语言</div></div>
+            <select id="langSel"><option value="zh-CN">中文</option><option value="en-US">English</option><option value="auto" data-i18n="theme.autoLang">跟随系统</option></select></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="set.theme">外观主题</div></div>
+            <select id="themeSel"><option value="dark" data-i18n="theme.dark">深色</option><option value="light" data-i18n="theme.light">浅色</option><option value="auto" data-i18n="theme.auto">跟随系统</option></select></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.hotkey">全局热键</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.wheel">呼出轮盘</div></div>
+            <input class="hotkey-input" id="hotkeyInput" spellcheck="false"></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.direct">快速注入（默认提示词）</div><div class="sub" data-i18n="hk.directSub">目标 = 最近使用第 1 位，可改为固定提示词</div></div>
+            <input class="hotkey-input" id="quickHotkeyInput" spellcheck="false"></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.default">默认提示词</div></div>
+            <select id="defaultPromptSel"></select></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.inject">注入</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.clipboard">允许剪贴板策略</div><div class="sub" data-i18n="inj.clipboardSub">关闭后仅使用逐字输入（更慢）</div></div><button class="switch" id="swClipboard" aria-label="allow clipboard"></button></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.restore">注入后恢复剪贴板</div></div><button class="switch" id="swRestore" aria-label="restore clipboard"></button></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.gate">安全控件检测</div><div class="sub" data-i18n="inj.gateSub">检测到密码框时拒绝注入</div></div><button class="switch" id="swGate" aria-label="secure gate"></button></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.data">数据</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="data.io">导入 / 导出</div><div class="sub" data-i18n="data.ioSub">promptkey-pack JSON 格式</div></div>
+            <div class="row-gap"><button class="btn" id="exportBtn"><span class="ico" data-icon="download"></span><span data-i18n="data.export">导出</span></button><button class="btn" id="importBtn"><span class="ico" data-icon="upload"></span><span data-i18n="data.import">导入</span></button></div></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="data.reset">重置设置</div><div class="sub" data-i18n="data.resetSub">恢复默认配置并重启服务</div></div>
+            <button class="btn" id="resetBtn"><span class="ico" data-icon="refresh-cw"></span><span data-i18n="data.resetBtn">重置</span></button></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.about">关于</h4>
+          <div class="set-row"><div class="about-brand"><img class="about-logo" src="icons/brand/logo-56.png" alt="PromptKey"><div><div class="lbl">PromptKey</div><div class="sub" id="aboutVer">v1.2.1</div></div></div>
+            <button class="btn" id="restartSvc"><span class="ico" data-icon="zap"></span><span data-i18n="about.restart">重启服务</span></button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Edit drawer -->
+<div class="drawer-mask" id="drawerMask"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head"><b id="drawerTitle"></b>
+    <button class="btn btn-ghost btn-icon drawer-close" id="drawerClose" aria-label="Close"><span class="ico" data-icon="x"></span></button></div>
+  <div class="drawer-body">
+    <div class="field"><label data-i18n="f.name">名称</label><input type="text" id="fName"></div>
+    <div class="field"><label data-i18n="f.content">内容（支持 {{变量}}）</label><textarea id="fContent" spellcheck="false"></textarea>
+      <div class="var-hint" id="varHint"></div></div>
+    <div class="field"><label data-i18n="f.tags">标签</label><input type="text" id="fTags" data-i18n-ph="f.tagsPh" placeholder="dev, 写作…"></div>
+    <div class="switch-row"><span class="lbl"><span class="ico ico-sm" data-icon="pin"></span> <span data-i18n="f.pinned">加入轮盘</span></span><button class="switch" id="fPin" aria-label="pin"></button></div>
+    <div class="field"><label data-i18n="f.apps">应用范围（可选）</label><input type="text" id="fApps" placeholder="chrome.exe, Code.exe"></div>
+    <div class="field"><label data-i18n="f.order">轮盘位置（手动排序时生效）</label><input type="text" id="fOrder" inputmode="numeric" placeholder="1"></div>
+    <div class="drawer-meta" id="fMeta"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn" id="previewBtn"><span class="ico" data-icon="eye"></span><span data-i18n="f.preview">预览</span></button>
+    <span class="flex-spacer"></span>
+    <button class="btn btn-ghost" id="delBtn"><span class="ico" data-icon="trash-2"></span><span data-i18n="common.delete">删除</span></button>
+    <button class="btn" id="cancelBtn" data-i18n="common.cancel">取消</button>
+    <button class="btn btn-primary" id="saveBtn"><span class="ico" data-icon="check"></span><span data-i18n="common.save">保存</span></button>
+  </div>
+</aside>
+
+<!-- Confirm modal -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn" id="modalCancel" data-i18n="common.cancel">取消</button>
+      <button class="btn btn-danger" id="modalOk"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Pack preview modal -->
+<div class="modal-mask" id="packMask">
+  <div class="modal modal-wide">
+    <div class="modal-title" id="packTitle"></div>
+    <div class="modal-body pack-modal-body" id="packBody"></div>
+    <div class="modal-foot">
+      <button class="btn" id="packCancel" data-i18n="common.cancel">取消</button>
+      <button class="btn" id="packSelAll" data-i18n="lib.selAll">全选</button>
+      <button class="btn btn-primary" id="packImport"></button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="fuse.min.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

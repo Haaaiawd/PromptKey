@@ -5,6 +5,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder, AppHandle, Emitter,
 };
+use tauri_plugin_dialog::DialogExt;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -33,44 +34,23 @@ struct Prompt {
     updated_at: Option<String>,
 }
 
-// T1-002: Quick Selection Panel prompt data structure
+// Phase 2: unified prompt view row (prompts page + wheel both consume this)
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct PromptForSelector {
-    id: i32,
-    name: String,
-    content: String,              // Full content (frontend will truncate)
-    category: Option<String>,     // Extracted from tags[0]
-    tags: Option<Vec<String>>,    // Full tag list
-    usage_count: i64,             // Usage statistics
-    last_used_at: Option<i64>,    // Last used timestamp (Unix ms)
-}
-
-// T1-004: Quick Selection Panel statistics data structure
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct SelectorStats {
-    top_prompts: Vec<TopPromptStat>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct TopPromptStat {
-    name: String,
-    usage_count: i64,
-}
-
-// TW006: PromptWheel data structures
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct WheelPromptsPage {
-    prompts: Vec<WheelPrompt>,
-    current_page: u32,
-    total_pages: u32,
-    total_count: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct WheelPrompt {
+struct PromptView {
     id: i32,
     name: String,
     content: String,
+    tags: Vec<String>,
+    content_type: Option<String>,
+    variables_json: Option<String>,
+    app_scopes_json: Option<String>,
+    inject_order: Option<String>,
+    version: Option<i32>,
+    updated_at: Option<String>,
+    is_pinned: bool,
+    usage_count: i64,
+    last_used_at: Option<i64>,
+    frecency: f64,
 }
 
 
@@ -215,13 +195,13 @@ fn main() {
             apply_settings,
             get_settings,
             get_all_prompts,
-            get_all_prompts_for_selector,  // T1-002: Quick Selection Panel query
-            log_selector_usage,            // T1-003: Quick Selection Panel usage logging
-            get_selector_stats,            // T1-004: Quick Selection Panel statistics
-            show_selector_window,          // T1-011: Show selector panel window
+            get_prompts_view,
+            get_app_settings,
+            set_app_setting,
+            set_pin_order,
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
-            get_top_prompts_paginated,     // TW006: PromptWheel paginated query
-            show_wheel_window,             // TW012: Show PromptWheel window
+            trigger_wheel_injection_vars,  // Phase2: inject with {{var}} values
+            show_wheel_window,             // TW012: Show PromptWheel window (cursor-following)
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -231,8 +211,11 @@ fn main() {
             get_usage_logs,
             exit_application,
             clear_usage_logs,
-            toggle_prompt_pin,              // Wheel: Toggle pin status
-            get_all_prompts_with_pin        // Wheel: Get prompts with pin status
+            toggle_prompt_pin,
+            export_prompts_pack,
+            import_prompts_pack,
+            fetch_pack_url,
+            pick_pack_file
         ])
         .setup(|app| {
             // 创建系统托盘菜单
@@ -269,41 +252,15 @@ fn main() {
                 })
                 .build(app)?;
             
-            // T1-020: Pre-create selector panel window (hidden state)
-            let selector_window = WebviewWindowBuilder::new(
-                app,
-                "selector-panel",
-                WebviewUrl::App("selector.html".into())
-            )
-            .title("Quick Selector")
-            .inner_size(700.0, 500.0)
-            .resizable(false)
-            .decorations(false)       // Borderless
-            .always_on_top(true)      // Always on top
-            .skip_taskbar(true)       // Don't show in taskbar
-            .visible(false)           // Start hidden
-            .center()                 // Center on screen
-            .build()?;
-            
-            // T1-021: Register focus lost event to auto-hide selector panel
-            let selector_window_clone = selector_window.clone();
-            selector_window.on_window_event(move |event| {
-                if let tauri::WindowEvent::Focused(false) = event {
-                    // Auto-hide on blur
-                    let _ = selector_window_clone.hide();
-                }
-            });
-            
-            println!("✅ Selector panel window pre-created (hidden)");
-
             // TW012: Pre-create PromptWheel window (hidden state)
+            // Phase 2 Wheel A: 280px wheel + petal overflow + shadow = 320px window
             let wheel_window = WebviewWindowBuilder::new(
                 app,
                 "wheel-panel",
                 WebviewUrl::App("wheel.html".into())
             )
             .title("PromptWheel")
-            .inner_size(600.0, 600.0)
+            .inner_size(320.0, 320.0)
             .resizable(false)
             .decorations(false)       // Borderless
             .transparent(true)        // Transparent background (Crucial for Donut shape)
@@ -311,7 +268,6 @@ fn main() {
             .always_on_top(true)      // Always on top
             .skip_taskbar(true)       // Don't show in taskbar
             .visible(false)           // Start hidden
-            .center()                 // Center on screen
             .build()?;
             
             // TW014: Register focus lost event to auto-hide wheel
@@ -416,160 +372,108 @@ fn get_all_prompts() -> Result<Vec<Prompt>, String> {
     Ok(prompts)
 }
 
-// T1-002: Query all prompts with usage statistics for Quick Selection Panel
+// Phase 2: one query serving both the prompts grid and the wheel.
+// usage_count / last_used_at only count successful injections; frecency =
+// successes with a 7-day half-life style recency denominator.
 #[tauri::command]
-fn get_all_prompts_for_selector() -> Result<Vec<PromptForSelector>, String> {
+fn get_prompts_view() -> Result<Vec<PromptView>, String> {
     let conn = open_db()?;
-    
-    // SQL query with LEFT JOIN to usage_logs, filtering by action='selector_select'
+
     let mut stmt = conn.prepare(
-        "SELECT 
-            p.id,
-            p.name,
-            p.content,
-            p.tags,
-            COUNT(u.id) as usage_count,
-            MAX(strftime('%s', u.created_at)) * 1000 as last_used_at_ms
+        "SELECT
+            p.id, p.name, p.content, p.tags, p.content_type, p.variables_json,
+            p.app_scopes_json, p.inject_order, p.version, p.updated_at,
+            COALESCE(p.is_pinned, 0) AS is_pinned,
+            COALESCE(s.usage_count, 0) AS usage_count,
+            s.last_used_s AS last_used_at_ms,
+            COALESCE(
+                (COALESCE(s.usage_count, 0) * 1.0)
+                / (1.0 + COALESCE(julianday('now') - julianday(
+                    COALESCE(s.last_used, p.updated_at)), 0.0) / 7.0),
+                0.0) AS frecency
          FROM prompts p
-         LEFT JOIN usage_logs u ON u.prompt_id = p.id AND u.action = 'selector_select'
-         GROUP BY p.id
-         ORDER BY p.id ASC"
+         LEFT JOIN (
+            SELECT prompt_id,
+                   COUNT(*) AS usage_count,
+                   MAX(created_at) AS last_used,
+                   MAX(strftime('%s', created_at)) * 1000 AS last_used_s
+            FROM usage_logs
+            WHERE success = 1
+            GROUP BY prompt_id
+         ) s ON s.prompt_id = p.id
+         ORDER BY is_pinned DESC, frecency DESC, p.id DESC"
     ).map_err(|e| format!("Failed to prepare query: {}", e))?;
-    
-    let prompts_iter = stmt.query_map([], |row| {
-        // Parse tags JSON
+
+    let rows = stmt.query_map([], |row| {
         let tags_str: Option<String> = row.get(3)?;
-        let tags = match tags_str {
-            Some(s) => match serde_json::from_str(&s) {
-                Ok(t) => Some(t),
-                Err(_) => None,
-            },
-            None => None,
-        };
-        
-        // Extract category from first tag
-        let category = tags.as_ref()
-            .and_then(|t: &Vec<String>| t.first())
-            .map(|s| s.clone());
-        
-        Ok(PromptForSelector {
+        let tags: Vec<String> = tags_str
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        Ok(PromptView {
             id: row.get(0)?,
             name: row.get(1)?,
             content: row.get(2)?,
-            category,
             tags,
-            usage_count: row.get(4)?,
-            last_used_at: row.get::<_, Option<i64>>(5)?,
+            content_type: row.get(4)?,
+            variables_json: row.get(5)?,
+            app_scopes_json: row.get(6)?,
+            inject_order: row.get(7)?,
+            version: row.get(8)?,
+            updated_at: row.get(9)?,
+            is_pinned: row.get::<_, i32>(10)? == 1,
+            usage_count: row.get(11)?,
+            last_used_at: row.get::<_, Option<i64>>(12)?,
+            frecency: row.get(13)?,
         })
     }).map_err(|e| format!("Query failed: {}", e))?;
-    
+
     let mut prompts = Vec::new();
-    for prompt in prompts_iter {
-        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
+    for p in rows {
+        prompts.push(p.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
     }
-    
     Ok(prompts)
 }
 
-// T1-003: Log Quick Selection Panel usage events
+// Phase 2: key/value app settings table (UI prefs + default prompt policy)
 #[tauri::command]
-fn log_selector_usage(
-    prompt_id: i32,
-    prompt_name: String,
-    query: Option<String>,
-) -> Result<(), String> {
-    // Non-blocking: log errors but don't fail the UI
-    match open_db() {
-        Ok(conn) => {
-            let insert_result = conn.execute(
-                "INSERT INTO usage_logs (
-                    prompt_id, 
-                    prompt_name, 
-                    target_app, 
-                    window_title, 
-                    action, 
-                    query, 
-                    strategy, 
-                    success, 
-                    created_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
-                rusqlite::params![
-                    prompt_id,
-                    &prompt_name,
-                    "Selector Panel",         // target_app (fixed)
-                    "Quick Selection Panel",  // window_title
-                    "selector_select",        // action (T1-001 new column)
-                    &query,                   // query (T1-001 new column)
-                    "selector",               // strategy
-                    1,                        // success (always true for selection)
-                ],
-            );
-            
-            match insert_result {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    // Log error but don't fail UI
-                    eprintln!("Failed to log selector usage: {}", e);
-                    Ok(())
-                }
-            }
-        }
-        Err(e) => {
-            // Non-blocking: log error but return Ok
-            eprintln!("Failed to open DB for selector logging: {}", e);
-            Ok(())
-        }
-    }
-}
-
-// T1-004: Get Quick Selection Panel usage statistics (Top 2 most-used prompts)
-#[tauri::command]
-fn get_selector_stats() -> Result<SelectorStats, String> {
+fn get_app_settings() -> Result<serde_json::Map<String, serde_json::Value>, String> {
     let conn = open_db()?;
-    
-    // Query Top 2 most-used prompts based on selector_select actions
-    let mut stmt = conn.prepare(
-        "SELECT 
-            p.name,
-            COUNT(u.id) as usage_count
-         FROM usage_logs u
-         INNER JOIN prompts p ON p.id = u.prompt_id
-         WHERE u.action = 'selector_select'
-         GROUP BY u.prompt_id
-         ORDER BY usage_count DESC
-         LIMIT 2"
-    ).map_err(|e| format!("Failed to prepare stats query: {}", e))?;
-    
-    let stats_iter = stmt.query_map([], |row| {
-        Ok(TopPromptStat {
-            name: row.get(0)?,
-            usage_count: row.get(1)?,
-        })
-    }).map_err(|e| format!("Stats query failed: {}", e))?;
-    
-    let mut top_prompts = Vec::new();
-    for stat in stats_iter {
-        top_prompts.push(stat.map_err(|e| format!("Failed to fetch stat: {}", e))?);
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM app_settings")
+        .map_err(|e| format!("Failed to read app_settings: {}", e))?;
+    let mut map = serde_json::Map::new();
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .map_err(|e| format!("Query failed: {}", e))?;
+    for r in rows {
+        let (k, v) = r.map_err(|e| format!("Read failed: {}", e))?;
+        map.insert(k, serde_json::Value::String(v));
     }
-    
-    Ok(SelectorStats { top_prompts })
+    Ok(map)
 }
 
-// T1-011: Show selector panel window command
 #[tauri::command]
-fn show_selector_window(app: AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("selector-panel") {
-        window.show().map_err(|e| format!("Show window failed: {}", e))?;
-        window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
-        
-        // Emit reset-state event to frontend
-        window.emit("reset-state", ()).map_err(|e| format!("Emit reset failed: {}", e))?;
-        
-        println!("✅ Selector window shown and focused");
-        Ok(())
-    } else {
-        Err("Selector window not found".to_string())
+fn set_app_setting(key: String, value: String) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    ).map_err(|e| format!("Failed to write setting: {}", e))?;
+    Ok(())
+}
+
+// Phase 2 D2: persist manual pin order (inject_order column)
+#[tauri::command]
+fn set_pin_order(ids: Vec<i32>) -> Result<(), String> {
+    let conn = open_db()?;
+    for (i, id) in ids.iter().enumerate() {
+        conn.execute(
+            "UPDATE prompts SET inject_order = ?1 WHERE id = ?2",
+            rusqlite::params![(i + 1).to_string(), id],
+        ).map_err(|e| format!("Failed to set order: {}", e))?;
     }
+    Ok(())
 }
 
 // TW005: Trigger wheel injection command
@@ -580,134 +484,199 @@ fn trigger_wheel_injection(prompt_id: i32) -> Result<(), String> {
         .map_err(|e| format!("Failed to send inject request: {}", e))
 }
 
-// TW012: Show wheel window command
+// Phase 2 D5: inject a prompt after the wheel collected {{var}} values
 #[tauri::command]
-fn show_wheel_window(app: AppHandle) -> Result<(), String> {
+fn trigger_wheel_injection_vars(prompt_id: i32, vars_json: String) -> Result<(), String> {
+    inject_pipe_client::send_inject_request_vars(prompt_id, vars_json)
+        .map_err(|e| format!("Failed to send inject request: {}", e))
+}
+
+// Position the wheel window centered on the mouse cursor, clamped later by JS.
+pub(crate) fn present_wheel(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("wheel-panel") {
+        // Center on the physical cursor position; JS clamps to monitor bounds.
+        if let Ok(pos) = app.cursor_position() {
+            let _ = window.set_position(tauri::PhysicalPosition::new(
+                (pos.x - 160.0).max(0.0),
+                (pos.y - 160.0).max(0.0),
+            ));
+        }
         window.show().map_err(|e| format!("Show window failed: {}", e))?;
         window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
-        
-        // Emit reset-state event to frontend (optional, for future state management)
-        window.emit("reset-state", ()).map_err(|e| format!("Emit reset failed: {}", e))?;
-        
-        println!("✅ Wheel window shown and focused");
+        window.emit("wheel-show", ()).map_err(|e| format!("Emit failed: {}", e))?;
+        println!("✅ Wheel window shown at cursor");
         Ok(())
     } else {
         Err("Wheel window not found".to_string())
     }
 }
 
-// TW006: Get top prompts with pagination for wheel display
+// TW012: Show wheel window command (also used by the in-app wheel preview button)
 #[tauri::command]
-fn get_top_prompts_paginated(page: u32, per_page: u32) -> Result<WheelPromptsPage, String> {
-    let conn = open_db()?;
-    
-    // Calculate offset
-    let offset = page * per_page;
-    
-    // Query total count first
-    let total_count: u32 = conn
-        .query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))
-        .map_err(|e| format!("Failed to get total count: {}", e))?;
-    
-    // Calculate total_pages
-    let total_pages = if total_count == 0 {
-        0
-    } else {
-        (total_count + per_page - 1) / per_page
-    };
-    
-    // Query prompts ordered by: Pinned first, then Most Recent Use, then Usage Frequency
-    let mut stmt = conn.prepare(
-        "SELECT 
-            p.id,
-            p.name,
-            p.content
-         FROM prompts p
-         LEFT JOIN usage_logs u ON u.prompt_id = p.id
-         GROUP BY p.id
-         ORDER BY 
-            COALESCE(p.is_pinned, 0) DESC,
-            MAX(COALESCE(u.created_at, 0)) DESC,
-            COUNT(u.id) DESC
-         LIMIT ?1 OFFSET ?2"
-    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
-
-    
-    let prompts_iter = stmt.query_map([per_page, offset], |row| {
-        Ok(WheelPrompt {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            content: row.get(2)?,
-        })
-    }).map_err(|e| format!("Query failed: {}", e))?;
-    
-    let mut prompts = Vec::new();
-    for prompt in prompts_iter {
-        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
-    }
-    
-    Ok(WheelPromptsPage {
-        prompts,
-        current_page: page,
-        total_pages,
-        total_count,
-    })
+fn show_wheel_window(app: AppHandle) -> Result<(), String> {
+    present_wheel(&app)
 }
 
 // Wheel: Toggle prompt pin status
 #[tauri::command]
 fn toggle_prompt_pin(id: i32) -> Result<bool, String> {
     let conn = open_db()?;
-    
+
     // Get current pin status
     let current_pin: i32 = conn
         .query_row("SELECT COALESCE(is_pinned, 0) FROM prompts WHERE id = ?1", [id], |row| row.get(0))
         .map_err(|e| format!("Failed to get pin status: {}", e))?;
-    
+
     // Toggle
     let new_pin = if current_pin == 0 { 1 } else { 0 };
-    
+
     conn.execute("UPDATE prompts SET is_pinned = ?1 WHERE id = ?2", [new_pin, id])
         .map_err(|e| format!("Failed to update pin status: {}", e))?;
-    
+
     Ok(new_pin == 1)
 }
 
-// Wheel: Get all prompts with pin status for wheel config panel
-#[derive(serde::Serialize)]
-struct PromptWithPin {
-    id: i32,
-    name: String,
-    content: String,
-    is_pinned: bool,
+/* ---------- Phase 2: promptkey-pack import/export (N5) ---------- */
+
+fn pack_json_from_db() -> Result<serde_json::Value, String> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT name, content, tags, app_scopes_json, inject_order, COALESCE(is_pinned,0)
+         FROM prompts ORDER BY id ASC"
+    ).map_err(|e| format!("Failed to read prompts: {}", e))?;
+    let rows = stmt.query_map([], |row| {
+        let tags_str: Option<String> = row.get(2)?;
+        let tags: Vec<String> = tags_str.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let apps_str: Option<String> = row.get(3)?;
+        let app_scopes: Vec<String> = apps_str.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        Ok(serde_json::json!({
+            "name": row.get::<_, String>(0)?,
+            "content": row.get::<_, String>(1)?,
+            "tags": tags,
+            "app_scopes": app_scopes,
+            "inject_order": row.get::<_, Option<String>>(4)?,
+            "pinned": row.get::<_, i32>(5)? == 1,
+        }))
+    }).map_err(|e| format!("Query failed: {}", e))?;
+    let mut prompts = Vec::new();
+    for r in rows { prompts.push(r.map_err(|e| format!("Row failed: {}", e))?); }
+    Ok(serde_json::json!({
+        "format": "promptkey-pack",
+        "version": 1,
+        "pack": { "name": "PromptKey Export", "author": "user", "lang": "mixed" },
+        "prompts": prompts,
+    }))
+}
+
+fn import_pack_obj(obj: &serde_json::Value) -> Result<(usize, usize), String> {
+    if obj.get("format").and_then(|f| f.as_str()) != Some("promptkey-pack") {
+        return Err("Not a promptkey-pack file".into());
+    }
+    let prompts = obj.get("prompts").and_then(|p| p.as_array())
+        .ok_or_else(|| "Pack has no prompts array".to_string())?;
+    let conn = open_db()?;
+    let mut added = 0usize;
+    let mut skipped = 0usize;
+    for p in prompts {
+        let name = match p.get("name").and_then(|v| v.as_str()) { Some(n) if !n.trim().is_empty() => n.trim(), _ => continue };
+        let content = match p.get("content").and_then(|v| v.as_str()) { Some(c) if !c.is_empty() => c, _ => continue };
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM prompts WHERE name = ?1", [name], |r| r.get(0)
+        ).unwrap_or(0);
+        if exists > 0 { skipped += 1; continue; }
+        let tags: Vec<String> = p.get("tags").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+        let apps: Vec<String> = p.get("app_scopes").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+        let pinned = if p.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false) { 1 } else { 0 };
+        let order = p.get("inject_order").and_then(|v| v.as_str().map(|s| s.to_string()));
+        conn.execute(
+            "INSERT INTO prompts (name, tags, content, content_type, app_scopes_json, inject_order, version, is_pinned)
+             VALUES (?1, ?2, ?3, 'text', ?4, ?5, 1, ?6)",
+            rusqlite::params![
+                name,
+                serde_json::to_string(&tags).unwrap_or_default(),
+                content,
+                serde_json::to_string(&apps).unwrap_or_default(),
+                order,
+                pinned,
+            ],
+        ).map_err(|e| format!("Insert failed: {}", e))?;
+        added += 1;
+    }
+    Ok((added, skipped))
 }
 
 #[tauri::command]
-fn get_all_prompts_with_pin() -> Result<Vec<PromptWithPin>, String> {
-    let conn = open_db()?;
-    
-    let mut stmt = conn.prepare(
-        "SELECT id, name, content, COALESCE(is_pinned, 0) as is_pinned 
-         FROM prompts 
-         ORDER BY COALESCE(is_pinned, 0) DESC, id ASC"
-    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
-    
-    let prompts_iter = stmt.query_map([], |row| {
-        Ok(PromptWithPin {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            content: row.get(2)?,
-            is_pinned: row.get::<_, i32>(3)? == 1,
-        })
-    }).map_err(|e| format!("Query failed: {}", e))?;
-    
-    let mut prompts = Vec::new();
-    for prompt in prompts_iter {
-        prompts.push(prompt.map_err(|e| format!("Failed to fetch prompt: {}", e))?);
+async fn export_prompts_pack(app: AppHandle) -> Result<Option<String>, String> {
+    let pack = pack_json_from_db()?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name("promptkey-pack.json")
+        .add_filter("PromptKey Pack", &["json"])
+        .save_file(move |path| { let _ = tx.send(path); });
+    let picked = rx.await.map_err(|e| format!("Dialog failed: {}", e))?;
+    let Some(fp) = picked else { return Ok(None) };
+    let path = fp.as_path().ok_or_else(|| "Invalid path".to_string())?;
+    std::fs::write(&path, serde_json::to_string_pretty(&pack).unwrap_or_default())
+        .map_err(|e| format!("Write failed: {}", e))?;
+    Ok(Some(path.display().to_string()))
+}
+
+#[derive(Serialize)]
+struct ImportResult { added: usize, skipped: usize }
+
+#[tauri::command]
+async fn import_prompts_pack(app: AppHandle) -> Result<Option<ImportResult>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("PromptKey Pack", &["json"])
+        .pick_file(move |path| { let _ = tx.send(path); });
+    let picked = rx.await.map_err(|e| format!("Dialog failed: {}", e))?;
+    let Some(fp) = picked else { return Ok(None) };
+    let path = fp.as_path().ok_or_else(|| "Invalid path".to_string())?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("Read failed: {}", e))?;
+    let obj: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?;
+    let (added, skipped) = import_pack_obj(&obj)?;
+    Ok(Some(ImportResult { added, skipped }))
+}
+
+// Task5: fetch a pack from a URL (explicit user action; response capped at 1MB)
+#[tauri::command]
+async fn fetch_pack_url(url: String) -> Result<String, String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("URL must start with http(s)://".into());
     }
-    
-    Ok(prompts)
+    let text = tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Read;
+        let resp = ureq::get(&url).timeout(std::time::Duration::from_secs(15)).call()
+            .map_err(|e| format!("HTTP error: {}", e))?;
+        let mut buf = String::new();
+        resp.into_reader()
+            .take(1024 * 1024)
+            .read_to_string(&mut buf)
+            .map_err(|e| format!("Read error: {}", e))?;
+        Ok::<String, String>(buf)
+    }).await.map_err(|e| format!("Task failed: {}", e))??;
+    Ok(text)
+}
+
+#[derive(Serialize)]
+struct PickedFile { name: String, text: String }
+
+#[tauri::command]
+async fn pick_pack_file(app: AppHandle) -> Result<Option<PickedFile>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("PromptKey Pack", &["json"])
+        .pick_file(move |path| { let _ = tx.send(path); });
+    let picked = rx.await.map_err(|e| format!("Dialog failed: {}", e))?;
+    let Some(fp) = picked else { return Ok(None) };
+    let path = fp.as_path().ok_or_else(|| "Invalid path".to_string())?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("Read failed: {}", e))?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(Some(PickedFile { name, text }))
 }
 
 
@@ -828,6 +797,15 @@ fn open_db() -> Result<rusqlite::Connection, String> {
 
     // Ensure is_pinned column exists (for migration)
     let _ = conn.execute("ALTER TABLE prompts ADD COLUMN is_pinned INTEGER DEFAULT 0", []);
+    // Phase 2 migrations: columns added later on legacy DBs
+    for (col, decl) in [
+        ("variables_json", "TEXT"),
+        ("app_scopes_json", "TEXT"),
+        ("inject_order", "TEXT"),
+        ("version", "INTEGER DEFAULT 1"),
+    ] {
+        let _ = conn.execute(&format!("ALTER TABLE prompts ADD COLUMN {} {}", col, decl), []);
+    }
 
 
     // 初始创建（可能是旧结构），后续用 ensure_usage_logs_schema 升级列
@@ -863,6 +841,15 @@ fn open_db() -> Result<rusqlite::Connection, String> {
         "INSERT OR IGNORE INTO selected_prompt (id, prompt_id) VALUES (1, 0)",
         [],
     ).map_err(|e| format!("初始化 selected_prompt 表失败: {}", e))?;
+
+    // Phase 2: key/value app settings (default prompt policy, UI prefs mirror)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )",
+        [],
+    ).map_err(|e| format!("创建 app_settings 表失败: {}", e))?;
 
     Ok(conn)
 }
@@ -1027,26 +1014,52 @@ fn toggle_window_visibility(app: &AppHandle) {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AppConfig {
-    #[serde(default = "default_hotkey")] 
+    #[serde(default = "default_hotkey")]
     hotkey: String,
+    #[serde(default = "default_quick_hotkey")]
+    quick_hotkey: String,
     database_path: String,
     #[serde(default)]
     injection: InjectionConfig,
+    // Preserve unknown/extra YAML keys (e.g. applications map) across rewrites
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, serde_yaml::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct InjectionConfig {
-    #[serde(default = "default_injection_order")] 
+    #[serde(default = "default_injection_order")]
     order: Vec<String>,
-    #[serde(default = "default_allow_clipboard")] 
+    #[serde(default = "default_allow_clipboard")]
     allow_clipboard: bool,
-    #[serde(default = "default_uia_value_pattern_mode")] 
+    #[serde(default = "default_uia_value_pattern_mode")]
     uia_value_pattern_mode: String,
+    #[serde(default = "default_true")]
+    restore_clipboard: bool,
+    #[serde(default = "default_true")]
+    secure_gate: bool,
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, serde_yaml::Value>,
+}
+
+impl Default for InjectionConfig {
+    fn default() -> Self {
+        InjectionConfig {
+            order: default_injection_order(),
+            allow_clipboard: default_allow_clipboard(),
+            uia_value_pattern_mode: default_uia_value_pattern_mode(),
+            restore_clipboard: true,
+            secure_gate: true,
+            extra: Default::default(),
+        }
+    }
 }
 
 fn default_hotkey() -> String { "Ctrl+Alt+Space".into() }
+fn default_quick_hotkey() -> String { "Ctrl+Alt+A".into() }
 fn default_injection_order() -> Vec<String> { vec!["uia".into()] }
 fn default_allow_clipboard() -> bool { true }
+fn default_true() -> bool { true }
 fn default_uia_value_pattern_mode() -> String { "overwrite".into() }
 
 fn config_path() -> Result<std::path::PathBuf, String> {
@@ -1071,54 +1084,73 @@ fn load_or_default_config() -> Result<AppConfig, String> {
         };
         Ok(AppConfig {
             hotkey: default_hotkey(),
+            quick_hotkey: default_quick_hotkey(),
             database_path,
             injection: InjectionConfig::default(),
+            extra: Default::default(),
         })
     }
 }
 
-#[tauri::command]
-fn apply_settings(app: AppHandle, hotkey: Option<String>) -> Result<String, String> {
-    // 1) 读取现有配置
-    let mut cfg = load_or_default_config()?;
-
-    // 2) 规范化并写入热键
-    if let Some(mut hk) = hotkey {
-        // 简单规范化（大小写与空格）
-        hk = hk.replace(" ", "");
-        let lower = hk.to_lowercase();
-        // 仅允许 Ctrl/Alt/Shift + 字母/数字/Space
-        let allowed_main = [
-            "space","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z",
-            "0","1","2","3","4","5","6","7","8","9"
-        ];
-        // 拆分
-        let parts: Vec<&str> = lower.split('+').collect();
-        let mut mods = vec![];
-        let mut main: Option<&str> = None;
-        for p in parts {
-            match p {
-                "ctrl"|"control" => mods.push("Ctrl"),
-                "alt" => mods.push("Alt"),
-                "shift" => mods.push("Shift"),
-                other => {
-                    if allowed_main.contains(&other) { main = Some(other); }
-                    else { /* 非法主键，忽略 */ }
-                }
+// Normalize a hotkey string like "ctrl+alt+space" → "Ctrl+Alt+Space".
+// Always ensures Ctrl+Alt are present; falls back to `fallback` main key.
+fn normalize_hotkey(input: Option<String>, fallback_main: &str) -> String {
+    let mut hk = input.unwrap_or_default();
+    hk = hk.replace(" ", "");
+    let lower = hk.to_lowercase();
+    let allowed_main = [
+        "space","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z",
+        "0","1","2","3","4","5","6","7","8","9"
+    ];
+    let parts: Vec<&str> = lower.split('+').collect();
+    let mut mods = vec![];
+    let mut main: Option<&str> = None;
+    for p in parts {
+        match p {
+            "ctrl"|"control" => mods.push("Ctrl"),
+            "alt" => mods.push("Alt"),
+            "shift" => mods.push("Shift"),
+            other => {
+                if allowed_main.contains(&other) { main = Some(other); }
             }
         }
-        // 如果主键不合法，回落到 Space
-        let main = main.unwrap_or("space");
-        // 组装，至少包含 Ctrl+Alt
-        if !mods.iter().any(|m| *m=="Ctrl") { mods.push("Ctrl"); }
-        if !mods.iter().any(|m| *m=="Alt") { mods.push("Alt"); }
+    }
+    let main = main.unwrap_or(fallback_main);
+    if !mods.iter().any(|m| *m=="Ctrl") { mods.push("Ctrl"); }
+    if !mods.iter().any(|m| *m=="Alt") { mods.push("Alt"); }
     let main_norm = if main == "space" { "Space".to_string() } else if main.len()==1 { main.to_uppercase() } else { main.to_string() };
     let mut parts_out = mods;
     parts_out.push(main_norm.as_str());
-    cfg.hotkey = parts_out.join("+");
-    } else {
-        // 无输入时强制为 Ctrl+Alt+Space
-        cfg.hotkey = "Ctrl+Alt+Space".into();
+    parts_out.join("+")
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct InjectionPrefs {
+    allow_clipboard: Option<bool>,
+    restore_clipboard: Option<bool>,
+    secure_gate: Option<bool>,
+}
+
+#[tauri::command]
+fn apply_settings(
+    app: AppHandle,
+    hotkey: Option<String>,
+    quick_hotkey: Option<String>,
+    injection: Option<InjectionPrefs>,
+) -> Result<String, String> {
+    // 1) 读取现有配置
+    let mut cfg = load_or_default_config()?;
+
+    // 2) 规范化并写入热键（主热键 + 轮盘快捷热键）
+    cfg.hotkey = normalize_hotkey(hotkey, "space");
+    if quick_hotkey.is_some() || cfg.quick_hotkey.is_empty() {
+        cfg.quick_hotkey = normalize_hotkey(quick_hotkey, "a");
+    }
+    if let Some(inj) = injection {
+        if let Some(v) = inj.allow_clipboard { cfg.injection.allow_clipboard = v; }
+        if let Some(v) = inj.restore_clipboard { cfg.injection.restore_clipboard = v; }
+        if let Some(v) = inj.secure_gate { cfg.injection.secure_gate = v; }
     }
 
     // 4) 保存 YAML
@@ -1142,6 +1174,10 @@ fn get_settings() -> Result<serde_json::Value, String> {
     let cfg = load_or_default_config()?;
     Ok(serde_json::json!({
         "hotkey": cfg.hotkey,
+        "quick_hotkey": cfg.quick_hotkey,
+        "allow_clipboard": cfg.injection.allow_clipboard,
+        "restore_clipboard": cfg.injection.restore_clipboard,
+        "secure_gate": cfg.injection.secure_gate,
     }))
 }
 

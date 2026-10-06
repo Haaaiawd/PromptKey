@@ -1,5 +1,7 @@
 // TW001: Inject Pipe Server (Robust Tokio Implementation)
-// Listens on \\.\pipe\promptkey_inject for INJECT_PROMPT:{id}\n messages
+// Listens on \\.\pipe\promptkey_inject for messages:
+//   INJECT_PROMPT:{id}\n
+//   INJECT_PROMPT:{id}:VARS:{json}\n   (Phase 2 D5 — collected {{var}} values)
 
 use std::sync::mpsc;
 use std::thread;
@@ -9,9 +11,16 @@ use tokio::runtime::Runtime;
 
 const PIPE_NAME: &str = r"\\.\pipe\promptkey_inject";
 
+#[derive(Debug, Clone)]
+pub struct InjectionRequest {
+    pub prompt_id: i32,
+    /// Optional JSON object of {"var_name": "value"} pairs
+    pub vars_json: Option<String>,
+}
+
 /// Start the inject pipe server in a background thread
-pub fn start() -> mpsc::Receiver<i32> {
-    let (tx, rx) = mpsc::channel::<i32>();
+pub fn start() -> mpsc::Receiver<InjectionRequest> {
+    let (tx, rx) = mpsc::channel::<InjectionRequest>();
 
     thread::spawn(move || {
         log::info!("[InjectServer] Background thread started");
@@ -41,7 +50,7 @@ pub fn start() -> mpsc::Receiver<i32> {
     rx
 }
 
-async fn listen_once(tx: &mpsc::Sender<i32>) -> Result<(), Box<dyn std::error::Error>> {
+async fn listen_once(tx: &mpsc::Sender<InjectionRequest>) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("[InjectServer] Creating named pipe: {}", PIPE_NAME);
 
     // Create a new pipe instance
@@ -54,16 +63,16 @@ async fn listen_once(tx: &mpsc::Sender<i32>) -> Result<(), Box<dyn std::error::E
 
     log::info!("[InjectServer] Client connected, reading message...");
 
-    let mut buffer = [0u8; 256];
+    let mut buffer = [0u8; 8192];
     let n = server.read(&mut buffer).await?;
 
     if n > 0 {
         let message = String::from_utf8_lossy(&buffer[..n]);
         log::debug!("[InjectServer] Received: {}", message.trim());
 
-        if let Some(prompt_id) = parse_message(&message) {
-            log::info!("[InjectServer] Valid prompt_id received: {}", prompt_id);
-            let _ = tx.send(prompt_id);
+        if let Some(req) = parse_message(&message) {
+            log::info!("[InjectServer] Valid prompt_id received: {}", req.prompt_id);
+            let _ = tx.send(req);
         } else {
             log::warn!("[InjectServer] Invalid message format: {}", message.trim());
         }
@@ -72,11 +81,14 @@ async fn listen_once(tx: &mpsc::Sender<i32>) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-fn parse_message(msg: &str) -> Option<i32> {
+fn parse_message(msg: &str) -> Option<InjectionRequest> {
     let trimmed = msg.trim();
-    if let Some(id_str) = trimmed.strip_prefix("INJECT_PROMPT:") {
-        id_str.parse::<i32>().ok()
-    } else {
-        None
-    }
+    let rest = trimmed.strip_prefix("INJECT_PROMPT:")?;
+    // Optional ":VARS:{json}" suffix
+    let (id_str, vars_json) = match rest.find(":VARS:") {
+        Some(idx) => (&rest[..idx], Some(rest[idx + 6..].to_string())),
+        None => (rest, None),
+    };
+    let prompt_id = id_str.parse::<i32>().ok()?;
+    Some(InjectionRequest { prompt_id, vars_json })
 }

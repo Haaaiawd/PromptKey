@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>轮盘候选 A — Mini 径向 280px（推荐案）</title>
+<style>
+:root{--dur-fast:100ms;--dur-normal:180ms;--ease-out:cubic-bezier(.16,1,.3,1);--ease-pop:cubic-bezier(.34,1.4,.44,1);}
+body[data-theme="dark"]{
+  --surface:rgba(24,24,27,.78); --surface-solid:#18181b; --elevated:#27272a;
+  --border:rgba(255,255,255,.10); --border-strong:#3f3f46;
+  --text:#fafafa; --text2:#a1a1aa; --muted:#71717a;
+  --accent:#3b82f6; --accent-soft:rgba(59,130,246,.18);
+  --panel-bg:#101013; --bar-bg:#1b1b1f;
+}
+body[data-theme="light"]{
+  --surface:rgba(255,255,255,.86); --surface-solid:#ffffff; --elevated:#f4f4f5;
+  --border:rgba(0,0,0,.08); --border-strong:#d4d4d8;
+  --text:#18181b; --text2:#52525b; --muted:#a1a1aa;
+  --accent:#2563eb; --accent-soft:rgba(37,99,235,.12);
+  --panel-bg:#ffffff; --bar-bg:#f4f4f5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  height:100vh;overflow:hidden;color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 75% 15%, #1e3a5f 0%, transparent 55%),
+    radial-gradient(900px 600px at 15% 85%, #3b2f5e 0%, transparent 50%),
+    linear-gradient(160deg,#0d0f14,#14171f 60%,#101318);
+}
+body[data-theme="light"]{
+  background:
+    radial-gradient(1200px 700px at 75% 15%, #bcd3f0 0%, transparent 55%),
+    radial-gradient(900px 600px at 15% 85%, #d8ccf0 0%, transparent 50%),
+    linear-gradient(160deg,#e8ecf3,#dde3ee 60%,#e6eaf2);
+}
+/* ---- 模拟桌面上的目标应用窗口 ---- */
+.fakeapp{
+  position:absolute;left:8%;top:14%;width:46%;height:56%;border-radius:12px;overflow:hidden;
+  background:var(--panel-bg);border:1px solid var(--border);box-shadow:0 24px 70px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;
+}
+.fakeapp .bar{height:34px;background:var(--bar-bg);display:flex;align-items:center;gap:7px;padding:0 12px;border-bottom:1px solid var(--border)}
+.fakeapp .bar i{width:10px;height:10px;border-radius:50%;background:#ef4444}
+.fakeapp .bar i:nth-child(2){background:#f59e0b}.fakeapp .bar i:nth-child(3){background:#22c55e}
+.fakeapp .bar span{margin-left:8px;font-size:11px;color:var(--text2)}
+.fakeapp .doc{flex:1;padding:18px 20px;font-size:13px;color:var(--text2);line-height:1.9}
+.caret{display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.injected{color:var(--accent);font-weight:600}
+/* ---- 顶部说明条 ---- */
+.hud{
+  position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;gap:10px;align-items:center;background:var(--surface);backdrop-filter:blur(20px) saturate(1.4);
+  border:1px solid var(--border);border-radius:999px;padding:8px 16px;font-size:12px;color:var(--text2);
+}
+.hud kbd{border:1px solid var(--border-strong);border-radius:5px;padding:1px 7px;font-size:11px;color:var(--text)}
+.hud .seg{display:flex;gap:2px;background:rgba(127,127,127,.12);border-radius:8px;padding:2px}
+.hud .seg button{border:none;background:none;color:var(--text2);font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer}
+.hud .seg button.on{background:var(--elevated);color:var(--text)}
+/* ---- 轮盘本体：280px ---- */
+#wheel{position:fixed;width:280px;height:280px;z-index:20;pointer-events:none;display:none}
+#wheel.show{display:block;animation:open 220ms var(--ease-pop)}
+@keyframes open{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
+#wheel.closing{animation:close 120ms var(--ease-out) forwards}
+@keyframes close{to{opacity:0;transform:scale(.9)}}
+.glass{
+  position:absolute;inset:8px;border-radius:50%;pointer-events:none;
+  background:var(--surface);backdrop-filter:blur(24px) saturate(1.4);
+  border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.center{
+  position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;
+  background:var(--elevated);border:1px solid var(--border-strong);pointer-events:auto;
+  display:grid;place-items:center;font-size:9px;color:var(--muted);text-align:center;line-height:1.3;
+  box-shadow:0 6px 20px rgba(0,0,0,.3);
+}
+.petal{
+  position:absolute;left:50%;top:50%;width:104px;height:42px;margin:-21px -52px;pointer-events:auto;
+  border-radius:999px;background:var(--surface-solid);border:1px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  font-size:11px;font-weight:600;color:var(--text);cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.28);
+  opacity:0;transform:var(--pos) scale(.5);
+  transition:border-color var(--dur-fast),color var(--dur-fast),box-shadow var(--dur-fast);
+  animation:petal 190ms var(--ease-pop) forwards;
+}
+@keyframes petal{to{opacity:1;transform:var(--pos) scale(1)}}
+.petal:hover,.petal.kb{border-color:var(--accent);color:var(--accent);box-shadow:0 6px 22px var(--accent-soft)}
+.petal .k{font-size:9px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-weight:400}
+.petal.picked{animation:pick .3s var(--ease-out) forwards}
+@keyframes pick{40%{box-shadow:0 0 0 8px var(--accent-soft);border-color:var(--accent)}100%{opacity:0;transform:var(--pos) scale(1.15)}}
+.filter-tag{
+  position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);
+  background:var(--surface-solid);border:1px solid var(--border-strong);border-radius:8px;
+  padding:4px 10px;font-size:11px;color:var(--accent);white-space:nowrap;pointer-events:none;
+}
+.empty-tip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--muted);width:120px;text-align:center;pointer-events:none}
+/* ---- toast ---- */
+.toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:30}
+.toast{background:var(--surface-solid);border:1px solid var(--border-strong);border-radius:10px;padding:9px 16px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);animation:open .18s var(--ease-out);display:flex;gap:8px;align-items:center}
+.toast .dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="hud">
+  <span data-i18n="hint">点击任意处模拟热键弹出 · 打字过滤 · 数字键/点击选中 · Esc 关闭</span>
+  <div class="seg" id="themeSeg"><button data-t="light">☀</button><button data-t="dark" class="on">☾</button></div>
+  <div class="seg" id="langSeg"><button data-l="zh" class="on">中</button><button data-l="en">EN</button></div>
+</div>
+
+<div class="fakeapp">
+  <div class="bar"><i></i><i></i><i></i><span data-i18n="app">备忘录 — 今天的工作记录</span></div>
+  <div class="doc"><span data-i18n="doc">下午和产品对了下季度的规划，接下来需要写一份详细的方案。</span><span class="caret"></span><div id="injectEcho"></div></div>
+</div>
+
+<div id="wheel"><div class="glass"></div><div class="center" data-i18n="center">Esc<br>关闭</div></div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const D={
+ zh:{hint:"点击任意处模拟热键弹出 · 打字过滤 · 数字键/点击选中 · Esc 关闭",app:"备忘录 — 今天的工作记录",
+     doc:"下午和产品对了下季度的规划，接下来需要写一份详细的方案。",center:"Esc<br>关闭",
+     injected:"已注入",nomatch:"无匹配"},
+ en:{hint:"Click anywhere = hotkey · Type to filter · 1-6/click to inject · Esc closes",app:"Notes — work log",
+     doc:"Synced with product on the quarterly plan; need to write up a detailed proposal.",center:"Esc",
+     injected:"Injected",nomatch:"No match"}
+};
+let lang="zh";const $=s=>document.querySelector(s);
+const P=[
+ {id:1,name:"代码审查",en:"Code review",txt:"请审查以下代码，重点关注潜在 bug、性能与可读性：\n\n"},
+ {id:2,name:"英文邮件润色",en:"Email polish",txt:"Please polish this email to sound professional yet concise:\n\n"},
+ {id:3,name:"会议纪要",en:"Meeting minutes",txt:"将以下记录整理为决议/行动项/待定：\n\n"},
+ {id:4,name:"中译英",en:"ZH→EN",txt:"Translate to natural, idiomatic English:\n\n"},
+ {id:7,name:"Bug 定位",en:"Debug analysis",txt:"根据堆栈给出最可能的 3 个原因及排查步骤：\n\n"},
+ {id:10,name:"解释代码",en:"Explain code",txt:"用通俗语言解释这段代码的作用与坑：\n\n"},
+ {id:5,name:"周报生成",en:"Weekly report",txt:"生成结构化周报（完成/进行中/风险/计划）：\n\n"},
+ {id:11,name:"头脑风暴",en:"Brainstorm",txt:"给我 10 个不同角度的创意：\n\n"},
+];
+let mouse={x:innerWidth/2,y:innerHeight/2},open=false,query="",matches=[];
+addEventListener("mousemove",e=>mouse={x:e.clientX,y:e.clientY});
+
+function applyLang(){
+  document.documentElement.lang=lang==="zh"?"zh-CN":"en";
+  document.querySelectorAll("[data-i18n]").forEach(el=>{
+    el.dataset.zh??=el.innerHTML; el.innerHTML=lang==="zh"?el.dataset.zh:(D.en[el.dataset.i18n]??el.dataset.zh);
+  });
+  if(open) render();
+}
+$("#langSeg").querySelectorAll("button").forEach(b=>b.onclick=e=>{e.stopPropagation();lang=b.dataset.l;
+  $("#langSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));applyLang();});
+$("#themeSeg").querySelectorAll("button").forEach(b=>b.onclick=e=>{e.stopPropagation();
+  document.body.dataset.theme=b.dataset.t;
+  $("#themeSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));});
+
+function render(){
+  const w=$("#wheel");
+  w.querySelectorAll(".petal,.filter-tag,.empty-tip").forEach(x=>x.remove());
+  const pool=query?P.filter(p=>(p.name+p.en).toLowerCase().includes(query.toLowerCase())):P.slice(0,6);
+  matches=pool.slice(0,6);
+  const R=96;
+  matches.forEach((p,i)=>{
+    const a=(-90+i*(360/Math.max(matches.length,6)))*Math.PI/180;
+    const el=document.createElement("button");el.className="petal";
+    el.style.setProperty("--pos",`translate(${R*Math.cos(a)}px,${R*Math.sin(a)}px)`);
+    el.style.animationDelay=(i*30)+"ms";
+    el.innerHTML=`<span class="k">${i+1}</span>${lang==="zh"?p.name:p.en}`;
+    el.onclick=e=>{e.stopPropagation();pick(el,p);};
+    w.appendChild(el);
+  });
+  if(!matches.length){const e=document.createElement("div");e.className="empty-tip";e.textContent=D[lang].nomatch;w.appendChild(e);}
+  if(query){const f=document.createElement("div");f.className="filter-tag";f.textContent="🔍 "+query;w.appendChild(f);}
+}
+function show(){
+  const w=$("#wheel"),S=280,half=140,m=16;
+  w.style.left=Math.min(Math.max(mouse.x-half,m),innerWidth-S-m)+"px";
+  w.style.top =Math.min(Math.max(mouse.y-half,m),innerHeight-S-m)+"px";
+  query="";w.className="show";open=true;render();
+}
+function hide(){const w=$("#wheel");w.className="closing";setTimeout(()=>{w.className="";open=false;},110);}
+function pick(el,p){
+  el.classList.add("picked");
+  setTimeout(()=>{
+    hide();
+    const t=document.createElement("div");t.className="toast";
+    t.innerHTML=`<span class="dot"></span>${D[lang].injected}: ${lang==="zh"?p.name:p.en}`;
+    $("#toasts").appendChild(t);setTimeout(()=>t.remove(),2200);
+    const echo=document.createElement("div");echo.className="injected";echo.textContent=p.txt.trim();$("#injectEcho").appendChild(echo);
+  },200);
+}
+document.addEventListener("click",e=>{if(!open)show();else if(!e.target.closest(".petal")&&!e.target.closest(".center"))hide();});
+document.addEventListener("keydown",e=>{
+  if(!open)return;
+  if(e.key==="Escape")return hide();
+  if(e.key==="Backspace"){query=query.slice(0,-1);render();return;}
+  const n=parseInt(e.key);
+  if(n>=1&&n<=6){const els=$("#wheel").querySelectorAll(".petal");els[n-1]?.click();return;}
+  if(e.key.length===1&&!e.metaKey&&!e.ctrlKey){query+=e.key;render();}
+});
+applyLang();
+</script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>轮盘候选 C — 紧凑列表浮条 Palette（搜索最强）</title>
+<style>
+:root{--ease-out:cubic-bezier(.16,1,.3,1);--ease-pop:cubic-bezier(.34,1.4,.44,1);}
+body[data-theme="dark"]{
+  --surface:rgba(24,24,27,.82); --solid:#18181b; --elevated:#27272a;
+  --border:rgba(255,255,255,.10); --strong:#3f3f46;
+  --text:#fafafa; --text2:#a1a1aa; --muted:#71717a; --accent:#3b82f6; --soft:rgba(59,130,246,.16);
+  --panel:#101013; --bar:#1b1b1f;
+}
+body[data-theme="light"]{
+  --surface:rgba(255,255,255,.92); --solid:#fff; --elevated:#f4f4f5;
+  --border:rgba(0,0,0,.08); --strong:#d4d4d8;
+  --text:#18181b; --text2:#52525b; --muted:#a1a1aa; --accent:#2563eb; --soft:rgba(37,99,235,.12);
+  --panel:#fff; --bar:#f4f4f5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  height:100vh;overflow:hidden;color:var(--text);
+  background:
+    radial-gradient(1100px 700px at 30% 20%, #5e3a2e 0%, transparent 50%),
+    radial-gradient(900px 650px at 80% 75%, #26354e 0%, transparent 55%),
+    linear-gradient(140deg,#12100e,#10141c 55%,#0e1116);
+}
+body[data-theme="light"]{
+  background:
+    radial-gradient(1100px 700px at 30% 20%, #f0d5c5 0%, transparent 50%),
+    radial-gradient(900px 650px at 80% 75%, #ccd9ee 0%, transparent 55%),
+    linear-gradient(140deg,#f0ede9,#e6ebf3 55%,#eceef2);
+}
+.fakeapp{position:absolute;left:10%;top:18%;width:44%;height:50%;border-radius:12px;overflow:hidden;
+  background:var(--panel);border:1px solid var(--border);box-shadow:0 24px 70px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.fakeapp .bar{height:34px;background:var(--bar);display:flex;align-items:center;gap:7px;padding:0 12px;border-bottom:1px solid var(--border)}
+.fakeapp .bar i{width:10px;height:10px;border-radius:50%;background:#ef4444}.fakeapp .bar i:nth-child(2){background:#f59e0b}.fakeapp .bar i:nth-child(3){background:#22c55e}
+.fakeapp .bar span{margin-left:8px;font-size:11px;color:var(--text2)}
+.fakeapp .doc{flex:1;padding:18px 20px;font-size:13px;color:var(--text2);line-height:1.9}
+.caret{display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.injected{color:var(--accent);font-weight:600}
+.hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:10px;align-items:center;
+  background:var(--surface);backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--border);border-radius:999px;padding:8px 16px;font-size:12px;color:var(--text2)}
+.hud .seg{display:flex;gap:2px;background:rgba(127,127,127,.12);border-radius:8px;padding:2px}
+.hud .seg button{border:none;background:none;color:var(--text2);font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer}
+.hud .seg button.on{background:var(--elevated);color:var(--text)}
+/* ---- Palette ---- */
+#pal{
+  position:fixed;width:340px;z-index:20;display:none;
+  background:var(--surface);backdrop-filter:blur(24px) saturate(1.4);
+  border:1px solid var(--strong);border-radius:14px;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+#pal.show{display:block;animation:open .2s var(--ease-pop)}
+@keyframes open{from{opacity:0;transform:scale(.94) translateY(-6px)}to{opacity:1;transform:none}}
+#pal.closing{animation:cls .12s var(--ease-out) forwards}
+@keyframes cls{to{opacity:0;transform:scale(.95)}}
+.pal-input{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.pal-input input{flex:1;border:none;background:none;color:var(--text);font-size:13px;outline:none}
+.pal-list{max-height:216px;overflow-y:auto;padding:4px}
+.row{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;
+  font-size:12.5px;color:var(--text);
+}
+.row .k{font-size:9px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:0 4px;width:16px;text-align:center;flex-shrink:0}
+.row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .tg{font-size:10px;color:var(--muted)}
+.row.sel{background:var(--soft);}
+.row.sel .nm{color:var(--accent);font-weight:600}
+.pal-empty{padding:20px;text-align:center;font-size:11px;color:var(--muted)}
+.pal-foot{padding:6px 12px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:10px;color:var(--muted)}
+.pal-foot kbd{border:1px solid var(--border);border-radius:4px;padding:0 4px}
+.toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:30}
+.toast{background:var(--solid);border:1px solid var(--strong);border-radius:10px;padding:9px 16px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);animation:open .18s;display:flex;gap:8px;align-items:center}
+.toast .dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body data-theme="dark">
+<div class="hud">
+  <span data-i18n="hint">点击任意处模拟热键 · 打字过滤 · ↑↓ 选择 · Enter/数字键注入 · Esc 关闭</span>
+  <div class="seg" id="themeSeg"><button data-t="light">☀</button><button data-t="dark" class="on">☾</button></div>
+  <div class="seg" id="langSeg"><button data-l="zh" class="on">中</button><button data-l="en">EN</button></div>
+</div>
+
+<div class="fakeapp">
+  <div class="bar"><i></i><i></i><i></i><span data-i18n="app">飞书 — 产品周报群</span></div>
+  <div class="doc"><span data-i18n="doc">本周主要完成了注入链路的 Phase 0 清理，下周开始 UI 重构。</span><span class="caret"></span><div id="injectEcho"></div></div>
+</div>
+
+<div id="pal">
+  <div class="pal-input">🔍<input id="palInput" placeholder="" data-i18n-ph="ph"></div>
+  <div class="pal-list" id="palList"></div>
+  <div class="pal-foot"><span><kbd>↑↓</kbd> <span data-i18n="nav">选择</span></span><span><kbd>↵</kbd> <span data-i18n="ok">注入</span></span><span><kbd>esc</kbd> <span data-i18n="esc">关闭</span></span></div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const D={
+ zh:{hint:"点击任意处模拟热键 · 打字过滤 · ↑↓ 选择 · Enter/数字键注入 · Esc 关闭",app:"飞书 — 产品周报群",
+     doc:"本周主要完成了注入链路的 Phase 0 清理，下周开始 UI 重构。",ph:"输入以过滤提示词…",
+     injected:"已注入",nomatch:"无匹配项",nav:"选择",ok:"注入",esc:"关闭"},
+ en:{hint:"Click anywhere = hotkey · Type to filter · ↑↓ select · Enter/1-6 inject · Esc",app:"Lark — weekly report",
+     doc:"Finished Phase 0 cleanup of the injection chain; UI revamp starts next week.",ph:"Filter prompts…",
+     injected:"Injected",nomatch:"No match",nav:"select",ok:"inject",esc:"close"}
+};
+let lang="zh",open=false,query="",sel=0,items=[],mouse={x:innerWidth/2,y:innerHeight/2};
+const $=s=>document.querySelector(s);
+const P=[
+ {name:"英文邮件润色",en:"Email polish",tag:"写作",txt:"Please polish this email to sound professional yet concise:\n\n"},
+ {name:"代码审查",en:"Code review",tag:"dev",txt:"请审查以下代码的潜在 bug、性能与可读性：\n\n"},
+ {name:"中译英",en:"ZH→EN",tag:"翻译",txt:"Translate to natural, idiomatic English:\n\n"},
+ {name:"会议纪要",en:"Meeting minutes",tag:"会议",txt:"整理为决议/行动项/待定：\n\n"},
+ {name:"周报生成",en:"Weekly report",tag:"写作",txt:"生成结构化周报（完成/进行中/风险/计划）：\n\n"},
+ {name:"解释代码",en:"Explain code",tag:"dev",txt:"用通俗语言解释这段代码：\n\n"},
+ {name:"Bug 定位",en:"Debug",tag:"dev",txt:"给出最可能的 3 个原因及排查步骤：\n\n"},
+ {name:"头脑风暴",en:"Brainstorm",tag:"创意",txt:"给我 10 个不同角度的创意：\n\n"},
+];
+addEventListener("mousemove",e=>mouse={x:e.clientX,y:e.clientY});
+function applyLang(){document.querySelectorAll("[data-i18n]").forEach(el=>{el.dataset.zh??=el.innerHTML;el.innerHTML=lang==="zh"?el.dataset.zh:(D.en[el.dataset.i18n]??el.dataset.zh);});
+ $("#palInput").placeholder=D[lang].ph;if(open)render();}
+$("#langSeg").querySelectorAll("button").forEach(b=>b.onclick=e=>{e.stopPropagation();lang=b.dataset.l;
+ $("#langSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));applyLang();});
+$("#themeSeg").querySelectorAll("button").forEach(b=>b.onclick=e=>{e.stopPropagation();document.body.dataset.theme=b.dataset.t;
+ $("#themeSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));});
+
+function render(){
+  const list=P.filter(p=>!query||(p.name+p.en+p.tag).toLowerCase().includes(query.toLowerCase()));
+  items=list.slice(0,6);sel=Math.min(sel,Math.max(items.length-1,0));
+  $("#palList").innerHTML=items.length?items.map((p,i)=>`
+    <div class="row ${i===sel?"sel":""}" data-i="${i}">
+      <span class="k">${i+1}</span><span class="nm">${lang==="zh"?p.name:p.en}</span><span class="tg">${p.tag}</span>
+    </div>`).join(""):`<div class="pal-empty">${D[lang].nomatch}</div>`;
+}
+function show(){
+  const el=$("#pal");el.className="show";
+  el.style.left=Math.min(Math.max(mouse.x-170,16),innerWidth-356)+"px";
+  el.style.top =Math.min(Math.max(mouse.y-30,60),innerHeight-300)+"px";
+  query="";sel=0;$("#palInput").value="";open=true;render();
+  setTimeout(()=>$("#palInput").focus(),30);
+}
+function hide(){const el=$("#pal");el.className="closing";setTimeout(()=>{el.className="";open=false;},110);}
+function pick(p){
+  hide();
+  const t=document.createElement("div");t.className="toast";
+  t.innerHTML=`<span class="dot"></span>${D[lang].injected}: ${lang==="zh"?p.name:p.en}`;
+  $("#toasts").appendChild(t);setTimeout(()=>t.remove(),2200);
+  const e=document.createElement("div");e.className="injected";e.textContent=p.txt.trim();$("#injectEcho").appendChild(e);
+}
+$("#palInput").addEventListener("input",e=>{query=e.target.value.trim();sel=0;render();});
+$("#palList").addEventListener("click",e=>{const r=e.target.closest("[data-i]");if(r)pick(items[+r.dataset.i]);});
+$("#palList").addEventListener("mousemove",e=>{const r=e.target.closest("[data-i]");if(r&&+r.dataset.i!==sel){sel=+r.dataset.i;render();}});
+document.addEventListener("click",e=>{if(!open)show();else if(!e.target.closest("#pal"))hide();});
+document.addEventListener("keydown",e=>{
+  if(!open)return;
+  if(e.key==="Escape")return hide();
+  if(e.key==="ArrowDown"){e.preventDefault();sel=Math.min(sel+1,items.length-1);render();return;}
+  if(e.key==="ArrowUp"){e.preventDefault();sel=Math.max(sel-1,0);render();return;}
+  if(e.key==="Enter"){items[sel]&&pick(items[sel]);return;}
+  const n=parseInt(e.key);if(n>=1&&n<=6&&!query){items[n-1]&&pick(items[n-1]);}
+});
+applyLang();
+</script>
+</body>
+</html>

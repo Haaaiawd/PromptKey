@@ -17,6 +17,7 @@ pub fn run_service() {
     // 1. 初始化配置 (Moved up to get DB path)
     let config = crate::config::Config::load().unwrap_or_default();
     let hotkey_str = config.hotkey.clone();
+    let quick_hotkey_str = config.quick_hotkey.clone();
 
     // 2. 初始化数据库
     let database = db::Database::new(&config.database_path).expect("无法初始化数据库");
@@ -28,7 +29,7 @@ pub fn run_service() {
     let context_manager = context::ContextManager::new();
 
     // 5. 初始化热键服务
-    let mut hotkey_service = hotkey::HotkeyService::new(hotkey_str);
+    let mut hotkey_service = hotkey::HotkeyService::new(hotkey_str, quick_hotkey_str);
     if let Err(e) = hotkey_service.start() {
         log::error!("无法启动热键服务: {}", e);
     }
@@ -47,14 +48,15 @@ pub fn run_service() {
 
     loop {
         // A. 检查来自 GUI 的点选注入请求
-        while let Ok(prompt_id) = inject_rx.try_recv() {
-            println!("🎯 [ENGINE] 收到 GUI 注入请求: ID={}", prompt_id);
+        while let Ok(req) = inject_rx.try_recv() {
+            println!("🎯 [ENGINE] 收到 GUI 注入请求: ID={}", req.prompt_id);
             // Use the captured context if available, otherwise try to get current (fallback)
             handle_injection_request(
                 &database,
                 &injector,
                 &context_manager,
-                Some(prompt_id),
+                Some(req.prompt_id),
+                req.vars_json.as_deref(),
                 last_active_context.as_ref(),
             );
         }
@@ -74,6 +76,19 @@ pub fn run_service() {
                     }
                     let _ = ipc_client.send_show_wheel();
                 }
+                5 => {
+                    // Phase 2 N4: quick hotkey → inject the configured default prompt
+                    println!("⚡ [HOTKEY] 默认提示词直注");
+                    let ctx = context_manager.get_foreground_context().ok();
+                    handle_injection_request(
+                        &database,
+                        &injector,
+                        &context_manager,
+                        None,
+                        None,
+                        ctx.as_ref(),
+                    );
+                }
                 _ => {}
             }
         }
@@ -83,11 +98,67 @@ pub fn run_service() {
     }
 }
 
+/// Phase 2 D1+D5: render a prompt's template content.
+/// - Custom {{var}} placeholders are filled from `vars_json` ({"name": "value"}).
+/// - Automatic variables are always replaced: {{clipboard}}, {{date}}, {{time}}.
+///   {{date}}/{{time}} are computed in UTC (local-time APIs are Task6 work).
+fn render_template(content: &str, vars_json: Option<&str>) -> String {
+    let mut out = content.to_string();
+
+    if let Some(json) = vars_json {
+        if let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json) {
+            for (k, v) in map {
+                let val = v.as_str().unwrap_or_default();
+                out = out.replace(&format!("{{{{{}}}}}", k), val);
+            }
+        }
+    }
+
+    // Automatic variables (no form required)
+    if out.contains("{{clipboard}}") {
+        let clip = injector::clipboard_text().unwrap_or_default();
+        out = out.replace("{{clipboard}}", &clip);
+    }
+    if out.contains("{{date}}") || out.contains("{{time}}") {
+        let (date, time) = utc_now_strings();
+        out = out.replace("{{date}}", &date);
+        out = out.replace("{{time}}", &time);
+    }
+    out
+}
+
+/// Current UTC as ("YYYY-MM-DD", "HH:MM") — no extra deps.
+/// Date uses Howard Hinnant's civil-from-days algorithm.
+fn utc_now_strings() -> (String, String) {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let days = (secs / 86400) as i64;
+    let rem = secs % 86400;
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (
+        format!("{:04}-{:02}-{:02}", y, m, d),
+        format!("{:02}:{:02}", rem / 3600, (rem % 3600) / 60),
+    )
+}
+
 fn handle_injection_request(
     db: &db::Database,
     injector: &injector::Injector,
     ctx: &context::ContextManager,
     force_id: Option<i32>,
+    vars_json: Option<&str>,
     target_override: Option<&context::AppContext>,
 ) {
     // 1. 获取目标上下文
@@ -133,9 +204,12 @@ fn handle_injection_request(
     // 3. 执行注入
     match prompt_result {
         Ok((prompt, action_type)) => {
-            println!("✨ 正在注入: [{}] {}", prompt.name, prompt.content);
+            let rendered = render_template(&prompt.content, vars_json);
+            println!("✨ 正在注入: [{}]", prompt.name);
 
             // 记录使用日志
+            // NOTE: Task6 (injection hardening) rewrites this block to log the
+            // real strategy/duration/result AFTER inject() returns.
             if let Err(e) = db.log_usage(
                 prompt.id,
                 &prompt.name,
@@ -160,7 +234,7 @@ fn handle_injection_request(
             };
 
             // 调用注入器
-            if let Err(e) = injector.inject(&prompt.content, &injection_ctx) {
+            if let Err(e) = injector.inject(&rendered, &injection_ctx) {
                 log::error!("❌ 注入失败: {}", e);
                 println!("❌ 注入失败: {}", e);
             } else {

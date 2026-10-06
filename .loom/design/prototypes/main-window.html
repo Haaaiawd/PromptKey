@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PromptKey — 主窗口原型 (Phase 1)</title>
+<style>
+/* ============ Design Tokens (UI_UX_REDESIGN.md §2) ============ */
+:root{
+  --dur-fast:100ms; --dur-normal:180ms; --dur-slow:280ms;
+  --ease-out:cubic-bezier(.16,1,.3,1); --ease-pop:cubic-bezier(.34,1.4,.44,1);
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+  --fs-caption:11px; --fs-small:12px; --fs-body:13px; --fs-title:15px; --fs-head:20px;
+}
+body[data-theme="dark"]{
+  --bg-app:#09090b; --bg-surface:#18181b; --bg-elevated:#27272a;
+  --border:#27272a; --border-strong:#3f3f46;
+  --text-primary:#fafafa; --text-secondary:#a1a1aa; --text-muted:#71717a;
+  --accent:#3b82f6; --accent-hover:#2563eb; --accent-soft:rgba(59,130,246,.15);
+  --success:#22c55e; --danger:#ef4444; --warning:#f59e0b;
+  --shadow-md:0 4px 16px rgba(0,0,0,.35); --shadow-lg:0 12px 40px rgba(0,0,0,.45);
+}
+body[data-theme="light"]{
+  --bg-app:#f4f4f5; --bg-surface:#ffffff; --bg-elevated:#ffffff;
+  --border:#e4e4e7; --border-strong:#d4d4d8;
+  --text-primary:#18181b; --text-secondary:#52525b; --text-muted:#a1a1aa;
+  --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:rgba(37,99,235,.10);
+  --success:#16a34a; --danger:#dc2626; --warning:#d97706;
+  --shadow-md:0 4px 16px rgba(0,0,0,.10); --shadow-lg:0 12px 40px rgba(0,0,0,.16);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  background:var(--bg-app); color:var(--text-primary); font-size:var(--fs-body);
+  height:100vh; overflow:hidden;
+}
+body, .card, .nav-item, button{transition:background-color var(--dur-normal) var(--ease-out), border-color var(--dur-normal)}
+
+/* ============ Shell ============ */
+.app{display:flex;height:100vh}
+.sidebar{
+  width:200px;flex-shrink:0;background:var(--bg-surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:16px 10px;
+}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
+.logo-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px}
+.logo-name{font-weight:650;font-size:var(--fs-title)}
+.logo-tag{font-size:var(--fs-caption);color:var(--text-muted)}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--r-md);
+  color:var(--text-secondary);cursor:pointer;border:none;background:none;width:100%;
+  font-size:var(--fs-body);text-align:left;
+}
+.nav-item:hover{background:var(--bg-elevated);color:var(--text-primary)}
+.nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-item .ico{width:16px;text-align:center}
+.sidebar-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
+.seg{display:flex;background:var(--bg-app);border:1px solid var(--border);border-radius:var(--r-md);padding:2px;gap:2px}
+.seg button{flex:1;border:none;background:none;color:var(--text-secondary);font-size:var(--fs-small);padding:5px 0;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--bg-elevated);color:var(--text-primary);font-weight:600}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{
+  height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  padding:0 20px;gap:12px;background:var(--bg-surface);
+}
+.page-title{font-size:var(--fs-head);font-weight:650}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pill-hint{font-size:var(--fs-caption);color:var(--text-muted)}
+
+/* ============ Prompts view ============ */
+.view{display:none;flex:1;min-height:0}
+.view.active{display:flex}
+.toolbar{
+  display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);
+}
+.search{
+  flex:0 0 340px;display:flex;align-items:center;gap:8px;background:var(--bg-surface);
+  border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;
+}
+.search input{flex:1;border:none;background:none;color:var(--text-primary);font-size:var(--fs-body);outline:none}
+.search kbd{font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+select,.btn{
+  background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);
+  border-radius:var(--r-md);padding:7px 12px;font-size:var(--fs-small);cursor:pointer;
+}
+select:hover,.btn:hover{border-color:var(--border-strong)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-ghost{border:none;background:none;color:var(--text-secondary)}
+.btn-ghost:hover{color:var(--text-primary)}
+
+.content{flex:1;display:flex;min-height:0}
+.leftcol{
+  width:216px;flex-shrink:0;border-right:1px solid var(--border);padding:14px 12px;
+  overflow-y:auto;display:flex;flex-direction:column;gap:16px;
+}
+.sec-title{font-size:var(--fs-caption);color:var(--text-muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:0 4px 8px}
+.wheel-mirror{display:flex;flex-direction:column;gap:2px}
+.wm-item{
+  display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--r-sm);
+  font-size:var(--fs-small);color:var(--text-secondary);cursor:pointer;
+}
+.wm-item:hover{background:var(--bg-surface);color:var(--text-primary)}
+.wm-item .num{width:14px;font-size:10px;color:var(--text-muted);text-align:center}
+.wm-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wm-empty{font-size:var(--fs-small);color:var(--text-muted);padding:8px}
+.tags-cloud{display:flex;flex-wrap:wrap;gap:6px}
+.tagchip{
+  font-size:var(--fs-caption);color:var(--text-secondary);background:var(--bg-surface);
+  border:1px solid var(--border);border-radius:var(--r-pill);padding:3px 10px;cursor:pointer;
+}
+.tagchip.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.btn-preview{
+  margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px;
+  border:1px dashed var(--border-strong);border-radius:var(--r-md);padding:8px;
+  color:var(--text-secondary);font-size:var(--fs-small);background:none;cursor:pointer;width:100%;
+}
+.btn-preview:hover{color:var(--accent);border-color:var(--accent)}
+
+.grid-wrap{flex:1;overflow-y:auto;padding:16px 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.grid.listmode{grid-template-columns:1fr;gap:6px}
+.card{
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:14px;cursor:pointer;position:relative;
+}
+.card:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--border-strong)}
+.grid.listmode .card{display:flex;align-items:center;gap:14px;padding:10px 14px}
+.card-top{display:flex;align-items:flex-start;gap:8px}
+.card-name{flex:1;font-weight:600;font-size:var(--fs-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.star{border:none;background:none;cursor:pointer;font-size:15px;color:var(--text-muted);padding:0 2px;line-height:1}
+.star.on{color:var(--warning)}
+.card-preview{color:var(--text-secondary);font-size:var(--fs-small);margin-top:8px;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.grid.listmode .card-preview{-webkit-line-clamp:1;margin-top:0;flex:1}
+.card-foot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.grid.listmode .card-foot{margin-top:0}
+.ctag{font-size:10px;color:var(--text-secondary);background:var(--bg-elevated);border-radius:4px;padding:2px 7px}
+.cmeta{margin-left:auto;font-size:10px;color:var(--text-muted)}
+.empty{padding:60px;text-align:center;color:var(--text-muted);font-size:var(--fs-small)}
+
+/* ============ Drawer ============ */
+.drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity var(--dur-normal)}
+.drawer-mask.show{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:440px;background:var(--bg-surface);
+  border-left:1px solid var(--border);box-shadow:var(--shadow-lg);
+  transform:translateX(100%);transition:transform var(--dur-slow) var(--ease-out);
+  display:flex;flex-direction:column;
+}
+.drawer.show{transform:translateX(0)}
+.drawer-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+.drawer-head b{font-size:var(--fs-title)}
+.drawer-body{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.field label{display:block;font-size:var(--fs-small);color:var(--text-secondary);margin-bottom:6px}
+.field input[type=text],.field textarea{
+  width:100%;background:var(--bg-app);border:1px solid var(--border);border-radius:var(--r-md);
+  color:var(--text-primary);padding:9px 12px;font-size:var(--fs-body);outline:none;font-family:inherit;
+}
+.field input:focus,.field textarea:focus{border-color:var(--accent)}
+.field textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0}
+.switch-row .lbl{font-size:var(--fs-body)}
+.switch{width:36px;height:20px;border-radius:var(--r-pill);background:var(--border-strong);border:none;cursor:pointer;position:relative;transition:background var(--dur-fast)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left var(--dur-fast)}
+.switch.on{background:var(--accent)}.switch.on::after{left:18px}
+.drawer-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+
+/* ============ Library / Log / Settings ============ */
+.pane{flex:1;overflow-y:auto;padding:20px}
+.lib-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.lib-tab{border:none;background:none;color:var(--text-secondary);font-size:var(--fs-body);padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent}
+.lib-tab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.pack{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
+.pack h4{font-size:var(--fs-title);margin-bottom:4px}
+.pack .meta{font-size:var(--fs-caption);color:var(--text-muted);margin-bottom:10px}
+.pack .desc{font-size:var(--fs-small);color:var(--text-secondary);line-height:1.5;margin-bottom:12px}
+.stat-row{display:flex;gap:12px;margin-bottom:16px}
+.stat{flex:1;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px}
+.stat .v{font-size:22px;font-weight:700}
+.stat .k{font-size:var(--fs-caption);color:var(--text-muted);margin-top:2px}
+table.log{width:100%;border-collapse:collapse;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+table.log th,table.log td{padding:9px 12px;text-align:left;font-size:var(--fs-small);border-bottom:1px solid var(--border)}
+table.log th{color:var(--text-muted);font-weight:600;font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.4px}
+table.log tr:last-child td{border-bottom:none}
+.badge{font-size:10px;border-radius:var(--r-pill);padding:2px 8px}
+.badge.ok{background:rgba(34,197,94,.15);color:var(--success)}
+.badge.err{background:rgba(239,68,68,.15);color:var(--danger)}
+.set-group{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden}
+.set-group h4{font-size:var(--fs-small);color:var(--text-secondary);padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-app)}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-row .lbl{font-size:var(--fs-body)}
+.set-row .sub{font-size:var(--fs-caption);color:var(--text-muted);margin-top:2px}
+kbd.hotkey{font-size:var(--fs-small);border:1px solid var(--border-strong);border-radius:6px;padding:4px 10px;background:var(--bg-app);font-family:ui-monospace,monospace}
+
+/* ============ Toast ============ */
+.toasts{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.toast{
+  background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--r-md);
+  padding:10px 16px;font-size:var(--fs-small);box-shadow:var(--shadow-md);
+  animation:toast-in var(--dur-normal) var(--ease-out);display:flex;gap:8px;align-items:center;
+}
+.toast .dot{width:8px;height:8px;border-radius:50%}
+.toast.ok .dot{background:var(--success)} .toast.err .dot{background:var(--danger)} .toast.info .dot{background:var(--accent)}
+@keyframes toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* ============ Wheel preview overlay (mini radial A案 内嵌演示) ============ */
+.wheel-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.28);backdrop-filter:blur(2px);z-index:50}
+.wheel-overlay.show{display:grid}
+.miniwheel{position:relative;width:280px;height:280px;animation:wheel-open 220ms var(--ease-pop)}
+@keyframes wheel-open{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
+.miniwheel .center{
+  position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;border-radius:50%;
+  background:var(--bg-elevated);border:1px solid var(--border-strong);display:grid;place-items:center;
+  font-size:10px;color:var(--text-muted);box-shadow:0 8px 30px rgba(0,0,0,.4);
+}
+.petal{
+  position:absolute;left:50%;top:50%;width:96px;height:40px;margin:-20px -48px;border-radius:var(--r-pill);
+  background:var(--bg-surface);border:1px solid var(--border-strong);box-shadow:0 4px 16px rgba(0,0,0,.3);
+  display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;font-weight:600;
+  color:var(--text-primary);cursor:pointer;opacity:0;
+  animation:petal-in 200ms var(--ease-pop) forwards;
+}
+.petal:hover{border-color:var(--accent);color:var(--accent)}
+.petal .n{font-size:9px;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+@keyframes petal-in{from{opacity:0;transform:var(--pos) scale(.6)}to{opacity:1;transform:var(--pos) scale(1)}}
+.petal{transform:var(--pos)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">P</div>
+      <div><div class="logo-name">PromptKey</div><div class="logo-tag" data-i18n="nav.tagline">Prompt Manager</div></div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="prompts"><span class="ico">◈</span><span data-i18n="nav.prompts">提示词</span></button>
+      <button class="nav-item" data-view="library"><span class="ico">▣</span><span data-i18n="nav.library">模板库</span></button>
+      <button class="nav-item" data-view="log"><span class="ico">≡</span><span data-i18n="nav.log">记录</span></button>
+      <button class="nav-item" data-view="settings"><span class="ico">⚙</span><span data-i18n="nav.settings">设置</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="seg" id="themeSeg">
+        <button data-theme="light">☀ <span data-i18n="theme.light">浅色</span></button>
+        <button data-theme="dark" class="on">☾ <span data-i18n="theme.dark">深色</span></button>
+      </div>
+      <div class="seg" id="langSeg">
+        <button data-lang="zh" class="on">中文</button>
+        <button data-lang="en">EN</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div class="page-title" id="pageTitle">提示词</div>
+      <div class="topbar-right">
+        <span class="pill-hint" data-i18n="top.hint">原型预览 · Phase 1 设计稿</span>
+      </div>
+    </div>
+
+    <!-- ===== Prompts (merged) ===== -->
+    <section class="view active" id="view-prompts">
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <div class="toolbar">
+          <div class="search">🔍<input id="searchInput" data-i18n-ph="search.placeholder" placeholder="搜索提示词… (#标签 / @名称 / c:全文)"><kbd>⌘K</kbd></div>
+          <select id="sortSel"><option data-i18n="sort.recent">最近使用</option><option data-i18n="sort.freq">使用频率</option><option data-i18n="sort.name">名称</option></select>
+          <div class="seg" style="width:110px">
+            <button id="viewCard" class="on" data-i18n="view.card">卡片</button>
+            <button id="viewList" data-i18n="view.list">列表</button>
+          </div>
+          <button class="btn" id="previewWheel" data-i18n="wheel.preview">◎ 轮盘预览</button>
+          <button class="btn btn-primary" id="newBtn" data-i18n="prompt.new">+ 新建</button>
+        </div>
+        <div class="content">
+          <div class="leftcol">
+            <div>
+              <div class="sec-title" data-i18n="wheel.section">⭐ 轮盘</div>
+              <div class="wheel-mirror" id="wheelMirror"></div>
+            </div>
+            <div>
+              <div class="sec-title" data-i18n="tags.section">标签</div>
+              <div class="tags-cloud" id="tagsCloud"></div>
+            </div>
+          </div>
+          <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Library ===== -->
+    <section class="view" id="view-library">
+      <div class="pane">
+        <div class="lib-tabs">
+          <button class="lib-tab on" data-i18n="lib.builtin">内置精选</button>
+          <button class="lib-tab" data-i18n="lib.url">链接导入</button>
+          <button class="lib-tab" data-i18n="lib.file">文件导入</button>
+        </div>
+        <div class="pack-grid" id="packGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== Log ===== -->
+    <section class="view" id="view-log">
+      <div class="pane">
+        <div class="stat-row">
+          <div class="stat"><div class="v" id="stTotal">183</div><div class="k" data-i18n="log.total">总注入次数</div></div>
+          <div class="stat"><div class="v" style="color:var(--success)">98.9%</div><div class="k" data-i18n="log.rate">成功率</div></div>
+          <div class="stat"><div class="v">241ms</div><div class="k" data-i18n="log.avg">平均耗时</div></div>
+          <div class="stat"><div class="v">Clipboard</div><div class="k" data-i18n="log.strategy">主策略</div></div>
+        </div>
+        <table class="log"><thead><tr>
+          <th data-i18n="log.t">时间</th><th data-i18n="log.p">提示词</th><th data-i18n="log.app">应用</th>
+          <th data-i18n="log.s">策略</th><th data-i18n="log.d">耗时</th><th data-i18n="log.st">状态</th>
+        </tr></thead><tbody id="logBody"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ===== Settings ===== -->
+    <section class="view" id="view-settings">
+      <div class="pane" style="max-width:720px">
+        <div class="set-group"><h4 data-i18n="set.general">通用</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="set.lang">界面语言</div></div>
+            <select id="langSel"><option value="zh">中文</option><option value="en">English</option></select></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="set.theme">外观主题</div></div>
+            <select id="themeSel"><option value="dark" data-i18n="theme.dark">深色</option><option value="light" data-i18n="theme.light">浅色</option><option value="auto" data-i18n="theme.auto">跟随系统</option></select></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.hotkey">全局热键</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.direct">快速注入（默认提示词）</div><div class="sub" data-i18n="hk.directSub">目标 = 最近使用第 1 位，可在下方改为固定</div></div><kbd class="hotkey">Ctrl + Alt + A</kbd></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.wheel">呼出轮盘</div></div><kbd class="hotkey">Ctrl + Alt + Q</kbd></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.default">默认提示词</div></div>
+            <select><option data-i18n="hk.lastUsed">最近使用</option><option>代码审查</option></select></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.inject">注入</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.clipboard">允许剪贴板策略</div><div class="sub" data-i18n="inj.clipboardSub">关闭后仅使用逐字输入（更慢）</div></div><button class="switch on"></button></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.restore">注入后恢复剪贴板</div></div><button class="switch on"></button></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="inj.gate">安全控件检测</div><div class="sub" data-i18n="inj.gateSub">检测到密码框时拒绝注入</div></div><button class="switch on"></button></div>
+        </div>
+        <div class="set-group"><h4 data-i18n="set.data">数据</h4>
+          <div class="set-row"><div><div class="lbl" data-i18n="data.io">导入 / 导出</div><div class="sub">SQLite · WAL · promptkey.db</div></div>
+            <div><button class="btn" id="exportBtn" data-i18n="data.export">导出</button> <button class="btn" data-i18n="data.import">导入</button></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ Edit drawer ============ -->
+<div class="drawer-mask" id="drawerMask"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head"><b id="drawerTitle">编辑提示词</b>
+    <button class="btn btn-ghost" style="margin-left:auto" id="drawerClose">✕</button></div>
+  <div class="drawer-body">
+    <div class="field"><label data-i18n="f.name">名称</label><input type="text" id="fName"></div>
+    <div class="field"><label data-i18n="f.content">内容（支持 {{变量}}）</label><textarea id="fContent"></textarea></div>
+    <div class="field"><label data-i18n="f.tags">标签</label><input type="text" id="fTags" placeholder="dev, 写作…"></div>
+    <div class="switch-row"><span class="lbl" data-i18n="f.pinned">加入轮盘 ⭐</span><button class="switch" id="fPin"></button></div>
+    <div class="field"><label data-i18n="f.apps">应用范围（可选）</label><input type="text" id="fApps" placeholder="chrome.exe, Code.exe"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" id="delBtn" data-i18n="common.delete">删除</button>
+    <button class="btn" id="cancelBtn" data-i18n="common.cancel">取消</button>
+    <button class="btn btn-primary" id="saveBtn" data-i18n="common.save">保存</button>
+  </div>
+</aside>
+
+<!-- ============ Wheel preview overlay ============ -->
+<div class="wheel-overlay" id="wheelOverlay">
+  <div class="miniwheel" id="miniWheel"><div class="center" data-i18n="wheel.center">Esc 关闭</div></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ============ i18n ============ */
+const I18N = {
+  zh: {}, // zh 值已在 HTML 硬编码（原型简化）
+  en: {
+    "nav.tagline":"Prompt Manager","nav.prompts":"Prompts","nav.library":"Library","nav.log":"Log","nav.settings":"Settings",
+    "theme.light":"Light","theme.dark":"Dark","theme.auto":"Auto","top.hint":"Prototype · Phase 1 design",
+    "search.placeholder":"Search prompts… (#tag / @name / c:fulltext)","sort.recent":"Recent","sort.freq":"Frequency","sort.name":"Name",
+    "view.card":"Cards","view.list":"List","wheel.preview":"◎ Wheel preview","prompt.new":"+ New",
+    "wheel.section":"⭐ Wheel","tags.section":"Tags","wheel.center":"Esc to close","wheel.empty":"No pinned prompts",
+    "lib.builtin":"Built-in","lib.url":"From URL","lib.file":"From file",
+    "log.total":"Total injections","log.rate":"Success rate","log.avg":"Avg latency","log.strategy":"Primary strategy",
+    "log.t":"Time","log.p":"Prompt","log.app":"App","log.s":"Strategy","log.d":"Latency","log.st":"Status",
+    "set.general":"General","set.lang":"Language","set.theme":"Theme","set.hotkey":"Global hotkeys",
+    "hk.direct":"Quick inject (default prompt)","hk.directSub":"Target = most recently used; can pin a fixed one",
+    "hk.wheel":"Show wheel","hk.default":"Default prompt","hk.lastUsed":"Last used",
+    "set.inject":"Injection","inj.clipboard":"Allow clipboard strategy","inj.clipboardSub":"Off = keystroke-only (slower)",
+    "inj.restore":"Restore clipboard after inject","inj.gate":"Secure-field detection","inj.gateSub":"Refuse injection into password fields",
+    "set.data":"Data","data.io":"Import / Export","data.export":"Export","data.import":"Import",
+    "f.name":"Name","f.content":"Content (supports {{vars}})","f.tags":"Tags","f.pinned":"Pin to wheel ⭐","f.apps":"App scopes (optional)",
+    "common.delete":"Delete","common.cancel":"Cancel","common.save":"Save",
+    "toast.saved":"Saved","toast.deleted":"Deleted","toast.imported":"Imported {n} prompts","toast.injected":"Injected: {n}","toast.exported":"Exported promptkey-pack.json",
+    "empty.prompts":"No prompts yet — import from Library or create one",
+  }
+};
+let lang = "zh";
+const t = k => (lang==="en" ? (I18N.en[k] ?? k) : (document.querySelector(`[data-i18n="${k}"]`)?.dataset.zh ?? k));
+function applyLang(){
+  document.documentElement.lang = lang==="zh"?"zh-CN":"en";
+  document.querySelectorAll("[data-i18n]").forEach(el=>{
+    if(el.dataset.zh===undefined) el.dataset.zh = el.textContent;
+    el.textContent = lang==="zh" ? el.dataset.zh : (I18N.en[el.dataset.i18n] ?? el.dataset.zh);
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el=>{
+    if(el.dataset.zh===undefined) el.dataset.zh = el.placeholder;
+    el.placeholder = lang==="zh" ? el.dataset.zh : (I18N.en[el.dataset.i18nPh] ?? el.dataset.zh);
+  });
+  document.getElementById("pageTitle").textContent =
+    document.querySelector(".nav-item.active span[data-i18n]").textContent;
+  renderAll();
+}
+function T(k){ // JS 侧取值（不依赖 DOM）
+  if(lang==="zh"){ const el=document.querySelector(`[data-i18n="${k}"]`); return el?.dataset.zh ?? k; }
+  return I18N.en[k] ?? k;
+}
+
+/* ============ Sample data ============ */
+let PROMPTS = [
+  {id:1,name:"代码审查",en:"Code review",content:"请审查以下代码，重点关注：\n1. 潜在 bug 与边界条件\n2. 性能问题\n3. 可读性\n\n代码：\n{{code}}",tags:["dev"],pinned:true,uses:42,updated:"2 天前",app:"VS Code"},
+  {id:2,name:"英文邮件润色",en:"Email polish",content:"Please polish this email to sound professional yet friendly. Keep it concise:\n\n{{text}}",tags:["写作","英文"],pinned:true,uses:38,updated:"1 天前",app:"Chrome"},
+  {id:3,name:"会议纪要",en:"Meeting minutes",content:"将以下会议记录整理为：决议事项 / 行动项（负责人+截止）/ 待定问题：\n\n{{notes}}",tags:["会议"],pinned:true,uses:15,updated:"3 天前",app:"飞书"},
+  {id:4,name:"中译英",en:"ZH→EN translate",content:"Translate to natural, idiomatic English. Preserve tone and formatting:\n\n{{text}}",tags:["翻译"],pinned:true,uses:33,updated:"5 小时前",app:"DeepL"},
+  {id:5,name:"周报生成",en:"Weekly report",content:"根据以下要点生成结构化周报（本周完成/进行中/风险/下周计划）：\n\n{{points}}",tags:["写作"],pinned:false,uses:9,updated:"1 周前",app:"Word"},
+  {id:6,name:"SQL 优化",en:"SQL optimize",content:"分析这条 SQL 的执行计划并给出优化建议（索引/重写/分页）：\n\n{{sql}}",tags:["dev","数据库"],pinned:false,uses:12,updated:"4 天前",app:"DataGrip"},
+  {id:7,name:"Bug 定位分析",en:"Debug analysis",content:"根据错误堆栈与现象描述，给出最可能的 3 个原因及排查步骤：\n\n{{error}}",tags:["dev"],pinned:true,uses:20,updated:"6 小时前",app:"VS Code"},
+  {id:8,name:"小红书文案",en:"Social post",content:"把以下内容改写为小红书风格（emoji 适度、短句、带话题标签）：\n\n{{text}}",tags:["运营"],pinned:false,uses:6,updated:"2 周前",app:"小红书"},
+  {id:9,name:"论文摘要",en:"Paper abstract",content:"Summarize this paper in 150 words: contribution, method, key results, limitations:\n\n{{paper}}",tags:["学术"],pinned:false,uses:4,updated:"3 周前",app:"Zotero"},
+  {id:10,name:"解释代码",en:"Explain code",content:"用通俗语言解释这段代码做什么、怎么做的、有什么坑：\n\n{{code}}",tags:["dev"],pinned:true,uses:27,updated:"昨天",app:"VS Code"},
+  {id:11,name:"头脑风暴",en:"Brainstorm",content:"针对「{{topic}}」给我 10 个不同角度的创意，每个一句话说明亮点。",tags:["创意"],pinned:false,uses:8,updated:"5 天前",app:"备忘录"},
+  {id:12,name:"简历优化",en:"Resume polish",content:"Rewrite this resume bullet using strong verbs and quantified impact:\n\n{{bullet}}",tags:["求职"],pinned:false,uses:3,updated:"1 月前",app:"Pages"},
+];
+const PACKS = [
+  {name:"写作助手精选",en:"Writing Essentials",author:"PromptKey",n:12,desc:"邮件润色、周报、纪要、改写——覆盖日常写作高频场景。"},
+  {name:"开发者工具箱",en:"Dev Toolbox",author:"PromptKey",n:15,desc:"代码审查、调试分析、SQL 优化、正则生成、commit 信息。"},
+  {name:"翻译与语言",en:"Translate & Language",author:"PromptKey",n:8,desc:"中英互译、语气调整、语法讲解、本地化检查。"},
+  {name:"AI 提示工程进阶",en:"Prompt Engineering+",author:"Community源示例",n:20,desc:"角色设定、思维链、few-shot 框架、评估 rubric。"},
+];
+const LOGS = [
+  ["14:32:07","英文邮件润色","Chrome","Clipboard","212ms",1],
+  ["14:28:51","代码审查","Code","Clipboard","238ms",1],
+  ["14:15:22","中译英","WeChat","Clipboard","198ms",1],
+  ["13:58:40","会议纪要","WindowsTerminal","SendInput","1.1s",1],
+  ["13:41:03","Bug 定位分析","Code","Clipboard","226ms",1],
+  ["13:02:19","解释代码","Code","Clipboard","243ms",1],
+  ["11:47:55","周报生成","Word","SendInput","980ms",0],
+];
+
+/* ============ Render ============ */
+let q="", tagFilter=null, sortMode="recent", listMode=false, editingId=null, dirty=false;
+const $ = s=>document.querySelector(s);
+const nameOf = p => lang==="zh" ? p.name : (p.en||p.name);
+
+function filtered(){
+  let list = PROMPTS.filter(p=>{
+    if(tagFilter && !p.tags.includes(tagFilter)) return false;
+    if(!q) return true;
+    if(q.startsWith("#")) return p.tags.some(x=>x.includes(q.slice(1)));
+    if(q.startsWith("@")) return (p.name+p.en).toLowerCase().includes(q.slice(1).toLowerCase());
+    if(q.startsWith("c:")) return p.content.toLowerCase().includes(q.slice(2).toLowerCase());
+    const s=q.toLowerCase();
+    return (p.name+p.en).toLowerCase().includes(s)||p.tags.join().toLowerCase().includes(s)||p.content.toLowerCase().includes(s);
+  });
+  if(sortMode==="freq") list.sort((a,b)=>b.uses-a.uses);
+  else if(sortMode==="name") list.sort((a,b)=>nameOf(a).localeCompare(nameOf(b)));
+  else list.sort((a,b)=>b.uses-a.uses); // recent ≈ uses in demo
+  return list;
+}
+function renderGrid(){
+  const list=filtered();
+  $("#grid").className = "grid"+(listMode?" listmode":"");
+  $("#grid").innerHTML = list.length ? list.map(p=>`
+    <div class="card" data-id="${p.id}">
+      <div class="card-top">
+        <div class="card-name">${nameOf(p)}</div>
+        <button class="star ${p.pinned?"on":""}" data-star="${p.id}" title="pin">★</button>
+      </div>
+      <div class="card-preview">${p.content.split("\n")[0]}</div>
+      <div class="card-foot">
+        ${p.tags.map(x=>`<span class="ctag">${x}</span>`).join("")}
+        <span class="cmeta">${lang==="zh"?`使用 ${p.uses} 次`:`used ${p.uses}×`} · ${p.updated}</span>
+      </div>
+    </div>`).join("")
+    : `<div class="empty">${T("empty.prompts")}</div>`;
+}
+function renderWheelMirror(){
+  const pins = PROMPTS.filter(p=>p.pinned);
+  $("#wheelMirror").innerHTML = pins.length
+    ? pins.map((p,i)=>`<div class="wm-item" data-preview="${p.id}"><span class="num">${i+1}</span><span class="nm">${nameOf(p)}</span></div>`).join("")
+      + `<button class="btn-preview" id="previewWheel2">◎ ${T("wheel.preview")}</button>`
+    : `<div class="wm-empty">${T("wheel.empty")}</div>`;
+  $("#previewWheel2")?.addEventListener("click",openWheel);
+}
+function renderTags(){
+  const all=[...new Set(PROMPTS.flatMap(p=>p.tags))];
+  $("#tagsCloud").innerHTML = all.map(x=>`<span class="tagchip ${tagFilter===x?"on":""}" data-tag="${x}">${x}</span>`).join("");
+}
+function renderPacks(){
+  $("#packGrid").innerHTML = PACKS.map(p=>`
+    <div class="pack"><h4>${lang==="zh"?p.name:p.en}</h4>
+    <div class="meta">${p.author} · ${p.n} ${lang==="zh"?"条":"prompts"}</div>
+    <div class="desc">${p.desc}</div>
+    <button class="btn btn-primary" data-import="${p.n}" style="width:100%">${lang==="zh"?"导入":"Import"}</button></div>`).join("");
+}
+function renderLog(){
+  $("#logBody").innerHTML = LOGS.map(r=>`<tr>
+    <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td>
+    <td><span class="badge ${r[5]?"ok":"err"}">${r[5]?(lang==="zh"?"成功":"OK"):(lang==="zh"?"失败":"Fail")}</span></td></tr>`).join("");
+}
+function renderAll(){ renderGrid(); renderWheelMirror(); renderTags(); renderPacks(); renderLog(); }
+
+/* ============ Toast ============ */
+function toast(type,msg){
+  const el=document.createElement("div");el.className="toast "+type;
+  el.innerHTML=`<span class="dot"></span>${msg}`;
+  $("#toasts").appendChild(el);setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.remove(),200)},2400);
+}
+
+/* ============ Events ============ */
+document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  $("#view-"+b.dataset.view).classList.add("active");
+  $("#pageTitle").textContent=b.querySelector("span[data-i18n]").textContent;
+});
+$("#themeSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  $("#themeSeg").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  document.body.dataset.theme=b.dataset.theme; $("#themeSel").value=b.dataset.theme;
+});
+$("#langSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  $("#langSeg").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  lang=b.dataset.lang; $("#langSel").value=lang; applyLang();
+});
+$("#themeSel").onchange=e=>{document.body.dataset.theme=e.target.value==="auto"?(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"):e.target.value;
+  $("#themeSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.theme===document.body.dataset.theme));};
+$("#langSel").onchange=e=>{lang=e.target.value;
+  $("#langSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.lang===lang));applyLang();};
+
+$("#searchInput").oninput=e=>{q=e.target.value.trim();renderGrid();};
+document.addEventListener("keydown",e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();$("#searchInput").focus();}
+  if(e.key==="Escape"){closeDrawer();closeWheel();}
+});
+$("#sortSel").onchange=e=>{sortMode=e.target.selectedIndex===0?"recent":e.target.selectedIndex===1?"freq":"name";renderGrid();};
+$("#viewCard").onclick=()=>{listMode=false;$("#viewCard").classList.add("on");$("#viewList").classList.remove("on");renderGrid();};
+$("#viewList").onclick=()=>{listMode=true;$("#viewList").classList.add("on");$("#viewCard").classList.remove("on");renderGrid();};
+
+$("#grid").addEventListener("click",e=>{
+  const star=e.target.closest("[data-star]");
+  if(star){const p=PROMPTS.find(x=>x.id==star.dataset.star);p.pinned=!p.pinned;renderGrid();renderWheelMirror();toast("info",(lang==="zh"?"已":" ")+(p.pinned?T("f.pinned"):"unpin")+"："+nameOf(p));return;}
+  const card=e.target.closest(".card"); if(card) openDrawer(+card.dataset.id);
+});
+$("#tagsCloud").addEventListener("click",e=>{
+  const c=e.target.closest("[data-tag]");if(!c)return;
+  tagFilter=tagFilter===c.dataset.tag?null:c.dataset.tag;renderTags();renderGrid();
+});
+$("#packGrid").addEventListener("click",e=>{
+  const b=e.target.closest("[data-import]");if(!b)return;
+  toast("ok",T("toast.imported").replace("{n}",b.dataset.import));
+});
+$("#exportBtn").onclick=()=>toast("ok",T("toast.exported"));
+
+/* ---- Drawer ---- */
+function openDrawer(id){
+  editingId=id;const p=PROMPTS.find(x=>x.id===id);
+  $("#drawerTitle").textContent=p?nameOf(p):(lang==="zh"?"新建提示词":"New prompt");
+  $("#fName").value=p?(lang==="zh"?p.name:p.en):"";
+  $("#fContent").value=p?p.content:"";
+  $("#fTags").value=p?p.tags.join(", "):"";
+  $("#fPin").classList.toggle("on",!!p?.pinned);
+  $("#fApps").value="";
+  dirty=false;$("#drawer").classList.add("show");$("#drawerMask").classList.add("show");
+}
+function closeDrawer(){
+  if(dirty && !confirm(lang==="zh"?"有未保存的修改，确定关闭？":"Discard unsaved changes?")) return;
+  $("#drawer").classList.remove("show");$("#drawerMask").classList.remove("show");
+}
+$("#fContent").oninput=()=>dirty=true;$("#fName").oninput=()=>dirty=true;
+$("#newBtn").onclick=()=>openDrawer(null);
+$("#drawerClose").onclick=closeDrawer;$("#cancelBtn").onclick=closeDrawer;$("#drawerMask").onclick=closeDrawer;
+$("#fPin").onclick=e=>e.target.classList.toggle("on");
+$("#saveBtn").onclick=()=>{
+  const p=PROMPTS.find(x=>x.id===editingId);
+  if(p){p.name=$("#fName").value;p.en=p.en||p.name;p.content=$("#fContent").value;
+    p.tags=$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    p.pinned=$("#fPin").classList.contains("on");}
+  dirty=false;closeDrawer();renderAll();toast("ok",T("toast.saved"));
+};
+$("#delBtn").onclick=()=>{
+  PROMPTS=PROMPTS.filter(x=>x.id!==editingId);dirty=false;closeDrawer();renderAll();toast("ok",T("toast.deleted"));
+};
+document.querySelectorAll(".switch").forEach(s=>{if(s.id!=="fPin")s.onclick=()=>s.classList.toggle("on");});
+
+/* ---- Mini wheel preview (A案缩影) ---- */
+function openWheel(){
+  const pins=PROMPTS.filter(p=>p.pinned).slice(0,6);
+  const w=$("#miniWheel");
+  w.querySelectorAll(".petal").forEach(x=>x.remove());
+  const R=96;
+  pins.forEach((p,i)=>{
+    const a=(-90+i*(360/6))*Math.PI/180;
+    const x=R*Math.cos(a), y=R*Math.sin(a);
+    const el=document.createElement("button");el.className="petal";
+    el.style.setProperty("--pos",`translate(${x}px,${y}px)`);
+    el.style.animationDelay=(i*30)+"ms";
+    el.innerHTML=`<span class="n">${i+1}</span>${nameOf(p)}`;
+    el.onclick=()=>{closeWheel();toast("ok",T("toast.injected").replace("{n}",nameOf(p)));};
+    w.appendChild(el);
+  });
+  $("#wheelOverlay").classList.add("show");
+}
+function closeWheel(){$("#wheelOverlay").classList.remove("show");}
+$("#previewWheel").onclick=openWheel;
+$("#wheelOverlay").addEventListener("click",e=>{if(e.target.id==="wheelOverlay")closeWheel();});
+document.addEventListener("keydown",e=>{
+  if(!$("#wheelOverlay").classList.contains("show"))return;
+  const n=parseInt(e.key);if(n>=1&&n<=6){const pels=$("#miniWheel").querySelectorAll(".petal");pels[n-1]?.click();}
+});
+
+renderAll();
+</script>
+</body>
+</html>
