@@ -1,71 +1,46 @@
-# TODO — Prompt Manager（Windows MVP，聚焦 UIA 注入与控制面板）
+# TODO — PromptKey（Phase 2 后）
 
-更新时间：2025-08-24
+更新时间：2026-10-06
 
 ## 当前状态
 
-- 构建：PASS（无阻塞错误）。
-- 运行：PASS。热键消息循环稳定，WM_HOTKEY 投递可靠。
-- 注入：
-	- UIA 主路径：ValuePattern.SetValue（支持 append/overwrite），带读回验证；密码字段自动拒绝。
-	- 无 ValuePattern 时：TextPattern 放置光标（末尾/当前位置），优先剪贴板粘贴，失败回退 SendInput。
-	- 前置目标窗口、防抖与小延迟已加，稳定性良好。
-- 配置：YAML 生效，热键/注入参数可改，变更后可平滑生效。
-- 数据：SQLite（WAL）OK，usage_logs 记录注入行为，prompts CRUD 可用。
+- 构建：GitHub Actions CI（windows-latest）跑 `cargo check`/`clippy`/`test`；`v*` tag 触发 release 构建出 NSIS+MSI。
+- 注入：**UIA 写入路径已移除**。主链路 = 剪贴板粘贴 → SendInput 兜底；UIA 仅用于密码框只读探测（IsPassword）。
+- 模型：提示词与轮盘已合并 —— pin 是提示词属性，轮盘是 pinned 投影；默认直注热键走 `app_settings` 策略（fixed / last_used）。
+- 模板库：内置包 + URL 导入（SSRF 防护）+ 文件导入 + 导出均已实现（原计划的 market 远端商店未做，本地优先替代）。
+- 变量：`{{var}}` 表单收集 + `{{clipboard}}`/`{{date}}`/`{{time}}` 自动变量，单遍渲染。
 
-## 交付目标（重心）
+## 待办
 
-P0 — UIA 注入稳定性（能力驱动优先）
-- [ ] ValuePattern 路径完善：
-	- [ ] 失败/不变场景再验证（VS Code/Chromium 文本框等），确保按配置 append/overwrite 行为一致。
-	- [ ] 读回验证策略可配置（次数/间隔/终止条件）。
-- [ ] TextPattern 路径完善：
-	- [ ] 选区存在时执行替换；无选区时按配置决定“末尾”或“当前位置”。
-	- [ ] 末尾移动逻辑在大型文档/虚拟化编辑器上增加重试与上限保护。
-- [ ] 剪贴板回退（安全模式）：
-	- [ ] 快照→注入→恢复（互斥/超时/失败降级）。
-	- [ ] 与系统/第三方剪贴板管理器兼容性检查。
-- [ ] SendInput 回退：
-	- [ ] 长文本分批、节流与 IME/组合键干扰规避。
-- [ ] 能力驱动策略（不做应用名特例，或通过配置开关控制特例）。
+P0 — Windows 实机验证（CI 只能编译，不能验证行为）
+- [ ] 安装包安装/卸载/升级（perMachine NSIS，中英向导）
+- [ ] 热键呼出轮盘 → 光标跟随 → 点击注入，在记事本/VS Code/浏览器输入框实测
+- [ ] 密码框门禁实测（浏览器登录框、Windows 凭据框）
+- [ ] 剪贴板备份恢复实测（先复制图片再注入，确认剪贴板图片还在）
+- [ ] WebView2 缺失场景的表现（`webviewInstallMode: skip` 下直接装会怎样）
 
-P0 — 控制面板（GUI/Tauri）完工
-- [ ] 设置页：
-	- [ ] 热键录制（冲突检测、应用后热更新）。
-	- [ ] 注入策略顺序与参数：allow_clipboard、uia_value_pattern_mode（append/overwrite）、验证次数与延时。
-	- [ ] 数据库路径、日志级别、开机自启。
-- [ ] 提示词面板：
-	- [ ] 列表/搜索/增删改查，与 SQLite 对接；导入导出（JSON/YAML）。
-- [ ] 使用记录：
-	- [ ] 查看 usage_logs（过滤/导出 CSV），一键复制错误详情。
-- [ ] 服务控制：
-	- [ ] 启动/停止/重载配置；托盘菜单与状态指示。
-- [ ] 主题与无障碍：浅/深色、字号、快捷键可达性。
+P1 — 工程质量
+- [ ] Rust 侧单元测试（模板渲染、配置加载、解析器）—— 当前测试覆盖≈0
+- [ ] 注入成功率本地统计页（usage_logs 已有数据，缺可视化）
+- [ ] 兼容性清单冒烟：Notepad/VS Code/Edge/Chrome/JetBrains/VS
 
-P1 — 兼容性与测试
-- [ ] 兼容性清单与冒烟脚本：Notepad、WordPad、VS Code、Edge/Chrome 文本框、IntelliJ、Visual Studio。
-- [ ] 端到端烟雾测试（本地脚本 + 手动指引），记录成功率与耗时。
-- [ ] 单元测试：热键解析、配置加载、策略选择、数据库 CRUD。
+P2 — 发布与体验
+- [ ] 代码签名（Azure Trusted Signing 或 OV 证书；去掉 SmartScreen 拦截）
+- [ ] WebView2 引导（webviewInstallMode 改为 embedBootstrapper/downloadBootstrapper，或用引导器）
+- [ ] Tauri updater + 差量更新
+- [ ] SendInput 高级优化（粘连键防护、长文本分批）
 
-P1 — 可观测性与文档
-- [ ] 运行日志与故障排查手册（常见注入失败原因与自检步骤）。
-- [ ] 使用统计（本地）：近 N 次注入成功率、回退频率、均耗时。
+P3 — 跨平台（trait 已抽象，未实装）
+- [ ] macOS：AXUIElement/CGEvent 注入 + AX 上下文 + Carbon 热键
+- [ ] Linux-X11：XTEST + 剪贴板；Wayland：明确降级或 uinput（需权限）
 
-P2 — 体验与发布
-- [ ] SendInput 高级优化（粘连键/重复键防护、退格/换行语义）。
-- [ ] 安装与签名（MSI/EXE，自动更新预研）。
-- [ ] 云同步占位（延后实现）。
+## 已完成（Phase 2 摘要）
 
-## 已完成（摘要）
-- [x] 热键服务与消息循环；失败回退热键组合；优雅退出。
-- [x] UIA 主路径与 TextPattern/剪贴板/SendInput 回退链路。
-- [x] 配置读写（%APPDATA%）；WAL 数据库初始化与 prompts/usage_logs。
-- [x] 目标窗口前置；密码字段保护；日志增强与错误透传。
-
-## 里程碑
-- M1（P0 完成）：UIA 注入在清单应用中≥95% 成功率；控制面板可调参并热更新；剪贴板回退具备快照恢复。
-- M2（P1 完成）：兼容性脚本齐备；端到端稳定；文档完善。
-- M3（P2 完成）：体验优化与安装签名准备。
-
-备注
-- 若需彻底移除“应用特例”，可将编辑器特化分支置于配置开关（默认关闭），以保持能力驱动一致性。
+- [x] 轮盘 A 形态：光标跟随 280px 径向轮盘，多显示器正确落位
+- [x] 提示词/轮盘合并：pin 内联属性 + frecency 排序 + 手动排序
+- [x] 模板库：内置 4 包 + URL/文件导入 + 导出
+- [x] 注入加固：密码门禁 + 全格式剪贴板备份恢复 + 真实成败日志
+- [x] 前端加固 + 设计系统（双主题/中英切换/新图标）
+- [x] Injector/Context/Hotkey trait 抽象（Windows 实现迁入 windows_impl.rs）
+- [x] 74 项 review 发现全数处理
+- [x] GitHub Actions CI + tag 触发 Release 流水线
