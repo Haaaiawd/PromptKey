@@ -43,6 +43,7 @@ tauri-plugin-shell = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
 tauri-plugin-fs = "2.0.0"
 ureq = "2.10"
+url = "2.5"
 
 # Task8: Win32 bindings only build on Windows
 [target.'cfg(windows)'.dependencies]

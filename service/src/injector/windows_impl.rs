@@ -66,16 +66,18 @@ pub struct WindowsInjector {
 // describe_element deleted (T0-002 Step 1.2)
 
 /// Phase 2 Task6: snapshot every clipboard format whose data lives in a GMEM
-/// block (readable via GlobalLock). Non-GMEM formats (HBITMAP, HPALETTE,
-/// HMETAFILE, owner-display/DSP formats) are skipped — documented limitation:
-/// those cannot be snapshotted byte-for-byte. Plain text/RTF/HTML/PNG-DIB etc.
-/// are all preserved.
-fn backup_clipboard_all() -> Vec<(u32, Vec<u8>)> {
+/// block (readable via GlobalLock). Returns `(items, complete)` — `complete`
+/// is false when any format had to be skipped (non-GMEM handles like HBITMAP,
+/// oversized blocks, owner-display/DSP formats), meaning restoration would
+/// permanently lose data. Review F41/F51/F63: callers must treat an
+/// incomplete snapshot as a reason not to overwrite the clipboard at all.
+fn backup_clipboard_all() -> (Vec<(u32, Vec<u8>)>, bool) {
     let mut out: Vec<(u32, Vec<u8>)> = Vec::new();
+    let mut complete = true;
     let mut total = 0usize;
     unsafe {
         if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
-            return out;
+            return (out, false);
         }
         let mut fmt = 0u32;
         loop {
@@ -85,28 +87,41 @@ fn backup_clipboard_all() -> Vec<(u32, Vec<u8>)> {
             }
             // owner-display / DSP formats are rendered on demand — cannot snapshot
             if (0x0080..=0x008F).contains(&fmt) {
+                complete = false;
                 continue;
             }
-            if let Ok(h) = GetClipboardData(fmt) {
-                let hg = HGLOBAL(h.0);
-                let size = GlobalSize(hg);
-                if size == 0 || size > MAX_BACKUP_FORMAT_BYTES || total + size > MAX_BACKUP_TOTAL_BYTES {
-                    continue;
+            match GetClipboardData(fmt) {
+                Ok(h) => {
+                    let hg = HGLOBAL(h.0);
+                    let size = GlobalSize(hg);
+                    if size > MAX_BACKUP_FORMAT_BYTES || total + size > MAX_BACKUP_TOTAL_BYTES {
+                        complete = false;
+                        continue;
+                    }
+                    if size == 0 {
+                        // zero-length GMEM block — snapshot is trivially complete
+                        out.push((fmt, Vec::new()));
+                        continue;
+                    }
+                    let ptr = GlobalLock(hg) as *const u8;
+                    if ptr.is_null() {
+                        complete = false; // not a GMEM block (HBITMAP etc.)
+                        continue;
+                    }
+                    let mut buf = vec![0u8; size];
+                    std::ptr::copy_nonoverlapping(ptr, buf.as_mut_ptr(), size);
+                    let _ = GlobalUnlock(hg);
+                    total += size;
+                    out.push((fmt, buf));
                 }
-                let ptr = GlobalLock(hg) as *const u8;
-                if ptr.is_null() {
-                    continue; // not a GMEM block (HBITMAP etc.)
+                Err(_) => {
+                    complete = false;
                 }
-                let mut buf = vec![0u8; size];
-                std::ptr::copy_nonoverlapping(ptr, buf.as_mut_ptr(), size);
-                let _ = GlobalUnlock(hg);
-                total += size;
-                out.push((fmt, buf));
             }
         }
         let _ = CloseClipboard();
     }
-    out
+    (out, complete)
 }
 
 /// Phase 2 Task6: restore a full backup (as produced by backup_clipboard_all).
@@ -141,6 +156,18 @@ fn restore_clipboard_all(items: &[(u32, Vec<u8>)]) {
 ///  2) UIA IsPassword on the focused element (no injection — detection only)
 /// Fail-open=false: on probe errors we return false but callers should treat
 /// "cannot determine" carefully — we only block on a positive signal.
+
+/// Pairs a successful CoInitialize with CoUninitialize on all exit paths
+/// (review F42/F67 — repeated injections leaked apartment refs).
+struct ComGuard(bool);
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            unsafe { CoUninitialize() };
+        }
+    }
+}
+
 pub fn is_secure_input(target_handle: u64) -> bool {
     unsafe {
         // Find the real focused control within the foreground window's thread
@@ -172,11 +199,16 @@ pub fn is_secure_input(target_handle: u64) -> bool {
 
         // Probe 2: UIA IsPassword (read-only detection; injection path stays
         // clipboard/SendInput — UIA write path is not resurrected).
-        // CoInitialize returns HRESULT (Err if already initialized under a
-        // different threading model) — either outcome is fine for a read probe.
-        let _ = CoInitialize(None);
+        // CoInitialize is paired with CoUninitialize via `com_guard`.
+        let _com_guard = ComGuard(CoInitialize(None).is_ok());
         if let Ok(uia) = CoCreateInstance::<IUIAutomation, _, _>(&CUIAutomation, None, CLSCTX_ALL) {
-            if let Ok(el) = uia.ElementFromHandle(focus) {
+            // Review F44: ask UIA for the *focused element* — browser password
+            // inputs have no HWND of their own, so ElementFromHandle(focus)
+            // only sees the parent window and misses IsPassword.
+            let el = uia
+                .GetFocusedElement()
+                .or_else(|_| uia.ElementFromHandle(focus));
+            if let Ok(el) = el {
                 if let Ok(is_pwd) = el.CurrentIsPassword() {
                     if is_pwd.as_bool() {
                         return true;
@@ -281,7 +313,15 @@ impl WindowsInjector {
         let _ = CloseClipboard();
 
         // 2) Task6: 备份全部剪贴板格式（不再只是 CF_UNICODETEXT）
-        let backup = backup_clipboard_all();
+        // Review F41/F51/F63: if any format can't be snapshotted (bitmap,
+        // oversized, owner-display), restoring would destroy it — refuse the
+        // clipboard strategy so the caller falls back to SendInput, which
+        // leaves the user's clipboard untouched.
+        let (backup, backup_complete) = backup_clipboard_all();
+        if self.config.injection.restore_clipboard && !backup_complete {
+            log::warn!("Clipboard contains unsnapshotable formats; skipping clipboard strategy");
+            return Err("clipboard backup incomplete".into());
+        }
 
         // 3) 设置我们的文本到剪贴板
         unsafe {
@@ -318,7 +358,7 @@ impl WindowsInjector {
         // 4) 等待一下，确保热键修饰键已释放，然后模拟 Ctrl+V 粘贴
         //    (Task6: 150ms，缩短剪贴板污染窗口)
         std::thread::sleep(Duration::from_millis(150));
-        unsafe {
+        let pasted = unsafe {
             let mut inputs = [
                 INPUT {
                     r#type: INPUT_KEYBOARD,
@@ -369,17 +409,24 @@ impl WindowsInjector {
                     },
                 },
             ];
-            if SendInput(&mut inputs, std::mem::size_of::<INPUT>() as i32) == 0 {
-                return Err("SendInput Ctrl+V failed".into());
-            }
-        }
+            SendInput(&mut inputs, std::mem::size_of::<INPUT>() as i32) != 0
+        };
 
         // 5) 粘贴后稍等再恢复剪贴板（80ms，确保目标应用已读取）
         std::thread::sleep(Duration::from_millis(80));
 
         // Task6: 恢复全部已备份格式（受 injection.restore_clipboard 开关控制）
-        if self.config.injection.restore_clipboard && !backup.is_empty() {
+        // Review F40/F62: restore on EVERY path after we overwrote the
+        // clipboard — including SendInput failure. An originally empty
+        // clipboard restores as empty (clears our prompt text).
+        if self.config.injection.restore_clipboard {
             restore_clipboard_all(&backup);
+        }
+
+        // Review F40/F62: report paste failure only after the user's
+        // clipboard has been restored.
+        if !pasted {
+            return Err("SendInput Ctrl+V failed".into());
         }
 
         log::info!("Text injected via Clipboard paste");

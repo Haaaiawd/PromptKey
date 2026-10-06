@@ -3,6 +3,8 @@
 //   INJECT_PROMPT:{id}\n
 //   INJECT_PROMPT:{id}:VARS:{json}\n   (Phase 2 D5 — collected {{var}} values)
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use tokio::io::AsyncReadExt;
@@ -10,6 +12,10 @@ use tokio::net::windows::named_pipe::ServerOptions;
 use tokio::runtime::Runtime;
 
 const PIPE_NAME: &str = r"\\.\pipe\promptkey_inject";
+/// Messages are framed by a trailing '\n'; a client write may still arrive in
+/// several chunks on a byte-mode pipe, so read until the newline or EOF.
+/// (review F10/F33/F45/F52/F68 — a single 8192-byte read truncated var JSON)
+const MAX_MESSAGE_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct InjectionRequest {
@@ -18,8 +24,10 @@ pub struct InjectionRequest {
     pub vars_json: Option<String>,
 }
 
-/// Start the inject pipe server in a background thread
-pub fn start() -> mpsc::Receiver<InjectionRequest> {
+/// Start the inject pipe server in a background thread.
+/// `stop` is shared with the engine loop; when set, the accept loop exits and
+/// the pipe listener is torn down so a restarted engine can rebind it.
+pub fn start(stop: Arc<AtomicBool>) -> mpsc::Receiver<InjectionRequest> {
     let (tx, rx) = mpsc::channel::<InjectionRequest>();
 
     thread::spawn(move || {
@@ -34,13 +42,22 @@ pub fn start() -> mpsc::Receiver<InjectionRequest> {
             }
         };
 
-        rt.block_on(async {
+        rt.block_on(async move {
             loop {
-                match listen_once(&tx).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::error!("[InjectServer] Loop error: {}", e);
-                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let watch = watch_stop(stop.clone());
+                tokio::select! {
+                    r = listen_once(&tx) => {
+                        if let Err(e) = r {
+                            log::error!("[InjectServer] Loop error: {}", e);
+                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                        }
+                    }
+                    _ = watch => {
+                        log::info!("[InjectServer] Stop requested; closing listener");
+                        break;
                     }
                 }
             }
@@ -48,6 +65,13 @@ pub fn start() -> mpsc::Receiver<InjectionRequest> {
     });
 
     rx
+}
+
+/// Resolves once the engine shutdown flag is set.
+async fn watch_stop(stop: Arc<AtomicBool>) {
+    while !stop.load(Ordering::Relaxed) {
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
 }
 
 async fn listen_once(tx: &mpsc::Sender<InjectionRequest>) -> Result<(), Box<dyn std::error::Error>> {
@@ -63,14 +87,38 @@ async fn listen_once(tx: &mpsc::Sender<InjectionRequest>) -> Result<(), Box<dyn 
 
     log::info!("[InjectServer] Client connected, reading message...");
 
-    let mut buffer = [0u8; 8192];
-    let n = server.read(&mut buffer).await?;
+    // Frame is one line. A byte-mode pipe can deliver the client's write in
+    // several chunks, so read until the trailing '\n' or EOF (bounded).
+    let mut buf: Vec<u8> = Vec::with_capacity(8192);
+    let mut chunk = [0u8; 8192];
+    loop {
+        let n = server.read(&mut chunk).await?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if buf.len() > MAX_MESSAGE_BYTES {
+            log::warn!("[InjectServer] Message exceeds {} bytes; dropped", MAX_MESSAGE_BYTES);
+            return Ok(());
+        }
+        if buf.contains(&b'\n') {
+            break;
+        }
+    }
 
-    if n > 0 {
-        let message = String::from_utf8_lossy(&buffer[..n]);
+    if !buf.is_empty() {
+        let message = String::from_utf8_lossy(&buf);
         log::debug!("[InjectServer] Received: {}", message.trim());
 
         if let Some(req) = parse_message(&message) {
+            // Reject malformed var JSON up front instead of silently injecting
+            // unresolved placeholders (review F10/F33/F45/F52/F68).
+            if let Some(vj) = req.vars_json.as_deref() {
+                if serde_json::from_str::<serde_json::Value>(vj).is_err() {
+                    log::warn!("[InjectServer] Rejected malformed VARS json for prompt {}", req.prompt_id);
+                    return Ok(());
+                }
+            }
             log::info!("[InjectServer] Valid prompt_id received: {}", req.prompt_id);
             let _ = tx.send(req);
         } else {

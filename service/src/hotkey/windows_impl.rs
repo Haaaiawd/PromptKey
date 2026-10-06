@@ -139,6 +139,12 @@ impl Hotkey for WindowsHotkey {
                     }
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
+                // Review F01/F28/F50/F64: release registrations before exit so a
+                // restarted engine can't fight this worker for the same hotkeys.
+                unsafe {
+                    let _ = UnregisterHotKey(None, 4);
+                    let _ = UnregisterHotKey(None, 5);
+                }
                 Ok(())
             },
         );

@@ -8,6 +8,8 @@ pub mod inject_server; // TW001: Inject pipe server
 /// compiling on other platforms and simply never yields a request.
 #[cfg(not(windows))]
 pub mod inject_server {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc;
 
     #[derive(Debug, Clone)]
@@ -16,7 +18,7 @@ pub mod inject_server {
         pub vars_json: Option<String>,
     }
 
-    pub fn start() -> mpsc::Receiver<InjectionRequest> {
+    pub fn start(_stop: Arc<AtomicBool>) -> mpsc::Receiver<InjectionRequest> {
         let (_tx, rx) = mpsc::channel::<InjectionRequest>();
         rx
     }

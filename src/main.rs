@@ -19,6 +19,8 @@ mod inject_pipe_client; // TW004: GUI → Service injection command client
 
 struct ServiceState {
     is_active: bool,
+    shutdown: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    worker: Option<std::thread::JoinHandle<()>>,
 }
 
 // 提示词结构体
@@ -58,7 +60,7 @@ struct PromptView {
 
 impl ServiceState {
     fn new() -> Self {
-        ServiceState { is_active: false }
+        ServiceState { is_active: false, shutdown: None, worker: None }
     }
     
     fn is_running(&mut self) -> bool {
@@ -73,12 +75,16 @@ impl ServiceState {
         
         println!("🚀 正在启动内嵌提示词引擎 (Embedded Thread)...");
         
-        // 启动后台线程运行 Service 逻辑
-        std::thread::spawn(|| {
+        // 启动后台线程运行 Service 逻辑；stop 标志位让引擎循环可退出
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop_thread = stop.clone();
+        let worker = std::thread::spawn(move || {
             // 注意：service::run_service 内部会处理循环
-            service::run_service();
+            service::run_service(stop_thread);
         });
 
+        self.shutdown = Some(stop);
+        self.worker = Some(worker);
         // 设置为已激活
         self.is_active = true;
         Ok(())
@@ -86,6 +92,15 @@ impl ServiceState {
     
     fn stop_service(&mut self) -> Result<(), String> {
         println!("🛑 正在停止内嵌提示词引擎...");
+        // Review F01/F28/F50/F64: actually terminate the engine — signal the
+        // loop, join the thread (it tears down hotkey + pipe workers), so a
+        // restart never leaves competing engines alive.
+        if let Some(stop) = self.shutdown.take() {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
         self.is_active = false;
         Ok(())
     }
@@ -431,15 +446,29 @@ fn trigger_wheel_injection_vars(prompt_id: i32, vars_json: String) -> Result<(),
         .map_err(|e| format!("Failed to send inject request: {}", e))
 }
 
-// Position the wheel window centered on the mouse cursor, clamped later by JS.
+// Position the wheel window centered on the mouse cursor, inside the monitor
+// that contains the cursor.
 pub(crate) fn present_wheel(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("wheel-panel") {
-        // Center on the physical cursor position; JS clamps to monitor bounds.
+        // Review F03/F56/F71: monitors can have negative/virtual origins, so a
+        // `.max(0.0)` floor teleported the wheel onto the primary display.
+        // Clamp against the cursor monitor's position+size instead.
         if let Ok(pos) = app.cursor_position() {
-            let _ = window.set_position(tauri::PhysicalPosition::new(
-                (pos.x - 160.0).max(0.0),
-                (pos.y - 160.0).max(0.0),
-            ));
+            let mut x = pos.x - 160.0;
+            let mut y = pos.y - 160.0;
+            if let Ok(Some(mon)) = window.monitor_from_point(pos.x, pos.y) {
+                let mp = mon.position();
+                let ms = mon.size();
+                let margin = 16.0;
+                // clamp() panics on inverted ranges (monitor smaller than the window)
+                let lo_x = mp.x as f64 + margin;
+                let hi_x = (mp.x as f64 + ms.width as f64 - 320.0 - margin).max(lo_x);
+                let lo_y = mp.y as f64 + margin;
+                let hi_y = (mp.y as f64 + ms.height as f64 - 320.0 - margin).max(lo_y);
+                x = x.clamp(lo_x, hi_x);
+                y = y.clamp(lo_y, hi_y);
+            }
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
         }
         window.show().map_err(|e| format!("Show window failed: {}", e))?;
         window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
@@ -480,8 +509,11 @@ fn toggle_prompt_pin(id: i32) -> Result<bool, String> {
 
 fn pack_json_from_db() -> Result<serde_json::Value, String> {
     let conn = open_db()?;
+    // Review F34: include variables_json + content_type so a pack round-trip
+    // preserves every prompt property.
     let mut stmt = conn.prepare(
-        "SELECT name, content, tags, app_scopes_json, inject_order, COALESCE(is_pinned,0)
+        "SELECT name, content, tags, app_scopes_json, inject_order, COALESCE(is_pinned,0),
+                content_type, variables_json
          FROM prompts ORDER BY id ASC"
     ).map_err(|e| format!("Failed to read prompts: {}", e))?;
     let rows = stmt.query_map([], |row| {
@@ -496,6 +528,8 @@ fn pack_json_from_db() -> Result<serde_json::Value, String> {
             "app_scopes": app_scopes,
             "inject_order": row.get::<_, Option<String>>(4)?,
             "pinned": row.get::<_, i32>(5)? == 1,
+            "content_type": row.get::<_, Option<String>>(6)?,
+            "variables_json": row.get::<_, Option<String>>(7)?,
         }))
     }).map_err(|e| format!("Query failed: {}", e))?;
     let mut prompts = Vec::new();
@@ -528,13 +562,19 @@ fn import_pack_obj(obj: &serde_json::Value) -> Result<(usize, usize), String> {
         let apps: Vec<String> = p.get("app_scopes").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
         let pinned = if p.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false) { 1 } else { 0 };
         let order = p.get("inject_order").and_then(|v| v.as_str().map(|s| s.to_string()));
+        // Review F34: round-trip content_type + variables_json too.
+        let content_type = p.get("content_type").and_then(|v| v.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "text".to_string());
+        let variables_json = p.get("variables_json").and_then(|v| v.as_str().map(|s| s.to_string()));
         conn.execute(
-            "INSERT INTO prompts (name, tags, content, content_type, app_scopes_json, inject_order, version, is_pinned)
-             VALUES (?1, ?2, ?3, 'text', ?4, ?5, 1, ?6)",
+            "INSERT INTO prompts (name, tags, content, content_type, variables_json, app_scopes_json, inject_order, version, is_pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8)",
             rusqlite::params![
                 name,
                 serde_json::to_string(&tags).unwrap_or_default(),
                 content,
+                content_type,
+                variables_json,
                 serde_json::to_string(&apps).unwrap_or_default(),
                 order,
                 pinned,
@@ -575,28 +615,114 @@ async fn import_prompts_pack(app: AppHandle) -> Result<Option<ImportResult>, Str
     let picked = rx.await.map_err(|e| format!("Dialog failed: {}", e))?;
     let Some(fp) = picked else { return Ok(None) };
     let path = fp.as_path().ok_or_else(|| "Invalid path".to_string())?;
+    // Review F32: cap file size before reading — no preview happens until
+    // parse, and a multi-GB file would exhaust memory first.
+    let size = std::fs::metadata(&path).map_err(|e| format!("Stat failed: {}", e))?.len();
+    if size > MAX_PACK_FILE_BYTES {
+        return Err(format!("Pack file too large ({} bytes > {})", size, MAX_PACK_FILE_BYTES));
+    }
     let text = std::fs::read_to_string(&path).map_err(|e| format!("Read failed: {}", e))?;
     let obj: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?;
     let (added, skipped) = import_pack_obj(&obj)?;
     Ok(Some(ImportResult { added, skipped }))
 }
 
+/* ---------- pack URL fetch with SSRF protection (review F04/F19/F30/F43/F53/F65, F31/F54) ---------- */
+
+const MAX_PACK_BYTES: u64 = 1024 * 1024;
+const MAX_PACK_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_PACK_REDIRECTS: u32 = 3;
+
+/// Publicly routable destination? Rejects loopback, private, link-local
+/// (incl. cloud metadata 169.254.169.254), CGNAT, reserved and doc ranges.
+fn ip_is_public(ip: &std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            !(v4.is_private() || v4.is_loopback() || v4.is_link_local()
+                || v4.is_unspecified() || v4.is_multicast() || v4.is_broadcast()
+                || o[0] == 0                                       // 0.0.0.0/8
+                || (o[0] == 100 && (o[1] & 0xC0) == 64)            // CGNAT 100.64/10
+                || (o[0] == 192 && o[1] == 0 && o[2] == 0)         // 192.0.0.0/24
+                || (o[0] == 192 && o[1] == 0 && o[2] == 2)         // TEST-NET-1
+                || (o[0] == 198 && (o[1] == 18 || o[1] == 19))     // benchmarking
+                || (o[0] == 198 && o[1] == 51 && o[2] == 100)      // TEST-NET-2
+                || (o[0] == 203 && o[1] == 0 && o[2] == 113)       // TEST-NET-3
+                || o[0] >= 240)                                    // reserved/broadcast
+        }
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return ip_is_public(&IpAddr::V4(mapped));
+            }
+            !(v6.is_loopback() || v6.is_unspecified() || v6.is_multicast()
+                || v6.is_unicast_link_local() || v6.is_unique_local())
+        }
+    }
+}
+
+fn validate_pack_url(raw: &str) -> Result<url::Url, String> {
+    let u = url::Url::parse(raw).map_err(|e| format!("Invalid URL: {}", e))?;
+    if u.scheme() != "https" {
+        return Err("Only https:// pack URLs are allowed".into());
+    }
+    if u.host_str().is_none() {
+        return Err("URL has no host".into());
+    }
+    Ok(u)
+}
+
+/// DNS resolver that refuses non-public destinations. Returning the validated
+/// addresses also pins the DNS answer for the actual connect, which closes
+/// the rebind window between "check IP" and "connect" (review SSRF fix).
+fn public_resolver() -> impl Fn(&str) -> std::io::Result<Vec<std::net::SocketAddr>> + Send + Sync {
+    |addr: &str| {
+        use std::net::ToSocketAddrs;
+        let resolved: Vec<std::net::SocketAddr> = addr.to_socket_addrs()?;
+        let public: Vec<_> = resolved.into_iter().filter(|a| ip_is_public(&a.ip())).collect();
+        if public.is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "pack URL resolves to a non-public address",
+            ));
+        }
+        Ok(public)
+    }
+}
+
 // Task5: fetch a pack from a URL (explicit user action; response capped at 1MB)
 #[tauri::command]
 async fn fetch_pack_url(url: String) -> Result<String, String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("URL must start with http(s)://".into());
-    }
+    validate_pack_url(&url)?;
     let text = tauri::async_runtime::spawn_blocking(move || {
         use std::io::Read;
-        let resp = ureq::get(&url).timeout(std::time::Duration::from_secs(15)).call()
-            .map_err(|e| format!("HTTP error: {}", e))?;
-        let mut buf = String::new();
-        resp.into_reader()
-            .take(1024 * 1024)
-            .read_to_string(&mut buf)
-            .map_err(|e| format!("Read error: {}", e))?;
-        Ok::<String, String>(buf)
+        let agent = ureq::AgentBuilder::new()
+            .redirects(0)           // manual: every hop is re-validated below
+            .https_only(true)       // also refuses https -> http downgrades
+            .timeout(std::time::Duration::from_secs(15))
+            .resolver(public_resolver())
+            .build();
+        let mut current = url;
+        for _ in 0..=MAX_PACK_REDIRECTS {
+            let resp = agent.get(&current).call()
+                .map_err(|e| format!("HTTP error: {}", e))?;
+            if (300..400).contains(&resp.status()) {
+                let loc = resp.header("Location").ok_or("Redirect without Location")?;
+                let next = url::Url::parse(&current)
+                    .and_then(|b| b.join(loc))
+                    .map_err(|e| format!("Bad redirect target: {}", e))?;
+                validate_pack_url(next.as_str())?;
+                current = next.to_string();
+                continue;
+            }
+            let mut buf = String::new();
+            resp.into_reader()
+                .take(MAX_PACK_BYTES)
+                .read_to_string(&mut buf)
+                .map_err(|e| format!("Read error: {}", e))?;
+            return Ok::<String, String>(buf);
+        }
+        Err("Too many redirects".into())
     }).await.map_err(|e| format!("Task failed: {}", e))??;
     Ok(text)
 }
@@ -614,6 +740,11 @@ async fn pick_pack_file(app: AppHandle) -> Result<Option<PickedFile>, String> {
     let picked = rx.await.map_err(|e| format!("Dialog failed: {}", e))?;
     let Some(fp) = picked else { return Ok(None) };
     let path = fp.as_path().ok_or_else(|| "Invalid path".to_string())?;
+    // Review F32: same size cap as direct import — read happens before preview.
+    let size = std::fs::metadata(&path).map_err(|e| format!("Stat failed: {}", e))?.len();
+    if size > MAX_PACK_FILE_BYTES {
+        return Err(format!("Pack file too large ({} bytes > {})", size, MAX_PACK_FILE_BYTES));
+    }
     let text = std::fs::read_to_string(&path).map_err(|e| format!("Read failed: {}", e))?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     Ok(Some(PickedFile { name, text }))

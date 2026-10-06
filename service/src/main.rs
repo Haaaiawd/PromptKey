@@ -6,10 +6,15 @@ pub mod hotkey;
 pub mod injector;
 pub mod ipc;
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-pub fn run_service() {
+/// `stop` is the cooperative shutdown flag (review F01/F28/F50/F64).
+/// The loop exits promptly when set, then hotkeys/pipe workers are torn down
+/// so a restarted engine never duplicates registrations or listeners.
+pub fn run_service(stop: Arc<AtomicBool>) {
     // 初始化日志
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     println!("🔥 [INTERNAL_ENGINE] 提示词引擎正在子线程启动...");
@@ -38,7 +43,7 @@ pub fn run_service() {
     let ipc_client = ipc::IPCClient::default();
 
     // 7. 初始化逻辑注入服务端 (接收来自 GUI 的直接注入请求)
-    let inject_rx = crate::ipc::inject_server::start();
+    let inject_rx = crate::ipc::inject_server::start(stop.clone());
 
     // 8. 进入主循环
     println!("✅ [INTERNAL_ENGINE] 引擎就绪，等待指令...");
@@ -47,6 +52,9 @@ pub fn run_service() {
     let mut last_active_context: Option<context::AppContext> = None;
 
     loop {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
         // A. 检查来自 GUI 的点选注入请求
         while let Ok(req) = inject_rx.try_recv() {
             println!("🎯 [ENGINE] 收到 GUI 注入请求: ID={}", req.prompt_id);
@@ -96,34 +104,64 @@ pub fn run_service() {
         // 防止空转
         thread::sleep(Duration::from_millis(10));
     }
+
+    // Shutdown: stop hotkey worker (unregisters hotkey ids) and drop the pipe
+    // receiver; the inject server thread exits via its own stop watch.
+    println!("🛑 [INTERNAL_ENGINE] 引擎停止");
+    hotkey_service.stop();
 }
 
-/// Phase 2 D1+D5: render a prompt's template content.
+/// Phase 2 D1+D5: render a prompt's template content in a single pass.
 /// - Custom {{var}} placeholders are filled from `vars_json` ({"name": "value"}).
 /// - Automatic variables are always replaced: {{clipboard}}, {{date}}, {{time}}.
 ///   {{date}}/{{time}} are computed in UTC (local-time APIs are Task6 work).
+/// Single-pass semantics (review F05/F20/F39/F66): supplied values are inserted
+/// literally and never re-scanned, and automatic names are reserved — a
+/// caller-supplied "clipboard"/"date"/"time" key cannot shadow the real values.
+/// Whitespace inside braces is accepted ({{ name }} — F25/F35/F48/F69).
 fn render_template(content: &str, vars_json: Option<&str>) -> String {
-    let mut out = content.to_string();
-
-    if let Some(json) = vars_json {
-        if let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json) {
-            for (k, v) in map {
-                let val = v.as_str().unwrap_or_default();
-                out = out.replace(&format!("{{{{{}}}}}", k), val);
+    let user_vars: serde_json::Map<String, serde_json::Value> = vars_json
+        .and_then(|j| serde_json::from_str(j).ok())
+        .unwrap_or_default();
+    let mut clip: Option<String> = None;
+    let mut now: Option<(String, String)> = None;
+    let is_var_name = |s: &str| {
+        let mut cs = s.chars();
+        matches!(cs.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+            && cs.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
+    };
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(start) = rest.find("{{") {
+        let (head, tail) = rest.split_at(start);
+        out.push_str(head);
+        let inner = &tail[2..];
+        match inner.find("}}") {
+            Some(end) if is_var_name(inner[..end].trim()) => {
+                let name = inner[..end].trim();
+                match name {
+                    "clipboard" => {
+                        let v = clip.get_or_insert_with(|| injector::clipboard_text().unwrap_or_default());
+                        out.push_str(v.as_str());
+                    }
+                    "date" | "time" => {
+                        let dt = now.get_or_insert_with(utc_now_strings);
+                        out.push_str(if name == "date" { dt.0.as_str() } else { dt.1.as_str() });
+                    }
+                    _ => match user_vars.get(name).and_then(|v| v.as_str()) {
+                        Some(v) => out.push_str(v),
+                        None => out.push_str(&tail[..end + 4]), // unresolved stays literal
+                    },
+                }
+                rest = &inner[end + 2..];
+            }
+            _ => {
+                out.push_str("{{");
+                rest = inner;
             }
         }
     }
-
-    // Automatic variables (no form required)
-    if out.contains("{{clipboard}}") {
-        let clip = injector::clipboard_text().unwrap_or_default();
-        out = out.replace("{{clipboard}}", &clip);
-    }
-    if out.contains("{{date}}") || out.contains("{{time}}") {
-        let (date, time) = utc_now_strings();
-        out = out.replace("{{date}}", &date);
-        out = out.replace("{{time}}", &time);
-    }
+    out.push_str(rest);
     out
 }
 
@@ -265,5 +303,5 @@ fn handle_injection_request(
 // 为了作为二进制文件运行时兼容
 #[allow(dead_code)]
 fn main() {
-    run_service();
+    run_service(Arc::new(AtomicBool::new(false)));
 }

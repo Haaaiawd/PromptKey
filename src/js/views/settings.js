@@ -3,6 +3,7 @@ import { t, setLangPref, getLangPref } from '../i18n.js';
 import { setThemeMode, getThemeMode } from '../theme.js';
 import { toast, confirmModal } from '../toast.js';
 import { ipc, state } from '../store.js';
+import { previewPackJson } from './library.js';
 
 export async function renderSettings() {
   // sync selects with current prefs
@@ -66,10 +67,12 @@ export function wireSettings({ syncShell }) {
   $('#defaultPromptSel')?.addEventListener('change', async e => {
     const v = e.target.value;
     try {
+      // Review F61: write the id BEFORE flipping mode to fixed — a quick-hotkey
+      // press between the two calls would otherwise read a stale/empty id.
       if (v === 'last_used') await ipc('set_app_setting', { key: 'default_prompt_mode', value: 'last_used' });
       else {
-        await ipc('set_app_setting', { key: 'default_prompt_mode', value: 'fixed' });
         await ipc('set_app_setting', { key: 'default_prompt_id', value: v });
+        await ipc('set_app_setting', { key: 'default_prompt_mode', value: 'fixed' });
       }
       toast('ok', t('toast.saved'));
     } catch { /* toasted */ }
@@ -83,10 +86,10 @@ export function wireSettings({ syncShell }) {
   });
   $('#importBtn')?.addEventListener('click', async () => {
     try {
-      const r = await ipc('import_prompts_pack');
-      if (r && r.added !== undefined) {
-        toast('ok', r.skipped ? t('lib.importedSkip', { n: r.added, s: r.skipped }) : t('lib.imported', { n: r.added }));
-      }
+      // Review F36: route through the same pick→preview→import flow the
+      // library uses instead of inserting unseen prompts directly.
+      const r = await ipc('pick_pack_file');
+      if (r) previewPackJson(r.text);
     } catch { /* toasted */ }
   });
   $('#libExport')?.addEventListener('click', () => $('#exportBtn')?.click());

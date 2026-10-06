@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { toast } from '../toast.js';
 import { ipc, loadPrompts, rebuildIndex } from '../store.js';
+import { renderPrompts } from './prompts.js';
 
 let packs = [];
 
@@ -16,6 +17,12 @@ export function validatePack(obj) {
       content: p.content,
       tags: Array.isArray(p.tags) ? p.tags.filter(x => typeof x === 'string') : [],
       app_scopes: Array.isArray(p.app_scopes) ? p.app_scopes.filter(x => typeof x === 'string') : [],
+      // Review F21/F34/F37/F46/F58: keep wheel membership/order + prompt props
+      // through an export→import round-trip instead of dropping them here.
+      pinned: !!p.pinned,
+      inject_order: typeof p.inject_order === 'string' ? p.inject_order : null,
+      content_type: typeof p.content_type === 'string' ? p.content_type : 'text',
+      variables_json: typeof p.variables_json === 'string' ? p.variables_json : null,
     }));
   return { meta: obj.pack || {}, prompts };
 }
@@ -28,14 +35,19 @@ export async function importPackPrompts(list) {
     await ipc('create_prompt', {
       prompt: {
         id: null, name: p.name, content: p.content, tags: p.tags,
-        content_type: 'text', variables_json: null,
+        content_type: p.content_type || 'text', variables_json: p.variables_json ?? null,
         app_scopes_json: JSON.stringify(p.app_scopes || []),
-        inject_order: null, version: 1, updated_at: null,
+        inject_order: p.inject_order ?? null, version: 1, updated_at: null,
       },
-    });
+    }).then(async id => { if (p.pinned) await ipc('toggle_prompt_pin', { id }); });
     added++;
     existing.add(p.name);
   }
+  // Review F12/F26/F29/F57: re-fetch before indexing — the list we loaded
+  // above predates the inserts, so the grid/wheel would render stale data.
+  await loadPrompts();
+  rebuildIndex();
+  renderPrompts();
   return { added, skipped };
 }
 
@@ -114,7 +126,6 @@ function openPackPreview(meta, prompts, { warn = true } = {}) {
     mask.classList.remove('show');
     try {
       const { added, skipped } = await importPackPrompts(chosen);
-      rebuildIndex();
       toast('ok', skipped ? t('lib.importedSkip', { n: added, s: skipped }) : t('lib.imported', { n: added }));
     } catch { /* toasted */ }
   };

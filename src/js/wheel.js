@@ -1,8 +1,8 @@
 // PromptKey Wheel — 280px radial, cursor-following, type-to-filter (Wheel A)
 import { $, $$, esc, storage } from './dom.js';
 import { icon } from './icons.js';
-import { t, initI18n } from './i18n.js';
-import { applyTheme } from './theme.js';
+import { t, refreshI18n } from './i18n.js';
+import { refreshTheme } from './theme.js';
 import { toast } from './toast.js';
 import { state, loadPrompts, wheelPrompts, customVars } from './store.js';
 
@@ -13,6 +13,8 @@ let page = 0;
 let matches = [];
 let fuse = null;
 let hiding = false;
+// Review F60: invalidate a pending prepare() when a blur/hide fires mid-load.
+let prepareGen = 0;
 
 const win = () => window.__TAURI__?.window?.getCurrentWindow?.();
 
@@ -23,14 +25,16 @@ async function invokeRaw(cmd, args) {
 }
 
 function syncPrefs() {
-  // re-read in case the user changed theme/lang in the main window since last show
-  applyTheme();
-  initI18n();
+  // Review F59: re-read storage — the main window may have changed theme/lang
+  // since this wheel window was created (module state is cached at load).
+  refreshTheme();
+  refreshI18n();
   const ws = storage.get('pk-wheel-sort', 'auto');
   state.wheelSort = ws;
 }
 
 async function prepare() {
+  const gen = ++prepareGen;
   syncPrefs();
   const ct = $('#centerTxt');
   if (ct) ct.textContent = t('wh.esc');
@@ -40,6 +44,7 @@ async function prepare() {
     state.prompts = [];
     console.error('wheel load failed', e);
   }
+  if (gen !== prepareGen) return; // superseded or blurred while loading
   const pins = wheelPrompts();
   fuse = typeof Fuse !== 'undefined'
     ? new Fuse(pins, { keys: [{ name: 'name', weight: 0.7 }, { name: 'tags', weight: 0.2 }, { name: 'content', weight: 0.1 }], threshold: 0.34, ignoreLocation: true })
@@ -47,6 +52,7 @@ async function prepare() {
   state._wheelPool = pins;
   query = ''; page = 0;
   await clampToViewport();
+  if (gen !== prepareGen) return;
   const w = $('#wheel');
   if (!w) return;
   w.classList.remove('closing');
@@ -61,11 +67,15 @@ async function clampToViewport() {
   try {
     const [pos, size, monitor] = await Promise.all([w.outerPosition(), w.outerSize(), w.currentMonitor()]);
     const sf = monitor?.scaleFactor || 1;
+    // Review F03/F56: monitor origins can be negative on secondary displays —
+    // clamp inside position+size, not 0..size.
+    const mx = monitor?.position?.x ?? 0;
+    const my = monitor?.position?.y ?? 0;
     const mw = monitor?.size.width ?? 4096;
     const mh = monitor?.size.height ?? 2160;
     const m = 16 * sf;
-    const x = Math.min(Math.max(pos.x, m), Math.max(m, mw - size.width - m));
-    const y = Math.min(Math.max(pos.y, m), Math.max(m, mh - size.height - m));
+    const x = Math.min(Math.max(pos.x, mx + m), Math.max(mx + m, mx + mw - size.width - m));
+    const y = Math.min(Math.max(pos.y, my + m), Math.max(my + m, my + mh - size.height - m));
     if (x !== pos.x || y !== pos.y) {
       await w.setPosition(new window.__TAURI__.window.PhysicalPosition(Math.round(x), Math.round(y)));
     }
@@ -122,6 +132,7 @@ function render() {
 }
 
 function hide() {
+  prepareGen++; // any in-flight prepare() must not mark a hidden wheel open
   if (!open || hiding) return;
   hiding = true;
   const w = $('#wheel');
@@ -225,11 +236,13 @@ $('#wheelCenter')?.addEventListener('click', e => {
 
 // D4: quick-create — right-click or long-press(500ms) the center dot
 // creates a prompt named after the current filter text, pins it, keeps wheel open.
+// Review F18/F74: seed content with the typed text so the new petal injects
+// something real instead of an empty body (user can edit it later).
 async function quickCreate() {
   const name = (query || '').trim() || t('wh.newName');
   try {
     const id = await invokeRaw('create_prompt', {
-      prompt: { id: null, name, content: '', tags: [], content_type: 'text', variables_json: null, app_scopes_json: '[]', inject_order: null, version: 1, updated_at: null },
+      prompt: { id: null, name, content: name, tags: [], content_type: 'text', variables_json: null, app_scopes_json: '[]', inject_order: null, version: 1, updated_at: null },
     });
     await invokeRaw('toggle_prompt_pin', { id });
     await loadPrompts();

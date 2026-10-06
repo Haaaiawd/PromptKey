@@ -451,13 +451,16 @@ impl Database {
             return Ok(None);
         }
 
-        // last_used: most recent successful injection
+        // last_used: most recent successful injection of a prompt that still
+        // exists (review F38/F72: a deleted prompt must not shadow survivors)
+        // with an id tie-break for same-second logs (review F47).
         let last_id: Option<i32> = self
             .conn
             .query_row(
-                "SELECT prompt_id FROM usage_logs
-                 WHERE success = 1 AND prompt_id IS NOT NULL
-                 ORDER BY created_at DESC LIMIT 1",
+                "SELECT u.prompt_id FROM usage_logs u
+                 WHERE u.success = 1 AND u.prompt_id IS NOT NULL
+                   AND EXISTS (SELECT 1 FROM prompts p WHERE p.id = u.prompt_id)
+                 ORDER BY u.created_at DESC, u.id DESC LIMIT 1",
                 [],
                 |row| row.get(0),
             )

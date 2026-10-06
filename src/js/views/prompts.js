@@ -220,12 +220,14 @@ export function wirePrompts({ openPreview }) {
   });
 
   $('#wheelSortBtn')?.addEventListener('click', async () => {
+    // Review F16/F23/F49/F73: capture the *displayed* order BEFORE flipping to
+    // manual — after the toggle wheelPrompts() re-sorts by stale inject_order
+    // values and the seed would encode positions the user never saw.
+    const seedIds = state.wheelSort === 'manual' ? null : wheelPrompts().map(p => p.id);
     state.wheelSort = state.wheelSort === 'manual' ? 'auto' : 'manual';
     storage.set('pk-wheel-sort', state.wheelSort);
-    if (state.wheelSort === 'manual') {
-      // seed manual order from current auto order so it doesn't look random
-      const ids = wheelPrompts().map(p => p.id);
-      try { await ipc('set_pin_order', { ids }); await loadPrompts(); rebuildIndex(); } catch { /* toasted */ }
+    if (seedIds) {
+      try { await ipc('set_pin_order', { ids: seedIds }); await loadPrompts(); rebuildIndex(); } catch { /* toasted */ }
     }
     renderPrompts();
   });

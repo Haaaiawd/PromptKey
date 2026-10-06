@@ -68,7 +68,9 @@ function pinOrder(p) {
 }
 
 const VAR_RE = /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g;
-export const AUTO_VARS = new Set(['clipboard', 'date']);
+// Review F14/F24/F70: the service renders {{time}} automatically, so it must
+// not open a fill form.
+export const AUTO_VARS = new Set(['clipboard', 'date', 'time']);
 
 export function extractVars(content) {
   const out = [];
@@ -85,6 +87,7 @@ export function renderVars(content, values = {}) {
   const pad = n => String(n).padStart(2, '0');
   const auto = {
     date: `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
+    time: `${pad(today.getHours())}:${pad(today.getMinutes())}`,
     clipboard: values.clipboard ?? '',
   };
   return String(content || '').replace(VAR_RE, (_, k) => {
@@ -134,7 +137,10 @@ export function filterPrompts() {
       const body = q.slice(2).toLowerCase();
       list = list.filter(p => p.content.toLowerCase().includes(body));
     } else if (fuse) {
-      list = fuse.search(q).map(r => r.item);
+      // Review F13: fuse indexes ALL prompts — keep the tag filter applied to
+      // its results instead of replacing the filtered list wholesale.
+      list = fuse.search(q).map(r => r.item)
+        .filter(p => !state.tagFilter || (p.tags || []).includes(state.tagFilter));
     } else {
       const s = q.toLowerCase();
       list = list.filter(p => p.name.toLowerCase().includes(s)

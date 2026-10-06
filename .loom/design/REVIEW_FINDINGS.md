@@ -5,80 +5,80 @@ Source: Devin Review jobs for PRs #3–#8 (extracted 2026-10-06 via `app.devin.a
 
 | # | PR | kind | file:line | 标题 | posted | 判定 | 理由 |
 |---|----|------|-----------|------|--------|------|------|
-| 1 | #3 | bug | src/main.rs:1162 | Settings restart leaves old engines running | GitHub | | |
-| 2 | #3 | bug | src/js/views/settings.js:52 | Injection switches do not change injection | GitHub | | |
-| 3 | #3 | bug | src/js/wheel.js:74 | Wheel escapes offset secondary monitors | GitHub | | |
-| 4 | #3 | security | src/main.rs:646 | Pack fetch exposes private network responses | GitHub | | |
-| 5 | #3 | security | service/src/main.rs:108 | Variable values can expand private clipboard data | GitHub | | |
-| 6 | #3 | analysis | src/js/wheel.js:184 | Variable inputs trigger prompt selection | dashboard | | |
-| 7 | #3 | analysis | service/src/db.rs:454 | Failed injections become quick-hotkey defaults | dashboard | | |
-| 8 | #3 | analysis | src/js/views/settings.js:18 | Saved switches silently turn on again | dashboard | | |
-| 9 | #3 | analysis | src/main.rs:529 | Wheel preview reuses an old target | dashboard | | |
-| 10 | #3 | analysis | service/src/ipc/inject_server.rs:66 | Long variable values lose substitution | dashboard | | |
-| 11 | #3 | analysis | src/js/views/library.js:40 | Built-in packs have no manifest | dashboard | | |
-| 12 | #3 | analysis | src/js/views/library.js:15 | Imports leave prompt lists stale | dashboard | | |
-| 13 | #3 | analysis | src/js/store.js:138 | Fuzzy search drops the tag filter | dashboard | | |
-| 14 | #3 | analysis | src/js/store.js:67 | Time placeholder opens an unnecessary form | dashboard | | |
-| 15 | #3 | analysis | service/src/main.rs:83 | Quick injection leaves custom fields literal | dashboard | | |
-| 16 | #3 | analysis | src/js/views/prompts.js:215 | Manual sort seeds from old positions | dashboard | | |
-| 17 | #4 | bug | service/src/main.rs:210 | Failed injections become the default prompt | GitHub | | |
-| 18 | #4 | bug | src/js/wheel.js:219 | Quick-created prompts inject empty text | GitHub | | |
-| 19 | #4 | security | src/main.rs:646 | Pack fetch exposes internal HTTP services | GitHub | | |
-| 20 | #4 | security | service/src/main.rs:108 | Submitted variable values trigger clipboard expansion | GitHub | | |
-| 21 | #4 | analysis | src/js/views/library.js:14 | Library import loses wheel configuration | dashboard | | |
-| 22 | #4 | analysis | service/src/config/mod.rs:29 | Saved clipboard preferences have no effect | dashboard | | |
-| 23 | #4 | analysis | src/js/views/prompts.js:214 | Manual order resets on mode switch | dashboard | | |
-| 24 | #4 | analysis | src/js/store.js:70 | Automatic time asks for manual entry | dashboard | | |
-| 25 | #4 | analysis | service/src/main.rs:108 | Spaced placeholders remain unrendered | dashboard | | |
-| 26 | #4 | analysis | src/js/views/library.js:23 | Library imports remain hidden until reload | dashboard | | |
-| 27 | #5 | bug | src/js/wheel.js:184 | Variable entry triggers unintended injections | GitHub | | |
-| 28 | #5 | bug | src/js/views/settings.js:49 | Saved settings leave old hotkeys active | GitHub | | |
-| 29 | #5 | bug | src/js/views/library.js:114 | Imported prompts stay absent from the grid | GitHub | | |
-| 30 | #5 | security | src/main.rs:646 | Pack fetching exposes local network responses | GitHub | | |
-| 31 | #5 | security | src/main.rs:647 | Plaintext imports permit pack tampering | GitHub | | |
-| 32 | #5 | security | src/main.rs:675 | Oversized pack files exhaust application memory | GitHub | | |
-| 33 | #5 | analysis | service/src/ipc/inject_server.rs:66 | Large variable values lose their substitutions | dashboard | | |
-| 34 | #5 | analysis | src/main.rs:543 | Pack backup drops prompt properties | dashboard | | |
-| 35 | #5 | analysis | service/src/main.rs:112 | Spaced placeholders survive variable entry | dashboard | | |
-| 36 | #5 | analysis | src/js/views/settings.js:84 | Settings import bypasses pack preview | dashboard | | |
-| 37 | #5 | analysis | src/js/views/library.js:14 | Library import discards wheel layout | dashboard | | |
-| 38 | #5 | analysis | service/src/db.rs:454 | Deleted prompt shadows last-used selection | dashboard | | |
-| 39 | #5 | analysis | service/src/main.rs:108 | Filled values are parsed as templates | dashboard | | |
-| 40 | #6 | bug | service/src/injector/mod.rs:377 | Failed paste discards clipboard contents | GitHub | | |
-| 41 | #6 | bug | service/src/injector/mod.rs:102 | Partial backups destroy clipboard formats | GitHub | | |
-| 42 | #6 | bug | service/src/injector/mod.rs:186 | Secure checks accumulate COM references | GitHub | | |
-| 43 | #6 | security | src/main.rs:647 | Pack fetch reaches internal services | GitHub | | |
-| 44 | #6 | security | service/src/injector/mod.rs:187 | Password inputs bypass the secure-field gate | GitHub | | |
-| 45 | #6 | analysis | service/src/ipc/inject_server.rs:66 | Long variable messages lose their values | dashboard | | |
-| 46 | #6 | analysis | src/js/views/library.js:14 | Library imports lose wheel assignments | dashboard | | |
-| 47 | #6 | analysis | service/src/db.rs:458 | Recent prompt ordering lacks a tie-breaker | dashboard | | |
-| 48 | #6 | analysis | service/src/main.rs:574 | Spaced placeholders survive injection | dashboard | | |
-| 49 | #6 | analysis | src/js/views/prompts.js:215 | Manual sorting unexpectedly reorders pins | dashboard | | |
-| 50 | #7 | bug | src/js/views/settings.js:63 | Settings changes multiply background engines | GitHub | | |
-| 51 | #7 | bug | service/src/injector/mod.rs:128 | Clipboard restoration loses image data | GitHub | | |
-| 52 | #7 | bug | service/src/ipc/inject_server.rs:66 | Large variable values disappear during injection | GitHub | | |
-| 53 | #7 | security | src/main.rs:646 | Pack fetch exposes local network responses | GitHub | | |
-| 54 | #7 | security | src/main.rs:647 | Plaintext pack downloads allow tampering | GitHub | | |
-| 55 | #7 | analysis | src/js/store.js:70 | Spaced placeholders survive injection | dashboard | | |
-| 56 | #7 | analysis | src/js/wheel.js:64 | Secondary-monitor wheel placement | dashboard | | |
-| 57 | #7 | analysis | src/js/views/library.js:115 | Library imports stay invisible | dashboard | | |
-| 58 | #7 | analysis | src/js/views/library.js:14 | Library round-trip loses wheel pins | dashboard | | |
-| 59 | #7 | analysis | src/js/wheel.js:25 | Wheel retains outdated preferences | dashboard | | |
-| 60 | #7 | analysis | src/js/wheel.js:49 | Blur during loading leaves wheel open internally | dashboard | | |
-| 61 | #7 | analysis | src/js/views/settings.js:71 | Default-prompt updates expose an old selection | dashboard | | |
-| 62 | #8 | bug | service/src/injector/windows_impl.rs:378 | Failed paste leaves clipboard overwritten | GitHub | | |
-| 63 | #8 | bug | service/src/injector/windows_impl.rs:129 | Image clipboard lost after injection | GitHub | | |
-| 64 | #8 | bug | src/main.rs:1090 | Settings changes multiply active engines | GitHub | | |
-| 65 | #8 | security | src/main.rs:573 | Pack fetch exposes private network responses | GitHub | | |
-| 66 | #8 | security | service/src/main.rs:108 | User variables override automatic clipboard value | GitHub | | |
-| 67 | #8 | analysis | service/src/injector/windows_impl.rs:164 | COM initialization grows with injections | dashboard | | |
-| 68 | #8 | analysis | service/src/ipc/inject_server.rs:66 | Large variable requests lose values | dashboard | | |
-| 69 | #8 | analysis | service/src/main.rs:112 | Spaced template variables remain unresolved | dashboard | | |
-| 70 | #8 | analysis | src/js/store.js:71 | Automatic time variable opens a form | dashboard | | |
-| 71 | #8 | analysis | src/main.rs:442 | Wheel cannot follow negative screen coordinates | dashboard | | |
-| 72 | #8 | analysis | service/src/db.rs:457 | Deleted prompt masks recent surviving prompt | dashboard | | |
-| 73 | #8 | analysis | src/js/views/prompts.js:223 | Manual mode starts in old order | dashboard | | |
-| 74 | #8 | analysis | src/js/wheel.js:231 | Quick-created petal injects nothing | dashboard | | |
+| 1 | #3 | bug | src/main.rs:1162 | Settings restart leaves old engines running | GitHub |FIXED | run_service gets shutdown flag; ServiceState stores JoinHandle; stop_service signals+joins; hotkey thread unregisters 4/5; inject server exits via select! |
+| 2 | #3 | bug | src/js/views/settings.js:52 | Injection switches do not change injection | GitHub |FIXED | real on #3 head (Injector ignored prefs); on #8 injector already consumes allow_clipboard/restore_clipboard/secure_gate — engine-restart fix (F01) makes them take effect |
+| 3 | #3 | bug | src/js/wheel.js:74 | Wheel escapes offset secondary monitors | GitHub |FIXED | clamp uses monitor position+size (negative origins ok); present_wheel zero-floor removed |
+| 4 | #3 | security | src/main.rs:646 | Pack fetch exposes private network responses | GitHub |FIXED | fetch_pack_url hardened: https-only, redirect=0 manual re-validation, resolver pins+rejects non-public IPs (loopback/private/link-local/CGNAT/metadata) |
+| 5 | #3 | security | service/src/main.rs:108 | Variable values can expand private clipboard data | GitHub |FIXED | single-pass render_template: replacement values never re-scanned |
+| 6 | #3 | analysis | src/js/wheel.js:184 | Variable inputs trigger prompt selection | dashboard |ALREADY FIXED | TASK-005 added var-fill/input exclusion in wheel keydown (wheel.js:196) |
+| 7 | #3 | analysis | service/src/db.rs:454 | Failed injections become quick-hotkey defaults | dashboard |ALREADY FIXED | TASK-005 logs after inject() with real success (service/main.rs:218-256) |
+| 8 | #3 | analysis | src/js/views/settings.js:18 | Saved switches silently turn on again | dashboard |ALREADY FIXED | real on #3 head (s.injection vs flat); current settings.js reads flat keys matching get_settings |
+| 9 | #3 | analysis | src/main.rs:529 | Wheel preview reuses an old target | dashboard |SKIPPED (by design) | preview intentionally injects toward the last real target — same semantics as hotkey path; no better preview target exists without new UX |
+| 10 | #3 | analysis | service/src/ipc/inject_server.rs:66 | Long variable values lose substitution | dashboard |FIXED | listen_once reads until newline/EOF, 256KB cap; malformed JSON rejected |
+| 11 | #3 | analysis | src/js/views/library.js:40 | Built-in packs have no manifest | dashboard |ALREADY FIXED | TASK-003 added src/packs/manifest.json + 4 pack files |
+| 12 | #3 | analysis | src/js/views/library.js:15 | Imports leave prompt lists stale | dashboard |FIXED | after import: loadPrompts()+rebuildIndex()+re-render grid/wheel mirror |
+| 13 | #3 | analysis | src/js/store.js:138 | Fuzzy search drops the tag filter | dashboard |FIXED | fuse results intersected with active tag filter |
+| 14 | #3 | analysis | src/js/store.js:67 | Time placeholder opens an unnecessary form | dashboard |FIXED | time added to AUTO_VARS + renderVars auto map |
+| 15 | #3 | analysis | service/src/main.rs:83 | Quick injection leaves custom fields literal | dashboard |SKIPPED (out of scope) | quick hotkey has no UI channel to collect vars; literal placeholders kept as honest output; routing through wheel = new feature |
+| 16 | #3 | analysis | src/js/views/prompts.js:215 | Manual sort seeds from old positions | dashboard |FIXED | capture displayed order before toggling to manual |
+| 17 | #4 | bug | service/src/main.rs:210 | Failed injections become the default prompt | GitHub |ALREADY FIXED | same code path as F07 |
+| 18 | #4 | bug | src/js/wheel.js:219 | Quick-created prompts inject empty text | GitHub |FIXED | quickCreate seeds content=typed text so petal injects something real |
+| 19 | #4 | security | src/main.rs:646 | Pack fetch exposes internal HTTP services | GitHub |FIXED | dup of F04 |
+| 20 | #4 | security | service/src/main.rs:108 | Submitted variable values trigger clipboard expansion | GitHub |FIXED | dup of F05 |
+| 21 | #4 | analysis | src/js/views/library.js:14 | Library import loses wheel configuration | dashboard |FIXED | validatePack/import/export round-trip pinned, inject_order, variables_json, content_type |
+| 22 | #4 | analysis | service/src/config/mod.rs:29 | Saved clipboard preferences have no effect | dashboard |FIXED | real on #4 head; config now consumed by injector + restart fix applies live |
+| 23 | #4 | analysis | src/js/views/prompts.js:214 | Manual order resets on mode switch | dashboard |FIXED | dup of F16 |
+| 24 | #4 | analysis | src/js/store.js:70 | Automatic time asks for manual entry | dashboard |FIXED | dup of F14 |
+| 25 | #4 | analysis | service/src/main.rs:108 | Spaced placeholders remain unrendered | dashboard |FIXED | render_template accepts {{ name }} (whitespace inside braces) |
+| 26 | #4 | analysis | src/js/views/library.js:23 | Library imports remain hidden until reload | dashboard |FIXED | dup of F12 |
+| 27 | #5 | bug | src/js/wheel.js:184 | Variable entry triggers unintended injections | GitHub |ALREADY FIXED | dup of F06 |
+| 28 | #5 | bug | src/js/views/settings.js:49 | Saved settings leave old hotkeys active | GitHub |FIXED | dup of F01 |
+| 29 | #5 | bug | src/js/views/library.js:114 | Imported prompts stay absent from the grid | GitHub |FIXED | dup of F12 |
+| 30 | #5 | security | src/main.rs:646 | Pack fetching exposes local network responses | GitHub |FIXED | dup of F04 |
+| 31 | #5 | security | src/main.rs:647 | Plaintext imports permit pack tampering | GitHub |FIXED | https-only enforced (https_only(true) + scheme gate) |
+| 32 | #5 | security | src/main.rs:675 | Oversized pack files exhaust application memory | GitHub |FIXED | 2MB cap on pick_pack_file + import_prompts_pack |
+| 33 | #5 | analysis | service/src/ipc/inject_server.rs:66 | Large variable values lose their substitutions | dashboard |FIXED | dup of F10 |
+| 34 | #5 | analysis | src/main.rs:543 | Pack backup drops prompt properties | dashboard |FIXED | export includes variables_json+content_type; import restores them |
+| 35 | #5 | analysis | service/src/main.rs:112 | Spaced placeholders survive variable entry | dashboard |FIXED | dup of F25 |
+| 36 | #5 | analysis | src/js/views/settings.js:84 | Settings import bypasses pack preview | dashboard |FIXED | settings import routed through pick_pack_file + previewPackJson |
+| 37 | #5 | analysis | src/js/views/library.js:14 | Library import discards wheel layout | dashboard |FIXED | dup of F21 |
+| 38 | #5 | analysis | service/src/db.rs:454 | Deleted prompt shadows last-used selection | dashboard |FIXED | resolve_default_prompt requires surviving prompt + id DESC tie-break |
+| 39 | #5 | analysis | service/src/main.rs:108 | Filled values are parsed as templates | dashboard |FIXED | dup of F05 |
+| 40 | #6 | bug | service/src/injector/mod.rs:377 | Failed paste discards clipboard contents | GitHub |FIXED | restore runs on every post-EmptyClipboard path incl. SendInput failure |
+| 41 | #6 | bug | service/src/injector/mod.rs:102 | Partial backups destroy clipboard formats | GitHub |FIXED | incomplete backup (non-GMEM/oversized formats) -> skip clipboard strategy entirely |
+| 42 | #6 | bug | service/src/injector/mod.rs:186 | Secure checks accumulate COM references | GitHub |FIXED | CoInitialize paired with CoUninitialize via guard |
+| 43 | #6 | security | src/main.rs:647 | Pack fetch reaches internal services | GitHub |FIXED | dup of F04 |
+| 44 | #6 | security | service/src/injector/mod.rs:187 | Password inputs bypass the secure-field gate | GitHub |FIXED | UIA GetFocusedElement probes the real focused element, not just HWND root |
+| 45 | #6 | analysis | service/src/ipc/inject_server.rs:66 | Long variable messages lose their values | dashboard |FIXED | dup of F10 |
+| 46 | #6 | analysis | src/js/views/library.js:14 | Library imports lose wheel assignments | dashboard |FIXED | dup of F21 |
+| 47 | #6 | analysis | service/src/db.rs:458 | Recent prompt ordering lacks a tie-breaker | dashboard |FIXED | dup of F38 (id DESC tie-break) |
+| 48 | #6 | analysis | service/src/main.rs:574 | Spaced placeholders survive injection | dashboard |FIXED | dup of F25 |
+| 49 | #6 | analysis | src/js/views/prompts.js:215 | Manual sorting unexpectedly reorders pins | dashboard |FIXED | dup of F16 |
+| 50 | #7 | bug | src/js/views/settings.js:63 | Settings changes multiply background engines | GitHub |FIXED | dup of F01 |
+| 51 | #7 | bug | service/src/injector/mod.rs:128 | Clipboard restoration loses image data | GitHub |FIXED | dup of F41 |
+| 52 | #7 | bug | service/src/ipc/inject_server.rs:66 | Large variable values disappear during injection | GitHub |FIXED | dup of F10 |
+| 53 | #7 | security | src/main.rs:646 | Pack fetch exposes local network responses | GitHub |FIXED | dup of F04 |
+| 54 | #7 | security | src/main.rs:647 | Plaintext pack downloads allow tampering | GitHub |FIXED | dup of F31 |
+| 55 | #7 | analysis | src/js/store.js:70 | Spaced placeholders survive injection | dashboard |FIXED | dup of F25 |
+| 56 | #7 | analysis | src/js/wheel.js:64 | Secondary-monitor wheel placement | dashboard |FIXED | dup of F03 |
+| 57 | #7 | analysis | src/js/views/library.js:115 | Library imports stay invisible | dashboard |FIXED | dup of F12 |
+| 58 | #7 | analysis | src/js/views/library.js:14 | Library round-trip loses wheel pins | dashboard |FIXED | dup of F21 |
+| 59 | #7 | analysis | src/js/wheel.js:25 | Wheel retains outdated preferences | dashboard |FIXED | syncPrefs re-reads localStorage (refreshTheme/refreshI18n) |
+| 60 | #7 | analysis | src/js/wheel.js:49 | Blur during loading leaves wheel open internally | dashboard |FIXED | generation guard: blur during async load invalidates pending prepare() |
+| 61 | #7 | analysis | src/js/views/settings.js:71 | Default-prompt updates expose an old selection | dashboard |FIXED | write default_prompt_id before default_prompt_mode |
+| 62 | #8 | bug | service/src/injector/windows_impl.rs:378 | Failed paste leaves clipboard overwritten | GitHub |FIXED | dup of F40 |
+| 63 | #8 | bug | service/src/injector/windows_impl.rs:129 | Image clipboard lost after injection | GitHub |FIXED | dup of F41 |
+| 64 | #8 | bug | src/main.rs:1090 | Settings changes multiply active engines | GitHub |FIXED | dup of F01 |
+| 65 | #8 | security | src/main.rs:573 | Pack fetch exposes private network responses | GitHub |FIXED | dup of F04 |
+| 66 | #8 | security | service/src/main.rs:108 | User variables override automatic clipboard value | GitHub |FIXED | automatic names reserved — user-supplied clipboard/date/time keys ignored |
+| 67 | #8 | analysis | service/src/injector/windows_impl.rs:164 | COM initialization grows with injections | dashboard |FIXED | dup of F42 |
+| 68 | #8 | analysis | service/src/ipc/inject_server.rs:66 | Large variable requests lose values | dashboard |FIXED | dup of F10 |
+| 69 | #8 | analysis | service/src/main.rs:112 | Spaced template variables remain unresolved | dashboard |FIXED | dup of F25 |
+| 70 | #8 | analysis | src/js/store.js:71 | Automatic time variable opens a form | dashboard |FIXED | dup of F14 |
+| 71 | #8 | analysis | src/main.rs:442 | Wheel cannot follow negative screen coordinates | dashboard |FIXED | dup of F03 (Rust-side zero floor removed) |
+| 72 | #8 | analysis | service/src/db.rs:457 | Deleted prompt masks recent surviving prompt | dashboard |FIXED | dup of F38 |
+| 73 | #8 | analysis | src/js/views/prompts.js:223 | Manual mode starts in old order | dashboard |FIXED | dup of F16 |
+| 74 | #8 | analysis | src/js/wheel.js:231 | Quick-created petal injects nothing | dashboard |FIXED | dup of F18 |
 
 ---
 

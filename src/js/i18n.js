@@ -48,3 +48,11 @@ export function setLangPref(p) {
 export function onLangChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
 export function initI18n() { applyI18n(); }
+
+// Re-read the stored pref — used by the wheel window, whose module state is
+// populated at load and would otherwise go stale (review F59).
+export function refreshI18n() {
+  pref = readPref();
+  lang = resolveLang(pref);
+  applyI18n();
+}

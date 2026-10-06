@@ -26,4 +26,11 @@ export function setThemeMode(m) {
 
 export function onThemeChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
+// Re-read the stored mode — used by the wheel window, whose module state is
+// populated at load and would otherwise go stale (review F59).
+export function refreshTheme() {
+  mode = readMode();
+  applyTheme();
+}
+
 mq.addEventListener('change', () => { if (mode === 'auto') { applyTheme(); listeners.forEach(fn => fn(resolvedTheme())); } });
