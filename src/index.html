@@ -149,9 +149,9 @@
             <select id="themeSel"><option value="dark" data-i18n="theme.dark">深色</option><option value="light" data-i18n="theme.light">浅色</option><option value="auto" data-i18n="theme.auto">跟随系统</option></select></div>
         </div>
         <div class="set-group"><h4 data-i18n="set.hotkey">全局热键</h4>
-          <div class="set-row"><div><div class="lbl" data-i18n="hk.wheel">呼出轮盘</div></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.wheel">呼出轮盘</div><div class="sub hk-state" id="hotkeyWheelState"></div></div>
             <input class="hotkey-input" id="hotkeyInput" spellcheck="false"></div>
-          <div class="set-row"><div><div class="lbl" data-i18n="hk.direct">快速注入（默认提示词）</div><div class="sub" data-i18n="hk.directSub">目标 = 最近使用第 1 位，可改为固定提示词</div></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.direct">快速注入（默认提示词）</div><div class="sub" data-i18n="hk.directSub">目标 = 最近使用第 1 位，可改为固定提示词</div><div class="sub hk-state" id="hotkeyQuickState"></div></div>
             <input class="hotkey-input" id="quickHotkeyInput" spellcheck="false"></div>
           <div class="set-row"><div><div class="lbl" data-i18n="hk.default">默认提示词</div></div>
             <select id="defaultPromptSel"></select></div>

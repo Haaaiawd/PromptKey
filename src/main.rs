@@ -64,29 +64,72 @@ impl ServiceState {
     }
     
     fn is_running(&mut self) -> bool {
+        // Honest check — a panicked engine left is_active=true while dead.
+        if self.is_active {
+            let dead = self.worker.as_ref().map(|w| w.is_finished()).unwrap_or(true);
+            if dead {
+                self.is_active = false;
+            }
+        }
         self.is_active
     }
-    
+
     fn start_service(&mut self) -> Result<(), String> {
         if self.is_active {
             println!("✅ 内嵌服务已在运行中");
             return Ok(());
         }
-        
+
         println!("🚀 正在启动内嵌提示词引擎 (Embedded Thread)...");
-        
+
         // 启动后台线程运行 Service 逻辑；stop 标志位让引擎循环可退出
+        service::set_engine_state(service::EngineState::Starting);
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let stop_thread = stop.clone();
         let worker = std::thread::spawn(move || {
-            // 注意：service::run_service 内部会处理循环
-            service::run_service(stop_thread);
+            // A panicking engine must not vanish silently — record it so
+            // check_hotkeys / apply_settings can surface a real error.
+            // (release builds abort on panic regardless; catch_unwind covers
+            // unwind profiles and any future change.)
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                service::run_service(stop_thread);
+            }));
+            if let Err(payload) = res {
+                let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic".to_string()
+                };
+                service::set_engine_state(service::EngineState::Failed(msg));
+            }
         });
 
         self.shutdown = Some(stop);
         self.worker = Some(worker);
         // 设置为已激活
         self.is_active = true;
+
+        // Bounded wait for the engine to prove itself: a crash during init
+        // (previously: env_logger re-init panic; still possible: db init) must
+        // come back as an error, not a green "started".
+        for _ in 0..200 {
+            match service::engine_state() {
+                service::EngineState::Running => break,
+                service::EngineState::Failed(e) => {
+                    self.is_active = false;
+                    return Err(format!("引擎启动失败: {}", e));
+                }
+                _ => {
+                    if self.worker.as_ref().map(|w| w.is_finished()).unwrap_or(true) {
+                        self.is_active = false;
+                        return Err("引擎启动失败: 线程异常退出".to_string());
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
         Ok(())
     }
     
@@ -146,6 +189,7 @@ fn main() {
             stop_service,
             restart_service,
             check_service_status,
+            check_hotkeys,
             apply_settings,
             get_settings,
             get_all_prompts,
@@ -1163,36 +1207,71 @@ fn load_or_default_config() -> Result<AppConfig, String> {
     }
 }
 
-// Normalize a hotkey string like "ctrl+alt+space" → "Ctrl+Alt+Space".
-// Always ensures Ctrl+Alt are present; falls back to `fallback` main key.
-fn normalize_hotkey(input: Option<String>, fallback_main: &str) -> String {
-    let mut hk = input.unwrap_or_default();
-    hk = hk.replace(" ", "");
-    let lower = hk.to_lowercase();
-    let allowed_main = [
-        "space","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z",
-        "0","1","2","3","4","5","6","7","8","9"
-    ];
-    let parts: Vec<&str> = lower.split('+').collect();
-    let mut mods = vec![];
-    let mut main: Option<&str> = None;
-    for p in parts {
-        match p {
-            "ctrl"|"control" => mods.push("Ctrl"),
-            "alt" => mods.push("Alt"),
-            "shift" => mods.push("Shift"),
-            other => {
-                if allowed_main.contains(&other) { main = Some(other); }
-            }
-        }
+// Normalize a hotkey string like "ctrl+alt+f5" → "Ctrl+Alt+F5".
+// The old version silently rewrote input: unknown keys fell back to a default
+// main key and Ctrl+Alt were force-injected — so "F9" was saved as
+// "Ctrl+Alt+Space" while the UI toasted success. Now the shared service parser
+// validates strictly; anything it can't parse is a visible error.
+fn canonicalize_hotkey(input: Option<String>, default: &str) -> Result<String, String> {
+    let raw = input.unwrap_or_default();
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(default.to_string());
     }
-    let main = main.unwrap_or(fallback_main);
-    if !mods.iter().any(|m| *m=="Ctrl") { mods.push("Ctrl"); }
-    if !mods.iter().any(|m| *m=="Alt") { mods.push("Alt"); }
-    let main_norm = if main == "space" { "Space".to_string() } else if main.len()==1 { main.to_uppercase() } else { main.to_string() };
-    let mut parts_out = mods;
-    parts_out.push(main_norm.as_str());
-    parts_out.join("+")
+    let parsed = service::hotkey::parse_hotkey(trimmed)
+        .map_err(|e| format!("热键无效: {}", e))?;
+    if parsed.modifiers == 0 {
+        // A bare key (e.g. "F9") as a global hotkey swallows normal typing —
+        // refuse it explicitly rather than letting registration "work" badly.
+        return Err("热键需要至少一个修饰键 (Ctrl/Alt/Shift/Win)".to_string());
+    }
+    Ok(parsed.canonical)
+}
+
+#[derive(Serialize)]
+struct HotkeyReport {
+    /// "running" | "starting" | "stopped" | "failed"
+    engine: String,
+    engine_error: Option<String>,
+    hotkeys: Vec<service::hotkey::HotkeyCheck>,
+}
+
+/// Self-check for the global hotkeys (brief Task 3): reports what the engine
+/// actually registered vs. what config asks for, plus a live availability probe
+/// per combo. This is the surface that makes silent hotkey death impossible.
+#[tauri::command]
+fn check_hotkeys() -> Result<HotkeyReport, String> {
+    let cfg = load_or_default_config()?;
+    let want = [(4u32, cfg.hotkey.clone()), (5u32, cfg.quick_hotkey.clone())];
+
+    // Registration lands within ms of engine start; when the engine just
+    // (re)started, give the worker a short bounded window so the report
+    // reflects the CURRENT combos, then take the snapshot as-is.
+    let deadline = std::time::Instant::now() + Duration::from_millis(1200);
+    loop {
+        let outcomes = service::hotkey::outcomes();
+        let covered = want
+            .iter()
+            .filter(|(_, c)| !c.is_empty())
+            .all(|(id, c)| outcomes.iter().any(|(i, r)| *i == *id && r.combo == *c));
+        let running = matches!(service::engine_state(), service::EngineState::Running);
+        if covered || !running || std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let (engine, engine_error) = match service::engine_state() {
+        service::EngineState::Running => ("running", None),
+        service::EngineState::Starting => ("starting", None),
+        service::EngineState::Failed(e) => ("failed", Some(e)),
+        service::EngineState::Stopped => ("stopped", None),
+    };
+    Ok(HotkeyReport {
+        engine: engine.into(),
+        engine_error,
+        hotkeys: service::hotkey::check(&want),
+    })
 }
 
 #[derive(Deserialize, Default)]
@@ -1213,10 +1292,13 @@ fn apply_settings(
     // 1) 读取现有配置
     let mut cfg = load_or_default_config()?;
 
-    // 2) 规范化并写入热键（主热键 + 轮盘快捷热键）
-    cfg.hotkey = normalize_hotkey(hotkey, "space");
-    if quick_hotkey.is_some() || cfg.quick_hotkey.is_empty() {
-        cfg.quick_hotkey = normalize_hotkey(quick_hotkey, "a");
+    // 2) 规范化并写入热键 — invalid input is now a visible error, never a
+    //    silent rewrite to the default.
+    cfg.hotkey = canonicalize_hotkey(hotkey, "Ctrl+Alt+Space")?;
+    if let Some(q) = quick_hotkey {
+        cfg.quick_hotkey = canonicalize_hotkey(Some(q), "Ctrl+Alt+A")?;
+    } else if cfg.quick_hotkey.is_empty() {
+        cfg.quick_hotkey = default_quick_hotkey();
     }
     if let Some(inj) = injection {
         if let Some(v) = inj.allow_clipboard { cfg.injection.allow_clipboard = v; }
@@ -1229,13 +1311,42 @@ fn apply_settings(
     let yaml = serde_yaml::to_string(&cfg).map_err(|e| format!("序列化配置失败: {}", e))?;
     std::fs::write(&path, yaml).map_err(|e| format!("写入配置失败: {}", e))?;
 
-    // 5) 平滑重启服务
+    // 5) 平滑重启服务 — stop_service joins the old engine (which itself joins
+    //    the hotkey worker after UnregisterHotKey), so the new worker never
+    //    races a lingering registration. start_service errs if the engine dies.
     let service_state = app.state::<Mutex<ServiceState>>();
     let mut service_state = service_state.lock().unwrap();
     let _ = service_state.stop_service();
-    // 给一点时间释放热键
-    std::thread::sleep(std::time::Duration::from_millis(150));
     if let Err(e) = service_state.start_service() { return Err(e); }
+
+    // Wait for the worker's registration verdict on the combos we just wrote;
+    // a conflict/unsupported combo must reach the user, not hide in a log.
+    let want = [(4u32, cfg.hotkey.clone()), (5u32, cfg.quick_hotkey.clone())];
+    let deadline = std::time::Instant::now() + Duration::from_millis(1500);
+    loop {
+        let outs = service::hotkey::outcomes();
+        let covered = want
+            .iter()
+            .filter(|(_, c)| !c.is_empty())
+            .all(|(id, c)| outs.iter().any(|(i, r)| *i == *id && r.combo == *c));
+        if covered || std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let failures: Vec<String> = service::hotkey::check(&want)
+        .into_iter()
+        .filter(|h| matches!(h.status.as_str(),
+            "failed" | "conflict" | "unsupported" | "lost" | "not_registered"))
+        .map(|h| format!(
+            "{}: {}",
+            h.canonical.unwrap_or_else(|| h.combo.clone()),
+            h.detail.unwrap_or_else(|| h.status.clone())
+        ))
+        .collect();
+    if !failures.is_empty() {
+        return Err(format!("设置已保存，但热键注册未生效： {}", failures.join("; ")));
+    }
 
     Ok("设置已保存并已重启服务".into())
 }
@@ -1253,16 +1364,23 @@ fn get_settings() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn reset_settings() -> Result<String, String> {
+fn reset_settings(app: AppHandle) -> Result<String, String> {
     // 删除现有配置文件
     let path = config_path()?;
     if path.exists() {
         std::fs::remove_file(&path).map_err(|e| format!("删除配置文件失败: {}", e))?;
     }
-    
+
     // 重新创建默认配置文件
     let _ = load_or_default_config()?;
-    
+
+    // Restart so defaults actually take effect — previously the engine kept
+    // the old hotkeys registered until a manual restart (silent staleness).
+    let service_state = app.state::<Mutex<ServiceState>>();
+    let mut service_state = service_state.lock().unwrap();
+    let _ = service_state.stop_service();
+    if let Err(e) = service_state.start_service() { return Err(e); }
+
     Ok("设置已重置".into())
 }
 
