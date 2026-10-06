@@ -2,5 +2,8 @@
   "zh-writing.json",
   "zh-dev.json",
   "en-translation.json",
-  "en-analysis.json"
+  "en-analysis.json",
+  "zh-prismix.json",
+  "zh-tornpaper-poster.json",
+  "zh-vela-prompt-architect.json"
 ]
