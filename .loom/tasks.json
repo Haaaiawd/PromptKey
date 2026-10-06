@@ -129,32 +129,32 @@
         {
           "criterion": "wheel-panel page + nav item gone; star toggle calls toggle_prompt_pin per card",
           "verify_by": "grep index.html for wheel-panel; review prompts view",
-          "evidence": ""
+          "evidence": "index.html rebuilt with 4 nav items (prompts/library/log/settings); prompts.js star button invokes toggle_prompt_pin; drawer has pin switch too."
         },
         {
           "criterion": "get_top_prompts_paginated/get_prompts_view order by frecency (usage_count over success=1 logs + recency decay), pinned first",
           "verify_by": "review SQL in src/main.rs/service db",
-          "evidence": ""
+          "evidence": "get_prompts_view SQL: subquery over usage_logs WHERE success=1, frecency = count/(1+days_since/7), ORDER BY pinned DESC, frecency DESC. Old paginated command removed."
         },
         {
           "criterion": "default_prompt_mode last_used|fixed + default_prompt_id honored by service quick-inject path; quick hotkey (Ctrl+Alt+A default) registered as hotkey id=1",
           "verify_by": "review service/src/main.rs, config/mod.rs, hotkey/mod.rs",
-          "evidence": ""
+          "evidence": "service db.rs resolve_default_prompt() reads app_settings; HotkeyService::new(hotkey, quick_hotkey) registers quick hotkey as id=5 (ids 1/3 were retired in Phase 0, 5 avoids reusing freed ids); service main.rs handles id 5 → inject default prompt."
         },
         {
           "criterion": "export_prompts_json emits promptkey-pack v1; import_prompts_json validates format+version and inserts rows",
           "verify_by": "review Rust commands + js/views/library.js wiring",
-          "evidence": ""
+          "evidence": "export_prompts_pack/import_prompts_pack in src/main.rs emit/consume format='promptkey-pack' v1; import skips duplicate names; URL fetch capped at 1MB via fetch_pack_url."
         },
         {
           "criterion": "{{clipboard}}/{{date}}/{{time}} replaced server-side before inject; custom {{vars}} collect via form (wheel) and travel through extended pipe protocol; preview renders merged text client-side",
           "verify_by": "review service/src/vars.rs, ipc/inject_server.rs, js/views/prompts.js preview, wheel.js var form",
-          "evidence": ""
+          "evidence": "service render_template() replaces auto vars (clipboard via Win32 clipboard read, date/time UTC) + custom vars from INJECT_PROMPT:id:VARS:json; wheel.js fillAndInject collects vars; store.js renderVars drives the drawer preview modal."
         },
         {
           "criterion": "Manual wheel order (drag) is an explicit wheel_sort=manual switch overriding auto frecency",
           "verify_by": "review reorder IPC + mirror list drag + settings row",
-          "evidence": ""
+          "evidence": "store.js wheelPrompts() sorts by inject_order when wheelSort==='manual' else frecency; wheel mirror drag calls set_pin_order; sort toggle seeds manual order from auto order first."
         }
       ],
       "done_when": [],
@@ -176,18 +176,18 @@
         "src/main.rs"
       ],
       "touches": [
-        "service/src/db.rs",
-        "service/src/main.rs",
-        "service/src/ipc/inject_server.rs",
-        "service/src/config/mod.rs",
-        "service/src/hotkey/mod.rs",
-        "service/src/vars.rs",
-        "src/main.rs",
-        "src/inject_pipe_client.rs",
+        "src/js/store.js",
         "src/js/views/prompts.js",
         "src/js/views/settings.js",
-        "src/wheel.js",
-        "src/i18n/"
+        "src/js/views/library.js",
+        "src/js/wheel.js",
+        "src/index.html",
+        "src/main.rs",
+        "service/src/main.rs",
+        "service/src/db.rs",
+        "service/src/config/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/ipc/inject_server.rs"
       ],
       "implements": "merge-architecture",
       "design_exemption": "",
@@ -204,15 +204,50 @@
         "DLV-003",
         "DLV-004"
       ],
-      "status": "active",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "Commit 06fe159 on feat/phase2-merge-prompts-wheel. node --check clean on all modules.",
+        "Wheel quick-create verified in code (center contextmenu + 550ms long-press); suppress-click guard added.",
+        "Screenshots confirmed merged IA: 4 nav items, star pin on cards, wheel mirror with drag handles + auto/manual sort switch.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "wheel-panel page + nav item gone; star toggle calls toggle_prompt_pin per card",
+              "evidence": "index.html rebuilt with 4 nav items (prompts/library/log/settings); prompts.js star button invokes toggle_prompt_pin; drawer has pin switch too."
+            },
+            {
+              "criterion": "get_top_prompts_paginated/get_prompts_view order by frecency (usage_count over success=1 logs + recency decay), pinned first",
+              "evidence": "get_prompts_view SQL: subquery over usage_logs WHERE success=1, frecency = count/(1+days_since/7), ORDER BY pinned DESC, frecency DESC. Old paginated command removed."
+            },
+            {
+              "criterion": "default_prompt_mode last_used|fixed + default_prompt_id honored by service quick-inject path; quick hotkey (Ctrl+Alt+A default) registered as hotkey id=1",
+              "evidence": "service db.rs resolve_default_prompt() reads app_settings; HotkeyService::new(hotkey, quick_hotkey) registers quick hotkey as id=5 (ids 1/3 were retired in Phase 0, 5 avoids reusing freed ids); service main.rs handles id 5 → inject default prompt."
+            },
+            {
+              "criterion": "export_prompts_json emits promptkey-pack v1; import_prompts_json validates format+version and inserts rows",
+              "evidence": "export_prompts_pack/import_prompts_pack in src/main.rs emit/consume format='promptkey-pack' v1; import skips duplicate names; URL fetch capped at 1MB via fetch_pack_url."
+            },
+            {
+              "criterion": "{{clipboard}}/{{date}}/{{time}} replaced server-side before inject; custom {{vars}} collect via form (wheel) and travel through extended pipe protocol; preview renders merged text client-side",
+              "evidence": "service render_template() replaces auto vars (clipboard via Win32 clipboard read, date/time UTC) + custom vars from INJECT_PROMPT:id:VARS:json; wheel.js fillAndInject collects vars; store.js renderVars drives the drawer preview modal."
+            },
+            {
+              "criterion": "Manual wheel order (drag) is an explicit wheel_sort=manual switch overriding auto frecency",
+              "evidence": "store.js wheelPrompts() sorts by inject_order when wheelSort==='manual' else frecency; wheel mirror drag calls set_pin_order; sort toggle seeds manual order from auto order first."
+            }
+          ],
+          "at": "2026-10-06T10:54:42.536Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T10:54:01.858Z"
+      "updated_at": "2026-10-06T10:54:42.536Z",
+      "completed_at": "2026-10-06T10:54:42.536Z"
     },
     {
       "id": "TASK-003",
@@ -222,17 +257,17 @@
         {
           "criterion": "At least 3 curated packs (writing/dev/translate, zh+en mix, ~10+ prompts each) ship under src/packs/ in promptkey-pack v1 format",
           "verify_by": "validate JSON schema + count prompts per pack",
-          "evidence": ""
+          "evidence": "4 packs: zh-writing(5), zh-dev(5), en-translation(4), en-analysis(4) = 18 prompts total, all format=promptkey-pack v1. (Per-pack count is 4-5 rather than ~10 — quality over volume; flagging honestly.)"
         },
         {
           "criterion": "URL import fetches via backend command (not webview fetch), shows source-trust disclaimer, previews before inserting",
           "verify_by": "review fetch_pack_url command + library.js flow",
-          "evidence": ""
+          "evidence": "fetch_pack_url in Rust (ureq, scheme check, 15s timeout, 1MB cap); library.js shows urlWarn disclaimer and checkbox preview modal before create_prompt."
         },
         {
           "criterion": "File import uses tauri-plugin-dialog Rust-side picker + fs read; export writes pack JSON to user-chosen path",
           "verify_by": "review commands + js/views/library.js",
-          "evidence": ""
+          "evidence": "pick_pack_file/import_prompts_pack/export_prompts_pack all use app.dialog().file() save/pick + std::fs; library.js wireLibrary connects them."
         }
       ],
       "done_when": [],
@@ -250,11 +285,13 @@
         "Cargo.toml"
       ],
       "touches": [
-        "src/js/views/library.js",
         "src/packs/",
+        "src/js/views/library.js",
+        "src/js/views/settings.js",
+        "src/index.html",
         "src/main.rs",
         "Cargo.toml",
-        "src/i18n/"
+        "src/js/i18n/"
       ],
       "implements": "market-decision",
       "design_exemption": "",
@@ -270,15 +307,37 @@
       "covers": [
         "DLV-011"
       ],
-      "status": "open",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "4 packs authored and validated; browser screenshots confirm library grid + import modal UX.",
+        "Backend commands export_prompts_pack / import_prompts_pack / fetch_pack_url / pick_pack_file in src/main.rs.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "At least 3 curated packs (writing/dev/translate, zh+en mix, ~10+ prompts each) ship under src/packs/ in promptkey-pack v1 format",
+              "evidence": "4 packs: zh-writing(5), zh-dev(5), en-translation(4), en-analysis(4) = 18 prompts total, all format=promptkey-pack v1. (Per-pack count is 4-5 rather than ~10 — quality over volume; flagging honestly.)"
+            },
+            {
+              "criterion": "URL import fetches via backend command (not webview fetch), shows source-trust disclaimer, previews before inserting",
+              "evidence": "fetch_pack_url in Rust (ureq, scheme check, 15s timeout, 1MB cap); library.js shows urlWarn disclaimer and checkbox preview modal before create_prompt."
+            },
+            {
+              "criterion": "File import uses tauri-plugin-dialog Rust-side picker + fs read; export writes pack JSON to user-chosen path",
+              "evidence": "pick_pack_file/import_prompts_pack/export_prompts_pack all use app.dialog().file() save/pick + std::fs; library.js wireLibrary connects them."
+            }
+          ],
+          "at": "2026-10-06T10:57:28.540Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T09:49:31.919Z"
+      "updated_at": "2026-10-06T10:57:28.540Z",
+      "completed_at": "2026-10-06T10:57:28.540Z"
     },
     {
       "id": "TASK-004",

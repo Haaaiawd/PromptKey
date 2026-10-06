@@ -1,0 +1,83 @@
+{
+  "format": "promptkey-pack",
+  "version": 1,
+  "pack": {
+    "name": "Analysis & Reasoning",
+    "author": "PromptKey",
+    "lang": "en-US",
+    "desc": "Structured analysis templates: pros/cons, decision memo, data critique, risk scan"
+  },
+  "prompts": [
+    {
+      "name": "Decision Memo",
+      "content": "Turn the following into a decision memo: Context / Options (with pros & cons) / Recommendation / Risks / Next steps.\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "decision"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Pros & Cons",
+      "content": "Analyze the following proposal. List pros and cons in a table, then give a one-paragraph verdict:\n\n{{clipboard}}",
+      "tags": [
+        "analysis"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Data Critique",
+      "content": "Critique the following data or chart description: what conclusions are supported, what is overclaimed, what data is missing?\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "data"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Risk Scan",
+      "content": "Review the following plan and list the top risks (likelihood × impact), each with a concrete mitigation:\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "risk"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Root Cause 5-Whys",
+      "content": "Apply the 5-Whys technique to the following problem. Show each why and the final root cause hypothesis:\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "rca"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Compare Options",
+      "content": "Compare the following options across {{criteria}} in a table, then recommend one:\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "decision"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Meeting Debrief",
+      "content": "From the following notes produce: decisions made, open questions, and action items (owner + due date if mentioned):\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "meeting"
+      ],
+      "app_scopes": []
+    },
+    {
+      "name": "Fact Check Draft",
+      "content": "List the factual claims in the following text that would need verification, and suggest what evidence to check for each:\n\n{{clipboard}}",
+      "tags": [
+        "analysis",
+        "review"
+      ],
+      "app_scopes": []
+    }
+  ]
+}
