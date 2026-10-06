@@ -1,11 +1,8 @@
 {
-  "status": "provisional",
+  "status": "researching",
   "title": "市场机制形态决策（本地优先产品的内容分发）",
   "field": "",
-  "scenario": "本地优先桌面应用的模板分发：无账号无后端，内置精选包 + 显式 URL 导入，信任靠策展与格式校验",
+  "scenario": "",
   "confirmed_at": "",
-  "created_at": "2026-10-06T08:17:44.645Z",
-  "updated_at": "2026-10-06T10:03:03.887Z",
-  "source": "agent",
-  "selected_at": "2026-10-06T10:03:03.887Z"
+  "created_at": "2026-10-06T08:17:44.645Z"
 }

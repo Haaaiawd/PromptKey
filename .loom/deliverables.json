@@ -25,9 +25,7 @@
       "title": "合并后信息架构（提示词+轮盘单页）",
       "kind": "feature",
       "notes": "",
-      "covered_by": [
-        "TASK-002"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.262Z"
     },
     {
@@ -36,10 +34,7 @@
       "title": "轮盘新形态（缩小/跟随光标/动效）",
       "kind": "feature",
       "notes": "",
-      "covered_by": [
-        "TASK-001",
-        "TASK-002"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.310Z"
     },
     {
@@ -48,9 +43,7 @@
       "title": "明暗双套设计 token 与动效规范",
       "kind": "module",
       "notes": "",
-      "covered_by": [
-        "TASK-001"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.365Z"
     },
     {
@@ -59,9 +52,7 @@
       "title": "中英双语文案层",
       "kind": "module",
       "notes": "",
-      "covered_by": [
-        "TASK-001"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.417Z"
     },
     {
@@ -70,9 +61,7 @@
       "title": "能力驱动的多策略注入栈",
       "kind": "module",
       "notes": "",
-      "covered_by": [
-        "TASK-004"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.468Z"
     },
     {
@@ -81,9 +70,7 @@
       "title": "前端稳定性加固（去 alert/错误边界）",
       "kind": "behavior",
       "notes": "",
-      "covered_by": [
-        "TASK-005"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.519Z"
     },
     {
@@ -92,9 +79,7 @@
       "title": "Linux 端移植（X11 可用/Wayland 降级）",
       "kind": "module",
       "notes": "",
-      "covered_by": [
-        "TASK-006"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.585Z"
     },
     {
@@ -103,9 +88,7 @@
       "title": "macOS 端移植（AX 权限路径）",
       "kind": "module",
       "notes": "",
-      "covered_by": [
-        "TASK-006"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.643Z"
     },
     {
@@ -114,9 +97,7 @@
       "title": "内置精选提示词库与导入",
       "kind": "feature",
       "notes": "",
-      "covered_by": [
-        "TASK-003"
-      ],
+      "covered_by": [],
       "created_at": "2026-10-06T08:18:46.704Z"
     }
   ]

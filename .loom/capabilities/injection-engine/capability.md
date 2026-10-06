@@ -6,7 +6,7 @@
 
 ## Project scenario
 
-Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门禁、跨平台 trait 边界，用户隐私边界是硬约束
+单用户桌面工具，在任意前台应用的光标处注入中等长度 UTF-16 文本（典型 50–3000 字符），要求 ≥99% 成功、P95 ≤250ms/1.2s、不污染用户剪贴板、不触碰安全控件。Phase 1 调研完成态，Phase 2 实施。
 
 ## Decision tree
 
@@ -17,7 +17,7 @@ Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门�
   - A: 检测到密码/安全控件 → 拒绝注入并记日志 → leads_to: 输出 Err("refused: secure field")
   - B: 探测结果为普通控件或探测失败 → 放行（fail-open + log）→ leads_to: C2
 - decide_by: Windows=UIA `IsPassword`/`ControlType`（只读探测）；macOS=AXRole==`AXSecureTextField`；Linux=无可靠探测，声明降级
-- source: phase1-synthesis.md（原始依据：North_Star.md 边界条款；UIA 被删前代码含 `IsPassword` 判定（git: `cc41dd0` 删除体）；当前代码该检测**已缺失**）
+- source: North_Star.md 边界条款；UIA 被删前代码含 `IsPassword` 判定（git: `cc41dd0` 删除体）；当前代码该检测**已缺失**
 - counterexample: 探测 API 本身不可用时若 fail-closed 会杀死全部注入——故选 fail-open + 日志
 - output: 注入许可位
 
@@ -28,7 +28,7 @@ Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门�
   - A: className ∈ {Edit, RichEdit20W*, RICHEDIT50W} → `EM_REPLACESEL`/`WM_PASTE` 直投，<10ms 不碰剪贴板 → leads_to: DONE
   - B: 否则 → leads_to: C3
 - decide_by: `GetClassNameW` 结果
-- source: phase1-synthesis.md（原始依据：Win32 控件消息语义；Chromium/Electron 不消费 WM_* 是反例来源）
+- source: Win32 控件消息语义；Chromium/Electron 不消费 WM_* 是反例来源
 - counterexample: 对话框式 NMEdit/自绘控件类名相似但消息语义不同——命中白名单类名才走
 - output: 成功注入或落入 C3
 
@@ -39,7 +39,7 @@ Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门�
   - A: 备份全格式→SetClipboard→模拟粘贴键（Win Ctrl+V；mac ⌘V；终端类换 Ctrl+Shift+V）→恢复剪贴板 → leads_to: DONE
   - B: 失败/超时/目标禁粘贴 → leads_to: C4
 - decide_by: 剪贴板 API 返回值 + 平台/终端能力判定（ConsoleWindowClass/WindowsTerminal 类名）
-- source: phase1-synthesis.md（原始依据：现有实现 `service/src/injector/mod.rs:82-254`；PHASE0 实测 2930 字符 264ms）
+- source: 现有实现 `service/src/injector/mod.rs:82-254`；PHASE0 实测 2930 字符 264ms
 - counterexample: 远程桌面剪贴板隔离、剪贴板管理器抢占 → 捕获错误降级
 - output: 成功注入或落入 C4
 
@@ -50,7 +50,7 @@ Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门�
   - A: Win `SendInput KEYEVENTF_UNICODE`（现有）/ mac CGEvent / Linux XTEST 或 uinput → leads_to: DONE
   - B: 也失败 → 记日志 + UI 明确报错（不静默）
 - decide_by: 平台实现表
-- source: phase1-synthesis.md（原始依据：`injector/mod.rs:256-323`；macOS `CGEventKeyboardSetUnicodeString`；Linux enigo x11rb/ydotool）
+- source: `injector/mod.rs:256-323`；macOS `CGEventKeyboardSetUnicodeString`；Linux enigo x11rb/ydotool
 - counterexample: 万字符级文本应拒绝走此路（慢且易丢）——长文本在 C3 之前就该走剪贴板
 - output: 注入结果 + 真实 strategy/duration 落库
 
@@ -61,7 +61,7 @@ Windows 桌面文本注入工具：Clipboard/SendInput 双策略、密码框门�
   - A: x11/xwayland → X11 全栈 → leads_to: C2–C4 等价实现
   - B: wayland → 检查 ydotoold/uinput 可用性：有→注入模式 opt-in；无→降级"复制到剪贴板+提示手动粘贴"→ leads_to: 降级输出
 - decide_by: 会话类型 + `/dev/uinput` 可写性 + portal 可用性
-- source: phase1-synthesis.md（原始依据：Mutter 未实现 virtual-keyboard-v1（GNOME 不支持 wtype）；ydotool uinput 全栈）
+- source: Mutter 未实现 virtual-keyboard-v1（GNOME 不支持 wtype）；ydotool uinput 全栈
 - counterexample: 勿承诺 Wayland 全功能——平台设计禁止任意注入
 - output: Linux 运行模式标记
 
