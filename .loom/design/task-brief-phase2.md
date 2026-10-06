@@ -35,6 +35,46 @@
 
 ---
 
+## Task 0：图标与视觉资产规则（硬约束，优先级最高，先读这个再动手）
+
+用户原话：「比如图标之类的，一定要用我们自己的，不要去自己瞎做嘛。如果可以的话，可以上网找这些图标或者 logo 来用，而不是去这个自己画，因为我们现在的 devin 比较菜。让 devin 懂这个道理」
+
+### 现有资产（已核实，别再问）
+
+| 文件 | 大小 | 用途 |
+|---|---|---|
+| `PromptKey.ico` | 32K | **Windows 应用图标，已在用** |
+| `PromptKey_aiextract.png` | 253K | **从原设计提取的品牌 logo 素材** |
+| `src/icons/` | 仅一份 README | 空目录，需生成实际图标文件 |
+
+### 必须遵守
+
+1. **禁止手画 SVG 图标。** 现有代码里那些手写几何 rect 当图标的做法必须全部替换 —— 例如 `src/index.html:44-58` 用 `<rect>` 拼的卡片/列表视图切换图标，`src/wheel.html:77,81` 的 `◀` `▶` 字符，`src/index.html` 里的 `<i class="icon-plus">` 之类。
+2. **UI 图标全部来自单一成熟开源图标库**，整组引入、风格统一，禁止东拼西凑混用。
+   推荐（按优先级，选一个）：
+   - **Lucide** (`https://lucide.dev`) — **首推**。1.5k+ 图标、统一 2px stroke / 24×24 grid、ISC 许可、提供单文件 SVG sprite，最适合 vanilla 零构建项目
+   - Tabler Icons (`https://tabler.io`) — 备选，更细、数量更多
+   - Phosphor Icons (`https://phosphoricons.com`) — 备选，多粗细变体
+   - 选定后**全项目只用这一个库**
+3. **品牌 logo / 应用图标必须派生自现有资产，不许重新设计**：
+   - 从 `PromptKey.ico` + `PromptKey_aiextract.png` 派生：系统托盘图标、关于页 logo、轮盘中心标记、安装包图标、macOS `.icns`、Linux 多尺寸 PNG
+   - **不要"创造"品牌图形**，不要改 logo 的造型/配色/构图
+4. **静态引入，不依赖运行时 CDN** —— Tauri 打包后可能离线。把图标文件下载到 `src/icons/` 下（SVG sprite 或单图标 SVG + 一个 `<symbol>` 索引），许可文件（LICENSE）一并放 `src/icons/` 里，注明库名与版本，可追溯。
+5. **图标正确性要求**：
+   - stroke 图标用 `currentColor`，确保明暗两套主题都可见
+   - 尺寸统一（16/20/24 三档），对齐网格
+   - 触摸/点击目标 ≥ 24×24（轮盘等密集区域用视觉尺寸 + padding 扩大命中区）
+   - 加 `aria-label` / `title`，别让图标成为唯一信息载体
+
+### 验收
+- 全项目搜不到手画几何图标与 emoji/字符图标（`◀ ▶ ⭐ ✓ ✕ 🔍 ⚙` 等）
+- 图标全部来自选定的单一库，风格与粗细统一
+- `src/icons/` 下有真实图标文件 + 许可文件 + 库版本记录
+- 品牌资产（logo / 托盘 / 各平台安装包图标）派生自 `PromptKey.ico` 与 `PromptKey_aiextract.png`
+- 最终交付里单独列一节 **"Icon sourcing"**：用了哪个库及版本、许可、下载方式、品牌派生关系、新增图标文件清单
+
+---
+
 # Phase 2 任务
 
 ## Task 1：UI/UX 基础 —— 设计系统落地 + 明暗 + 中英 + 动效
