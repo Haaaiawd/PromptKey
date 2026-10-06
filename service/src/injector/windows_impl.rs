@@ -201,7 +201,7 @@ pub fn is_secure_input(target_handle: u64) -> bool {
         // clipboard/SendInput — UIA write path is not resurrected).
         // CoInitialize is paired with CoUninitialize via `com_guard`.
         let _com_guard = ComGuard(CoInitialize(None).is_ok());
-        if let Ok(uia) = CoCreateInstance::<IUIAutomation, _, _>(&CUIAutomation, None, CLSCTX_ALL) {
+        if let Ok(uia) = CoCreateInstance::<_, IUIAutomation>(&CUIAutomation, None, CLSCTX_ALL) {
             // Review F44: ask UIA for the *focused element* — browser password
             // inputs have no HWND of their own, so ElementFromHandle(focus)
             // only sees the parent window and misses IsPassword.
@@ -310,7 +310,9 @@ impl WindowsInjector {
         if !opened {
             return Err("OpenClipboard failed".into());
         }
-        let _ = CloseClipboard();
+        unsafe {
+            let _ = CloseClipboard();
+        }
 
         // 2) Task6: 备份全部剪贴板格式（不再只是 CF_UNICODETEXT）
         // Review F41/F51/F63: if any format can't be snapshotted (bitmap,
