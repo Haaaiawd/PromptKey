@@ -207,25 +207,6 @@ fn handle_injection_request(
             let rendered = render_template(&prompt.content, vars_json);
             println!("✨ 正在注入: [{}]", prompt.name);
 
-            // 记录使用日志
-            // NOTE: Task6 (injection hardening) rewrites this block to log the
-            // real strategy/duration/result AFTER inject() returns.
-            if let Err(e) = db.log_usage(
-                prompt.id,
-                &prompt.name,
-                &app_name,
-                &window_title,
-                "Internal",
-                "Internal",
-                0,
-                true,
-                None,
-                "Injected",
-                action_type,
-            ) {
-                log::error!("无法记录使用日志: {}", e);
-            }
-
             // 构造注入上下文
             let injection_ctx = injector::InjectionContext {
                 app_name: app_name.clone(),
@@ -233,12 +214,46 @@ fn handle_injection_request(
                 window_handle: context.window_handle,
             };
 
-            // 调用注入器
-            if let Err(e) = injector.inject(&rendered, &injection_ctx) {
-                log::error!("❌ 注入失败: {}", e);
-                println!("❌ 注入失败: {}", e);
-            } else {
-                println!("✅ 注入成功");
+            // 调用注入器，然后按真实结果写日志（Task6：不再硬编码 success=true）
+            match injector.inject(&rendered, &injection_ctx) {
+                Ok((strategy, elapsed)) => {
+                    println!("✅ 注入成功");
+                    if let Err(e) = db.log_usage(
+                        prompt.id,
+                        &prompt.name,
+                        &app_name,
+                        &window_title,
+                        "Internal",
+                        &strategy,
+                        elapsed as u128,
+                        true,
+                        None,
+                        "Injected",
+                        action_type,
+                    ) {
+                        log::error!("无法记录使用日志: {}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("❌ 注入失败: {}", e);
+                    println!("❌ 注入失败: {}", e);
+                    let err_msg = e.to_string();
+                    if let Err(le) = db.log_usage(
+                        prompt.id,
+                        &prompt.name,
+                        &app_name,
+                        &window_title,
+                        "Internal",
+                        "Failed",
+                        0,
+                        false,
+                        Some(&err_msg),
+                        "Failed",
+                        action_type,
+                    ) {
+                        log::error!("无法记录失败日志: {}", le);
+                    }
+                }
             }
         }
         Err(e) => {

@@ -2,7 +2,8 @@ use crate::config::Config;
 use std::result::Result as StdResult;
 use std::time::Duration;
 use windows::{
-    Win32::Foundation::*, Win32::System::DataExchange::*, Win32::System::Memory::*,
+    Win32::Foundation::*, Win32::System::Com::*, Win32::System::DataExchange::*,
+    Win32::System::Memory::*, Win32::UI::Accessibility::*,
     Win32::UI::Input::KeyboardAndMouse::*, Win32::UI::WindowsAndMessaging::*,
 };
 
@@ -12,6 +13,13 @@ const CF_UNICODETEXT_CONST: u32 = 13;
 /// Maximum clipboard size to read (1M UTF-16 chars = 2MB)
 /// Prevents potential unsafe memory overflow attacks.
 const MAX_CLIPBOARD_SIZE: usize = 1_000_000;
+
+/// Phase 2 Task6: cap for per-format clipboard backup payload
+const MAX_BACKUP_FORMAT_BYTES: usize = 16 * 1024 * 1024;
+/// Total cap across all formats
+const MAX_BACKUP_TOTAL_BYTES: usize = 64 * 1024 * 1024;
+/// ES_PASSWORD window style for classic EDIT controls
+const ES_PASSWORD: usize = 0x0020;
 
 #[derive(Debug)]
 pub struct InjectionContext {
@@ -67,6 +75,128 @@ pub struct Injector {
 
 // describe_element deleted (T0-002 Step 1.2)
 
+/// Phase 2 Task6: snapshot every clipboard format whose data lives in a GMEM
+/// block (readable via GlobalLock). Non-GMEM formats (HBITMAP, HPALETTE,
+/// HMETAFILE, owner-display/DSP formats) are skipped — documented limitation:
+/// those cannot be snapshotted byte-for-byte. Plain text/RTF/HTML/PNG-DIB etc.
+/// are all preserved.
+fn backup_clipboard_all() -> Vec<(u32, Vec<u8>)> {
+    let mut out: Vec<(u32, Vec<u8>)> = Vec::new();
+    let mut total = 0usize;
+    unsafe {
+        if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
+            return out;
+        }
+        let mut fmt = 0u32;
+        loop {
+            fmt = EnumClipboardFormats(fmt);
+            if fmt == 0 {
+                break;
+            }
+            // owner-display / DSP formats are rendered on demand — cannot snapshot
+            if (0x0080..=0x008F).contains(&fmt) {
+                continue;
+            }
+            if let Ok(h) = GetClipboardData(fmt) {
+                let hg = HGLOBAL(h.0);
+                let size = GlobalSize(hg);
+                if size == 0 || size > MAX_BACKUP_FORMAT_BYTES || total + size > MAX_BACKUP_TOTAL_BYTES {
+                    continue;
+                }
+                let ptr = GlobalLock(hg) as *const u8;
+                if ptr.is_null() {
+                    continue; // not a GMEM block (HBITMAP etc.)
+                }
+                let mut buf = vec![0u8; size];
+                std::ptr::copy_nonoverlapping(ptr, buf.as_mut_ptr(), size);
+                let _ = GlobalUnlock(hg);
+                total += size;
+                out.push((fmt, buf));
+            }
+        }
+        let _ = CloseClipboard();
+    }
+    out
+}
+
+/// Phase 2 Task6: restore a full backup (as produced by backup_clipboard_all).
+fn restore_clipboard_all(items: &[(u32, Vec<u8>)]) {
+    unsafe {
+        if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
+            return;
+        }
+        let _ = EmptyClipboard();
+        for (fmt, data) in items {
+            if let Ok(hmem) = GlobalAlloc(GMEM_MOVEABLE, data.len().max(1)) {
+                let ptr = GlobalLock(hmem) as *mut u8;
+                if ptr.is_null() {
+                    let _ = GlobalFree(hmem);
+                    continue;
+                }
+                std::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+                let _ = GlobalUnlock(hmem);
+                // SetClipboardData takes ownership of the handle on success
+                if SetClipboardData(*fmt, HANDLE(hmem.0)).is_err() {
+                    let _ = GlobalFree(hmem);
+                }
+            }
+        }
+        let _ = CloseClipboard();
+    }
+}
+
+/// Phase 2 Task6: is the currently focused control a password/secure field?
+/// Two probes, both read-only:
+///  1) classic EDIT control with ES_PASSWORD style (GetGUIThreadInfo focus hwnd)
+///  2) UIA IsPassword on the focused element (no injection — detection only)
+/// Fail-open=false: on probe errors we return false but callers should treat
+/// "cannot determine" carefully — we only block on a positive signal.
+pub fn is_secure_input(target_hwnd: HWND) -> bool {
+    unsafe {
+        // Find the real focused control within the foreground window's thread
+        let tid = GetWindowThreadProcessId(target_hwnd, None);
+        let mut gti = GUITHREADINFO::default();
+        gti.cbSize = std::mem::size_of::<GUITHREADINFO>() as u32;
+        let focus = if tid != 0 && GetGUIThreadInfo(tid, &mut gti).is_ok() && !gti.hwndFocus.0.is_null() {
+            gti.hwndFocus
+        } else {
+            target_hwnd
+        };
+
+        // Probe 1: window class + ES_PASSWORD
+        let mut cls = [0u16; 64];
+        let n = GetClassNameW(focus, &mut cls);
+        if n > 0 {
+            let class = String::from_utf16_lossy(&cls[..n as usize]).to_lowercase();
+            if class.contains("password") {
+                return true;
+            }
+            if class.contains("edit") || class.contains("input") {
+                let style = GetWindowLongPtrW(focus, GWL_STYLE) as usize;
+                if style & ES_PASSWORD != 0 {
+                    return true;
+                }
+            }
+        }
+
+        // Probe 2: UIA IsPassword (read-only detection; injection path stays
+        // clipboard/SendInput — UIA write path is not resurrected).
+        // CoInitialize returns HRESULT (Err if already initialized under a
+        // different threading model) — either outcome is fine for a read probe.
+        let _ = CoInitialize(None);
+        if let Ok(uia) = CoCreateInstance::<IUIAutomation, _, _>(&CUIAutomation, None, CLSCTX_ALL) {
+            if let Ok(el) = uia.ElementFromHandle(focus) {
+                if let Ok(is_pwd) = el.CurrentIsPassword() {
+                    if is_pwd.as_bool() {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 impl Injector {
     pub fn new(_strategies: Vec<InjectionStrategy>, config: Config) -> Self {
         log::debug!("Creating injector with config-driven strategies");
@@ -86,21 +216,31 @@ impl Injector {
             context.window_title
         );
 
+        // Task6: never inject into password/secure fields (hard boundary)
+        if self.config.injection.secure_gate && is_secure_input(context.window_handle) {
+            log::warn!("🔒 Injection refused: focused control is a secure/password field");
+            return Err("Refused: focused control is a secure field".into());
+        }
+
         let start = std::time::Instant::now();
 
         // Primary strategy: Clipboard (works in 99% of scenarios)
-        match self.inject_via_clipboard(text, context) {
-            Ok(_) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                log::info!("Successfully injected text via Clipboard in {}ms", elapsed);
-                return Ok(("Clipboard".to_string(), elapsed));
+        if self.config.injection.allow_clipboard {
+            match self.inject_via_clipboard(text, context) {
+                Ok(_) => {
+                    let elapsed = start.elapsed().as_millis() as u64;
+                    log::info!("Successfully injected text via Clipboard in {}ms", elapsed);
+                    return Ok(("Clipboard".to_string(), elapsed));
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Clipboard injection failed: {}. Falling back to SendInput",
+                        e
+                    );
+                }
             }
-            Err(e) => {
-                log::warn!(
-                    "Clipboard injection failed: {}. Falling back to SendInput",
-                    e
-                );
-            }
+        } else {
+            log::info!("Clipboard strategy disabled by config (injection.allow_clipboard=false)");
         }
 
         // Fallback strategy: SendInput (for apps that block paste)
@@ -143,48 +283,27 @@ impl Injector {
         if !opened {
             return Err("OpenClipboard failed".into());
         }
+        let _ = CloseClipboard();
 
-        // 2) 读取现有剪贴板文本，用于注入后恢复
-        let mut prev_text: Option<Vec<u16>> = None;
-        unsafe {
-            if IsClipboardFormatAvailable(CF_UNICODETEXT_CONST).is_ok() {
-                if let Ok(h) = GetClipboardData(CF_UNICODETEXT_CONST) {
-                    let hg = HGLOBAL(h.0);
-                    let ptr = GlobalLock(hg) as *const u16;
-                    if !ptr.is_null() {
-                        let mut v = Vec::new();
-                        let mut p = ptr;
-                        let mut len = 0usize;
-                        loop {
-                            if len >= MAX_CLIPBOARD_SIZE {
-                                log::warn!(
-                                    "Clipboard backup exceeds max size ({}), truncating",
-                                    MAX_CLIPBOARD_SIZE
-                                );
-                                break;
-                            }
-                            let ch = *p;
-                            v.push(ch);
-                            if ch == 0 {
-                                break;
-                            }
-                            p = p.add(1);
-                            len += 1;
-                        }
-                        prev_text = Some(v);
-                        let _ = GlobalUnlock(hg);
-                    }
-                }
-            }
-        }
+        // 2) Task6: 备份全部剪贴板格式（不再只是 CF_UNICODETEXT）
+        let backup = backup_clipboard_all();
 
         // 3) 设置我们的文本到剪贴板
         unsafe {
+            if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
+                return Err("OpenClipboard failed (write)".into());
+            }
             let _ = EmptyClipboard();
             let mut utf16: Vec<u16> = text.encode_utf16().collect();
             utf16.push(0);
             let bytes = (utf16.len() * std::mem::size_of::<u16>()) as usize;
-            let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes).map_err(|_| "GlobalAlloc failed")?;
+            let hmem = match GlobalAlloc(GMEM_MOVEABLE, bytes) {
+                Ok(h) => h,
+                Err(_) => {
+                    let _ = CloseClipboard();
+                    return Err("GlobalAlloc failed".into());
+                }
+            };
             let ptr = GlobalLock(hmem) as *mut u8;
             if ptr.is_null() {
                 let _ = GlobalFree(hmem);
@@ -202,7 +321,8 @@ impl Injector {
         }
 
         // 4) 等待一下，确保热键修饰键已释放，然后模拟 Ctrl+V 粘贴
-        std::thread::sleep(Duration::from_millis(200));
+        //    (Task6: 150ms，缩短剪贴板污染窗口)
+        std::thread::sleep(Duration::from_millis(150));
         unsafe {
             let mut inputs = [
                 INPUT {
@@ -259,27 +379,12 @@ impl Injector {
             }
         }
 
-        // 5) 粘贴后稍等再恢复剪贴板（避免覆盖目标应用读取）
-        std::thread::sleep(Duration::from_millis(100));
+        // 5) 粘贴后稍等再恢复剪贴板（80ms，确保目标应用已读取）
+        std::thread::sleep(Duration::from_millis(80));
 
-        if let Some(v) = prev_text {
-            unsafe {
-                if OpenClipboard(HWND(std::ptr::null_mut())).is_ok() {
-                    let _ = EmptyClipboard();
-                    let bytes = (v.len() * std::mem::size_of::<u16>()) as usize;
-                    let hmem =
-                        GlobalAlloc(GMEM_MOVEABLE, bytes).map_err(|_| "GlobalAlloc failed")?;
-                    let ptr = GlobalLock(hmem) as *mut u8;
-                    if !ptr.is_null() {
-                        std::ptr::copy_nonoverlapping(v.as_ptr() as *const u8, ptr, bytes);
-                        let _ = GlobalUnlock(hmem);
-                        let _ = SetClipboardData(CF_UNICODETEXT_CONST, HANDLE(hmem.0));
-                    } else {
-                        let _ = GlobalFree(hmem);
-                    }
-                    let _ = CloseClipboard();
-                }
-            }
+        // Task6: 恢复全部已备份格式（受 injection.restore_clipboard 开关控制）
+        if self.config.injection.restore_clipboard && !backup.is_empty() {
+            restore_clipboard_all(&backup);
         }
 
         log::info!("Text injected via Clipboard paste");
