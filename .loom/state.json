@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "project": {
+    "name": "promptkey",
+    "status": "shaping",
+    "created_at": "2026-10-06T08:16:56.246Z",
+    "updated_at": "2026-10-06T08:17:37.241Z"
+  },
+  "understanding": {
+    "confirmed": [
+      {
+        "id": "F-001",
+        "text": "愿景：面向 AI 重度用户的系统级提示词管理器；全局热键 + 上下文感知 + 模板管理，任何软件中一键调用高质量 Prompt（North_Star.md L4）",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-002",
+        "text": "KPI：标准输入控件注入成功率 ≥99%；热键到注入 P95 ≤250ms（短文本）/≤1.2s（长文本）；驻留内存 ≤60MB，空闲 CPU≈0；7 天无崩溃（North_Star.md L20-23）",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-003",
+        "text": "边界：不注入密码框/安全输入控件；不越权高完整性窗口；本地优先（SQLite，加密可选）；任何云同步需显式开启（North_Star.md L25-28）",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-004",
+        "text": "里程碑：Windows MVP 先行；跨平台为后续扩展方向（North_Star.md L8，本 Phase 扩展为三平台调研）",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-005",
+        "text": "当前架构：单进程——service 以 lib 形式内嵌为 GUI 线程（src/main.rs:95-98），非独立进程；两根 Named Pipe：promptkey_selector(S→G) 与 promptkey_inject(G→S)",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-006",
+        "text": "注入现状：仅 Clipboard→SendInput 两级；UIA 于 Phase0(commit cc41dd0 等) 有意删除以降复杂度（CCN 72→9）",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.240Z"
+      },
+      {
+        "id": "F-007",
+        "text": "Owner 钦定原则：优雅简约；符合真实 UX；新机制可降级；稳定可用优先于功能丰富；UI/UX 全面革新含动效、明暗双主题、中英双版",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "F-008",
+        "text": "本 Phase（Phase1）只研究设计，不改 src/service/Cargo.toml 实现代码",
+        "source": "conversation",
+        "at": "2026-10-06T08:17:37.241Z"
+      }
+    ],
+    "assumptions": [
+      {
+        "id": "A-001",
+        "text": "市场功能在本地优先约束下优先内置精选库+URL 源导入，不做需要后端的社区形态；最终以 MARKET_DECISION.md 为准",
+        "status": "active",
+        "source": "agent",
+        "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "A-002",
+        "text": "提示词+轮盘合并的理解为：轮盘配置内联进提示词列表（pin 为一级操作），轮盘独立导航页取消；最终以 MERGE_ARCHITECTURE.md 为准",
+        "status": "active",
+        "source": "agent",
+        "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "A-003",
+        "text": "UI 延续 Zinc 深色工业风并扩展为明暗双套；不默认引入重型框架，倾向 vanilla+设计 token 化；最终以 UI_UX_REDESIGN.md 为准",
+        "status": "active",
+        "source": "agent",
+        "at": "2026-10-06T08:17:37.241Z"
+      }
+    ],
+    "unresolved": [
+      {
+        "id": "Q-001",
+        "question": "Wayland 下全局热键与注入的硬限制是否被接受为'Linux Wayland 降级为半可用'的产品立场？",
+        "impact": "high",
+        "status": "open",
+        "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "Q-002",
+        "question": "是否接受 macOS 辅助功能权限带来的首启引导成本？",
+        "impact": "medium",
+        "status": "open",
+        "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "Q-003",
+        "question": "内置精选提示词库的内容来源与版权审核由谁负责？",
+        "impact": "medium",
+        "status": "open",
+        "at": "2026-10-06T08:17:37.241Z"
+      }
+    ]
+  },
+  "keeper": {
+    "status": "not_run",
+    "attempts": []
+  }
+}
