@@ -38,6 +38,8 @@ async function prepare() {
   syncPrefs();
   const ct = $('#centerTxt');
   if (ct) ct.textContent = t('wh.esc');
+  const cc = $('#wheelCenter');
+  if (cc) cc.title = t('wh.centerHint');
   try {
     await loadPrompts();
   } catch (e) {
@@ -234,32 +236,26 @@ $('#wheelCenter')?.addEventListener('click', e => {
   hide();
 });
 
-// D4: quick-create — right-click or long-press(500ms) the center dot
-// creates a prompt named after the current filter text, pins it, keeps wheel open.
-// Review F18/F74: seed content with the typed text so the new petal injects
-// something real instead of an empty body (user can edit it later).
+// D4: quick-create — right-click or long-press(550ms) the center dot hands the
+// current filter text to the main window's new-prompt drawer and hides the
+// wheel. No record is created here: a prompt exists only after the user writes
+// real content and saves through the drawer's normal validation, so the wheel
+// can never gain a petal that injects a placeholder (review F18 follow-up: the
+// previous fix set content=name, which made petals inject their own name).
 async function quickCreate() {
-  const name = (query || '').trim() || t('wh.newName');
+  const name = (query || '').trim();
   try {
-    const id = await invokeRaw('create_prompt', {
-      prompt: { id: null, name, content: name, tags: [], content_type: 'text', variables_json: null, app_scopes_json: '[]', inject_order: null, version: 1, updated_at: null },
-    });
-    await invokeRaw('toggle_prompt_pin', { id });
-    await loadPrompts();
-    const pins = wheelPrompts();
-    state._wheelPool = pins;
-    if (fuse) fuse.setCollection(pins);
-    query = ''; page = 0;
-    render();
-    toast('ok', t('prompt.pinnedToast') + ' · ' + name);
+    await invokeRaw('present_main_window_new_prompt', { name });
+    hide();
   } catch (e) {
-    toast('err', t('toast.injectedFail', { e: typeof e === 'string' ? e : e?.message || e }));
+    // keep the wheel open so the error toast is visible
+    toast('err', t('err.generic', { e: typeof e === 'string' ? e : e?.message || e }));
   }
 }
 let pressTimer = 0;
 const center = $('#wheelCenter');
 center?.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); suppressCenterClick = true; quickCreate(); });
-center?.addEventListener('mousedown', () => { pressTimer = setTimeout(() => { suppressCenterClick = true; quickCreate(); }, 550); });
+center?.addEventListener('mousedown', e => { if (e.button === 0) pressTimer = setTimeout(() => { suppressCenterClick = true; quickCreate(); }, 550); });
 center?.addEventListener('mouseup', () => clearTimeout(pressTimer));
 center?.addEventListener('mouseleave', () => clearTimeout(pressTimer));
 

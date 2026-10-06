@@ -36,7 +36,7 @@ export default {
   "wh.nomatch": "无匹配",
   "wh.filtering": "筛选",
   "wh.new": "+ 新建",
-  "wh.newName": "新提示词",
+  "wh.centerHint": "点击关闭 · 右键/长按 = 新建提示词",
   "wh.page": "{a}/{b}",
 
   "tags.section": "标签",
@@ -138,6 +138,7 @@ export default {
   "f.version": "版本 {v} · 更新于 {t}",
   "drawer.new": "新建提示词",
   "drawer.edit": "编辑提示词",
+  "drawer.fromWheel": "由轮盘新建 · 尚未创建 — 填写内容并保存后生效",
 
   "common.delete": "删除",
   "common.cancel": "取消",
