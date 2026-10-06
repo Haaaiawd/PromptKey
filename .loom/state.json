@@ -4,7 +4,7 @@
     "name": "promptkey",
     "status": "complete",
     "created_at": "2026-10-06T08:16:56.246Z",
-    "updated_at": "2026-10-06T11:13:46.755Z"
+    "updated_at": "2026-10-06T12:08:28.340Z"
   },
   "understanding": {
     "confirmed": [
@@ -91,6 +91,42 @@
         "text": "本机无 cargo：Rust 写对不编译验证，交付逐文件列未验证清单；前端用 node --check",
         "source": "conversation",
         "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-015",
+        "text": "Phase 2 review-fix cycle complete: 74 Devin Review findings extracted to .loom/design/REVIEW_FINDINGS.md (commit d4c3d35), adjudicated, 64 fixed / 8 already-fixed-in-stack / 2 skipped with reasons.",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.339Z"
+      },
+      {
+        "id": "F-016",
+        "text": "PRs #3-#8 squash-merged to master in order: 61ef844 (#3), 6941f70 (#4), 6eb7872 (#5), 4cd6ff0 (#6), 305fea4 (#7), c52c4b6 (#8). Review fixes landed as separate commit d229811. Branch heads were rebased onto master before each squash to preserve per-task diffs.",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.340Z"
+      },
+      {
+        "id": "F-017",
+        "text": "Rust NOT compiled: Linux env has no cargo/Windows toolchain. Windows API signatures hand-verified against docs only; cargo check + real injection tests remain Windows follow-ups.",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.340Z"
+      },
+      {
+        "id": "F-018",
+        "text": "Frontend verified via mocked __TAURI__ Playwright suite: 31/31 pass (theme/lang 4-combo, grid/search/tag+fuzzy, manual-sort seed, drawer, library pack preview, settings write-order, log, wheel 280px dial/show/filter/numeric/var-fill/quick-create/Esc, negative-origin monitor clamp).",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.340Z"
+      },
+      {
+        "id": "F-019",
+        "text": "SSRF policy logic (ip_is_public + https-only + redirect revalidation + DNS pin) ported and verified 26/26 IP cases; live resolver blocks localhost/0.0.0.0.",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.340Z"
+      },
+      {
+        "id": "F-020",
+        "text": "Preview distributed: https://box.haaaiawd.live/dl/promptkey-preview/ (index/wheel/packs 200).",
+        "source": "conversation",
+        "at": "2026-10-06T12:08:28.340Z"
       }
     ],
     "assumptions": [
@@ -143,6 +179,13 @@
         "at": "2026-10-06T08:17:37.241Z",
         "resolution": "Owner 指派给执行 Agent 策展；按 MARKET_DECISION 采用自撰措辞避免版权风险",
         "resolved_at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "Q-004",
+        "question": "Windows-only verification pending: cargo check of the 11 uncompiled Rust files (windows 0.52/0.58 API drift risk), real hotkey+pipe+SendInput/clipboard injection on a multi-monitor Windows box, COM/UIA password-gate behavior.",
+        "impact": "high",
+        "status": "open",
+        "at": "2026-10-06T12:08:28.340Z"
       }
     ]
   },
