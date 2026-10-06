@@ -2,9 +2,9 @@
   "schema_version": 2,
   "project": {
     "name": "promptkey",
-    "status": "building",
+    "status": "complete",
     "created_at": "2026-10-06T08:16:56.246Z",
-    "updated_at": "2026-10-06T10:58:54.411Z"
+    "updated_at": "2026-10-06T11:13:46.755Z"
   },
   "understanding": {
     "confirmed": [

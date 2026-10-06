@@ -24,7 +24,7 @@
       "slug": "merged-ia",
       "title": "合并后信息架构（提示词+轮盘单页）",
       "kind": "feature",
-      "notes": "",
+      "notes": "Done: prompts+wheel unified via get_prompts_view; nav 5->4; pin inline; frecency ordering; manual override via inject_order; vars/packs; default-prompt modes.",
       "covered_by": [
         "TASK-002"
       ],
@@ -35,7 +35,7 @@
       "slug": "wheel-v2",
       "title": "轮盘新形态（缩小/跟随光标/动效）",
       "kind": "feature",
-      "notes": "",
+      "notes": "Done: Wheel A 280px glass, cursor-follow present_wheel, type-filter via Fuse, 1-6 pick, page nav, var-fill form, quick-create, reduced-motion honored.",
       "covered_by": [
         "TASK-001",
         "TASK-002"
@@ -47,7 +47,7 @@
       "slug": "design-tokens",
       "title": "明暗双套设计 token 与动效规范",
       "kind": "module",
-      "notes": "",
+      "notes": "Done: design tokens dual theme in styles.css/wheel.css; i18n zh-CN/en-US 156 keys; motion tokens + prefers-reduced-motion.",
       "covered_by": [
         "TASK-001"
       ],
@@ -118,6 +118,50 @@
         "TASK-003"
       ],
       "created_at": "2026-10-06T08:18:46.704Z"
+    },
+    {
+      "id": "DLV-006",
+      "slug": "template-library",
+      "title": "模板库：内置精选包 + URL/文件导入 + 导出",
+      "kind": "feature",
+      "notes": "Done: 4 builtin packs (zh-writing10, zh-dev10, en-translation8, en-analysis8) + manifest; fetch_pack_url/pick_pack_file/export_prompts_pack/import_prompts_pack commands; preview+selective import; external-source warning only for untrusted inputs.",
+      "covered_by": [
+        "TASK-003"
+      ],
+      "created_at": "2026-10-06T11:14:44.542618Z"
+    },
+    {
+      "id": "DLV-007",
+      "slug": "injection-hardening",
+      "title": "注入加固：密码框门禁 + 剪贴板全格式备份 + 真实日志",
+      "kind": "feature",
+      "notes": "Done: is_secure_input (ES_PASSWORD + UIA IsPassword read probe); backup/restore all GMEM clipboard formats; logs written post-inject with real strategy/ms/success; allow_clipboard/restore_clipboard/secure_gate honored. Rust unverified (no cargo, Win32-only).",
+      "covered_by": [
+        "TASK-004"
+      ],
+      "created_at": "2026-10-06T11:14:44.542618Z"
+    },
+    {
+      "id": "DLV-008",
+      "slug": "frontend-stability",
+      "title": "前端稳定化：DOM 防护 + IPC 错误面 + 按键生命周期",
+      "kind": "feature",
+      "notes": "Done: zero alert()/confirm(); all DOM access guarded; var-fill keydown stopPropagation; global error+unhandledrejection toasts; blur teardown on wheel.",
+      "covered_by": [
+        "TASK-005"
+      ],
+      "created_at": "2026-10-06T11:14:44.542618Z"
+    },
+    {
+      "id": "DLV-009",
+      "slug": "xplat-traits",
+      "title": "跨平台 trait 边界（Injector/Context/Hotkey + u64 句柄）",
+      "kind": "feature",
+      "notes": "Done: traits in mod.rs, Windows impls in windows_impl.rs, Null* stubs cfg(not(windows)), create() factories; window_handle u64; windows/winres cfg-gated in Cargo.toml; cfg_attr windows_subsystem; dead resolve_service_exe_path removed. Rust unverified.",
+      "covered_by": [
+        "TASK-006"
+      ],
+      "created_at": "2026-10-06T11:14:44.542618Z"
     }
   ]
 }

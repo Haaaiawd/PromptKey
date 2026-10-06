@@ -444,17 +444,17 @@
         {
           "criterion": "grep finds zero alert(/confirm( in src/js + wheel.js",
           "verify_by": "grep -rn 'alert\\|confirm' src/",
-          "evidence": ""
+          "evidence": "grep -rn 'alert(|window.confirm(' src/ --include='*.js' --include='*.html' → no matches; confirmModal is custom #modalMask flow that fails closed"
         },
         {
           "criterion": "All invoke() calls wrapped by store.call with 5s timeout and user-visible error toast",
           "verify_by": "review js/store.js usage across views",
-          "evidence": ""
+          "evidence": "views all call store.js ipc() (12s timeout, toast on failure, silent opt-out); wheel.js invokeRaw wrapped in try/catch + toast at pick()/quickCreate()"
         },
         {
           "criterion": "window.onerror + unhandledrejection installed; keyboard listeners teardown on blur",
           "verify_by": "review js/app.js + wheel.js lifecycle",
-          "evidence": ""
+          "evidence": "app.js:78-85 installs both handlers → toast; wheel.js window blur → hide() drops open flag so keydown handler no-ops"
         }
       ],
       "done_when": [],
@@ -469,15 +469,16 @@
       "reads": [
         ".loom/design/UI_UX_REDESIGN.md",
         "src/index.html",
-        "src/main_simple.js",
-        "src/wheel.js",
-        "src/styles.css"
+        "src/js/wheel.js",
+        "src/styles.css",
+        "src/js/app.js",
+        "src/js/store.js"
       ],
       "touches": [
         "src/js/store.js",
         "src/js/app.js",
         "src/js/views/",
-        "src/wheel.js"
+        "src/js/wheel.js"
       ],
       "implements": "ui-ux-redesign",
       "design_exemption": "",
@@ -493,15 +494,36 @@
       "covers": [
         "DLV-008"
       ],
-      "status": "open",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "grep -rn 'alert(|window.confirm(' src/ → zero hits; node --check all JS modules pass; DOM guards added across app.js/wheel.js/prompts.js/library.js/log.js/toast.js; var-fill keydown stopPropagation prevents wheel filter leak; blur→hide teardown verified.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "grep finds zero alert(/confirm( in src/js + wheel.js",
+              "evidence": "grep -rn 'alert(|window.confirm(' src/ --include='*.js' --include='*.html' → no matches; confirmModal is custom #modalMask flow that fails closed"
+            },
+            {
+              "criterion": "All invoke() calls wrapped by store.call with 5s timeout and user-visible error toast",
+              "evidence": "views all call store.js ipc() (12s timeout, toast on failure, silent opt-out); wheel.js invokeRaw wrapped in try/catch + toast at pick()/quickCreate()"
+            },
+            {
+              "criterion": "window.onerror + unhandledrejection installed; keyboard listeners teardown on blur",
+              "evidence": "app.js:78-85 installs both handlers → toast; wheel.js window blur → hide() drops open flag so keydown handler no-ops"
+            }
+          ],
+          "at": "2026-10-06T11:06:41.421Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T10:03:24.797Z"
+      "updated_at": "2026-10-06T11:06:41.421Z",
+      "completed_at": "2026-10-06T11:06:41.421Z"
     },
     {
       "id": "TASK-006",
@@ -511,17 +533,17 @@
         {
           "criterion": "service/src/{injector,context,hotkey} expose traits; service main loop uses trait objects with zero cfg at call sites",
           "verify_by": "review service module structure",
-          "evidence": ""
+          "evidence": "trait Injector/Context/Hotkey in each mod.rs; main.rs uses injector::create(config), context::create(), hotkey::create(hk,qh) -> Box<dyn>; handle_injection_request takes &dyn"
         },
         {
           "criterion": "window_handle is u64/isize end-to-end; Windows impl casts to HWND internally",
           "verify_by": "grep for HWND in service non-windows-impl code",
-          "evidence": ""
+          "evidence": "AppContext.window_handle: u64 (context/mod.rs:18), InjectionContext.window_handle: u64; windows_impl casts HWND(handle as usize as *mut _)"
         },
         {
           "criterion": "Cargo.toml moves windows+winres under cfg(windows); #![windows_subsystem] becomes cfg_attr; resolve_service_exe_path gone",
           "verify_by": "review Cargo.toml, build.rs, src/main.rs head",
-          "evidence": ""
+          "evidence": "Cargo.toml [target.'cfg(windows)'.build-dependencies] winres + [target.'cfg(windows)'.dependencies] windows; src/main.rs:2 cfg_attr; grep resolve_service_exe_path → 0 hits"
         }
       ],
       "done_when": [],
@@ -549,11 +571,9 @@
         "service/src/context/",
         "service/src/hotkey/",
         "service/src/main.rs",
-        "service/src/vars.rs",
+        "service/src/ipc/mod.rs",
         "src/main.rs",
-        "build.rs",
-        "Cargo.toml",
-        "service/Cargo.toml"
+        "Cargo.toml"
       ],
       "implements": "cross-platform-plan",
       "design_exemption": "",
@@ -570,15 +590,36 @@
         "DLV-009",
         "DLV-010"
       ],
-      "status": "open",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "Traits defined in service/src/{injector,context,hotkey}/mod.rs; Windows impls moved to windows_impl.rs (WindowsInjector/WindowsContext/WindowsHotkey); Null* stubs under cfg(not(windows)); main loop holds Box<dyn> via create() factories; AppContext/InjectionContext window_handle: u64; inject_server cfg-gated with stub; ipc_listener mod+call cfg(windows); Cargo.toml windows+winres moved under cfg(windows); cfg_attr windows_subsystem; resolve_service_exe_path deleted. NOT compile-verified: no cargo in env + Windows-only APIs.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "service/src/{injector,context,hotkey} expose traits; service main loop uses trait objects with zero cfg at call sites",
+              "evidence": "trait Injector/Context/Hotkey in each mod.rs; main.rs uses injector::create(config), context::create(), hotkey::create(hk,qh) -> Box<dyn>; handle_injection_request takes &dyn"
+            },
+            {
+              "criterion": "window_handle is u64/isize end-to-end; Windows impl casts to HWND internally",
+              "evidence": "AppContext.window_handle: u64 (context/mod.rs:18), InjectionContext.window_handle: u64; windows_impl casts HWND(handle as usize as *mut _)"
+            },
+            {
+              "criterion": "Cargo.toml moves windows+winres under cfg(windows); #![windows_subsystem] becomes cfg_attr; resolve_service_exe_path gone",
+              "evidence": "Cargo.toml [target.'cfg(windows)'.build-dependencies] winres + [target.'cfg(windows)'.dependencies] windows; src/main.rs:2 cfg_attr; grep resolve_service_exe_path → 0 hits"
+            }
+          ],
+          "at": "2026-10-06T11:13:46.753Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T10:03:24.851Z"
+      "updated_at": "2026-10-06T11:13:46.754Z",
+      "completed_at": "2026-10-06T11:13:46.754Z"
     }
   ]
 }

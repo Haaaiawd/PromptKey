@@ -1,7 +1,26 @@
 // IPC Client Module - Service → GUI Communication via Named Pipe
 // T1-006: Quick Selection Panel IPC Layer
 
+#[cfg(windows)]
 pub mod inject_server; // TW001: Inject pipe server
+
+/// Phase 2 Task8: named pipes are Windows-only. The stub keeps the service
+/// compiling on other platforms and simply never yields a request.
+#[cfg(not(windows))]
+pub mod inject_server {
+    use std::sync::mpsc;
+
+    #[derive(Debug, Clone)]
+    pub struct InjectionRequest {
+        pub prompt_id: i32,
+        pub vars_json: Option<String>,
+    }
+
+    pub fn start() -> mpsc::Receiver<InjectionRequest> {
+        let (_tx, rx) = mpsc::channel::<InjectionRequest>();
+        rx
+    }
+}
 
 use std::error::Error;
 use std::fs::OpenOptions;
