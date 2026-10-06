@@ -77,11 +77,11 @@ export async function renderLibrary() {
   }).join('') : `<div class="empty">${esc(t('lib.empty'))}</div>`;
 }
 
-function openPackPreview(meta, prompts) {
+function openPackPreview(meta, prompts, { warn = true } = {}) {
   const mask = $('#packMask');
   if (!mask) return;
   $('#packTitle').textContent = meta.name || t('lib.import');
-  $('#packBody').innerHTML = `<div class="import-note"><span class="ico ico-sm">${icon('shield-check', 14)}</span><span>${esc(t('lib.urlWarn'))}</span></div>` +
+  $('#packBody').innerHTML = (warn ? `<div class="import-note"><span class="ico ico-sm">${icon('shield-check', 14)}</span><span>${esc(t('lib.urlWarn'))}</span></div>` : '') +
     `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">` +
     prompts.map((p, i) => `
       <label class="pack-item"><input type="checkbox" data-pi="${i}" checked>
@@ -139,7 +139,7 @@ export function wireLibrary() {
     const b = e.target.closest('[data-pack]');
     if (!b) return;
     const pk = packs[+b.dataset.pack];
-    if (pk) openPackPreview(pk.meta, pk.prompts);
+    if (pk) openPackPreview(pk.meta, pk.prompts, { warn: false });
   });
 
   // URL import — needs backend fetch command (Task 5 branch completes the fetch path)

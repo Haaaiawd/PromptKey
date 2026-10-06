@@ -1,0 +1,36 @@
+{
+  "format": "promptkey-pack",
+  "version": 1,
+  "pack": {
+    "name": "Translation & Language",
+    "author": "PromptKey",
+    "lang": "en-US",
+    "desc": "Translation, tone adjustment and language QA templates"
+  },
+  "prompts": [
+    {
+      "name": "Translate CN→EN",
+      "content": "Translate the following into natural, idiomatic English. Preserve tone and formatting:\n\n{{clipboard}}",
+      "tags": ["translation"],
+      "app_scopes": []
+    },
+    {
+      "name": "Translate EN→CN",
+      "content": "Translate the following into fluent, natural Simplified Chinese. Preserve formatting and terminology:\n\n{{clipboard}}",
+      "tags": ["translation"],
+      "app_scopes": []
+    },
+    {
+      "name": "Tone: Professional",
+      "content": "Rewrite the following text in a professional, concise business tone:\n\n{{clipboard}}",
+      "tags": ["writing", "tone"],
+      "app_scopes": []
+    },
+    {
+      "name": "Explain Simply",
+      "content": "Explain the following in plain language a non-expert can understand, in at most 3 short paragraphs:\n\n{{clipboard}}",
+      "tags": ["explain", "writing"],
+      "app_scopes": []
+    }
+  ]
+}

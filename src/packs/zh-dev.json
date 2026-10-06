@@ -1,0 +1,42 @@
+{
+  "format": "promptkey-pack",
+  "version": 1,
+  "pack": {
+    "name": "编程助手（中文）",
+    "author": "PromptKey",
+    "lang": "zh-CN",
+    "desc": "代码审查、报错解释、重构建议、SQL 优化"
+  },
+  "prompts": [
+    {
+      "name": "代码审查",
+      "content": "请审查以下代码，按严重程度列出问题（正确性 > 安全 > 性能 > 可读性），并给出修改建议：\n\n```\n{{clipboard}}\n```",
+      "tags": ["编程", "审查"],
+      "app_scopes": ["code.exe"]
+    },
+    {
+      "name": "报错诊断",
+      "content": "解释以下报错的最可能原因，并给出排查步骤与修复方案：\n\n```\n{{clipboard}}\n```\n\n上下文：{{context}}",
+      "tags": ["编程", "调试"],
+      "app_scopes": []
+    },
+    {
+      "name": "重构建议",
+      "content": "分析以下代码的可重构点（重复逻辑、命名、职责划分），给出重构后的结构建议，不要直接重写全部代码：\n\n```\n{{clipboard}}\n```",
+      "tags": ["编程", "重构"],
+      "app_scopes": ["code.exe"]
+    },
+    {
+      "name": "SQL 优化",
+      "content": "优化以下 SQL 的性能（索引、写法、执行计划角度），并说明每个改动的理由：\n\n```sql\n{{clipboard}}\n```",
+      "tags": ["编程", "SQL"],
+      "app_scopes": []
+    },
+    {
+      "name": "写单元测试",
+      "content": "为以下代码设计单元测试用例（正常路径 + 边界 + 异常），用 {{framework}} 写出测试代码：\n\n```\n{{clipboard}}\n```",
+      "tags": ["编程", "测试"],
+      "app_scopes": []
+    }
+  ]
+}

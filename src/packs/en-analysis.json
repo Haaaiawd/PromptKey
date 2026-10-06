@@ -1,0 +1,36 @@
+{
+  "format": "promptkey-pack",
+  "version": 1,
+  "pack": {
+    "name": "Analysis & Reasoning",
+    "author": "PromptKey",
+    "lang": "en-US",
+    "desc": "Structured analysis templates: pros/cons, decision memo, data critique, risk scan"
+  },
+  "prompts": [
+    {
+      "name": "Decision Memo",
+      "content": "Turn the following into a decision memo: Context / Options (with pros & cons) / Recommendation / Risks / Next steps.\n\n{{clipboard}}",
+      "tags": ["analysis", "decision"],
+      "app_scopes": []
+    },
+    {
+      "name": "Pros & Cons",
+      "content": "Analyze the following proposal. List pros and cons in a table, then give a one-paragraph verdict:\n\n{{clipboard}}",
+      "tags": ["analysis"],
+      "app_scopes": []
+    },
+    {
+      "name": "Data Critique",
+      "content": "Critique the following data or chart description: what conclusions are supported, what is overclaimed, what data is missing?\n\n{{clipboard}}",
+      "tags": ["analysis", "data"],
+      "app_scopes": []
+    },
+    {
+      "name": "Risk Scan",
+      "content": "Review the following plan and list the top risks (likelihood × impact), each with a concrete mitigation:\n\n{{clipboard}}",
+      "tags": ["analysis", "risk"],
+      "app_scopes": []
+    }
+  ]
+}

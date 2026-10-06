@@ -1,0 +1,42 @@
+{
+  "format": "promptkey-pack",
+  "version": 1,
+  "pack": {
+    "name": "中文写作助手",
+    "author": "PromptKey",
+    "lang": "zh-CN",
+    "desc": "常用中文写作与改写模板：润色、扩写、提纲、邮件"
+  },
+  "prompts": [
+    {
+      "name": "润色改写",
+      "content": "请在不改变原意的前提下润色以下文字，使其更流畅、更专业：\n\n{{clipboard}}\n\n要求：保持原有语气，修正语病与冗余，输出改写后的全文。",
+      "tags": ["写作", "润色"],
+      "app_scopes": []
+    },
+    {
+      "name": "扩写要点",
+      "content": "将以下要点扩写成一段连贯的文字（约 {{length}} 字）：\n\n{{clipboard}}\n\n要求：逻辑清晰、过渡自然，不虚构事实。",
+      "tags": ["写作", "扩写"],
+      "app_scopes": []
+    },
+    {
+      "name": "文章提纲",
+      "content": "为以下主题生成一份结构化提纲（含引言、3-5 个章节要点、结语）：\n\n主题：{{topic}}\n\n读者对象：{{audience}}",
+      "tags": ["写作", "提纲"],
+      "app_scopes": []
+    },
+    {
+      "name": "正式邮件",
+      "content": "根据以下要点起草一封正式邮件（含称呼、正文、结尾敬语）：\n\n{{clipboard}}\n\n语气：礼貌、简洁、目的明确。",
+      "tags": ["写作", "邮件"],
+      "app_scopes": []
+    },
+    {
+      "name": "总结提炼",
+      "content": "将以下内容提炼为不超过 100 字的摘要，保留关键结论与数据：\n\n{{clipboard}}",
+      "tags": ["写作", "总结"],
+      "app_scopes": []
+    }
+  ]
+}
