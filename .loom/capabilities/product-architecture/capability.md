@@ -6,7 +6,7 @@
 
 ## Project scenario
 
-两个一级对象（提示词、轮盘）实为同一数据的两个视图，合并诉求来自用户原话"提示词和轮盘直接合并"。产品处于 1.2.1 稳定态，重构不能以功能退化为代价。
+单用户桌面工具的信息架构合并：两个一级对象收敛为属性+投影模型，隐式耦合显式化为设置项
 
 ## Decision tree
 
@@ -17,7 +17,7 @@
   - A: 独立页面对象 → 仅当其生命周期操作集 ≥3 且与提示词不同（轮盘：pin 是唯一操作 → 不合格）
   - B: 内联属性/筛选维度 → leads_to: DONE
 - decide_by: 该概念的独立操作集大小；轮盘 = prompts 表 + pinned 标志，pin/unpin 一个动词
-- source: MERGE_ARCHITECTURE.md §1-2；`db.rs:42-59` 字段即证据
+- source: phase1-synthesis.md（原始依据：MERGE_ARCHITECTURE.md §1-2；`db.rs:42-59` 字段即证据）
 - counterexample: "记录"页——操作集小但读路径独立且为排障必需 → 保留独立 tab 但末位
 - output: 信息架构层级
 
@@ -29,7 +29,7 @@
   - B: 有价值但链路不断 → 延后，记入 backlog
   - C: 不回答"没有它会死吗" → 不做
 - decide_by: 缺失它时"找-选-注-留"链路是否断
-- source: 用户钦定原则"需要的功能就新加，不需要的就不要"；MERGE_ARCHITECTURE.md §4 评级表
+- source: phase1-synthesis.md（原始依据：用户钦定原则"需要的功能就新加，不需要的就不要"；MERGE_ARCHITECTURE.md §4 评级表）
 - counterexample: 变量填充是高价值但可延后（字段已备 `variables_json`），与"必需"的区别是链路可用占位变量直通
 - output: 功能评级
 
@@ -40,7 +40,7 @@
   - A: 保留隐式 → 拒绝（用户无法预测 ID1 热键注入目标）
   - B: 显式化（"默认快捷提示词"设置）或语义化（最近使用 #1）→ leads_to: DONE
 - decide_by: 用户能否在界面上看到并预测该状态
-- source: MERGE_ARCHITECTURE.md §5.2
+- source: phase1-synthesis.md（原始依据：MERGE_ARCHITECTURE.md §5.2）
 - counterexample: 纯内部缓存类隐式状态无用户可感知差异 → 不必管
 - output: 显式状态/设置项
 
@@ -51,7 +51,7 @@
   - A: 删除 → leads_to: DONE
   - B: 保留"以后可能用" → 仅当复活成本低且需求明确时保留数据字段（app_scopes_json 属此类），UI 必删
 - decide_by: 是否存在真实触发路径 + 复活价值
-- source: `service/src/hotkey/mod.rs:103` 注释、main.rs:64-77 只处理 id=4
+- source: phase1-synthesis.md（原始依据：`service/src/hotkey/mod.rs:103` 注释、main.rs:64-77 只处理 id=4）
 - counterexample: 数据字段保留（迁移成本低）vs UI 死代码删除（维护成本持续）
 - output: 删除清单
 

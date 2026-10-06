@@ -1,8 +1,11 @@
 {
-  "status": "researching",
+  "status": "provisional",
   "title": "UI 设计系统（明暗双主题 token、动效、i18n、轮盘形态）",
   "field": "",
-  "scenario": "",
+  "scenario": "Tauri 单进程桌面工具：vanilla 前端 + 多窗口 + 全局热键唤出的透明轮盘，需明暗双主题与中英双版运行时切换",
   "confirmed_at": "",
-  "created_at": "2026-10-06T08:17:44.783Z"
+  "created_at": "2026-10-06T08:17:44.783Z",
+  "updated_at": "2026-10-06T10:03:03.749Z",
+  "source": "agent",
+  "selected_at": "2026-10-06T10:03:03.749Z"
 }

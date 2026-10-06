@@ -2,9 +2,9 @@
   "schema_version": 2,
   "project": {
     "name": "promptkey",
-    "status": "shaping",
+    "status": "building",
     "created_at": "2026-10-06T08:16:56.246Z",
-    "updated_at": "2026-10-06T08:17:37.241Z"
+    "updated_at": "2026-10-06T10:10:15.759Z"
   },
   "understanding": {
     "confirmed": [
@@ -55,27 +55,63 @@
         "text": "本 Phase（Phase1）只研究设计，不改 src/service/Cargo.toml 实现代码",
         "source": "conversation",
         "at": "2026-10-06T08:17:37.241Z"
+      },
+      {
+        "id": "F-009",
+        "text": "Phase2 验收原话：「把五必须和五延后的都给做一下」「UI UX 一定要做好」（task-brief-phase2.md）",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-010",
+        "text": "图标规则：UI 图标统一用 Lucide 静态 SVG 存 src/icons/（禁手画/字符图标/运行时 CDN）；品牌资产只从 PromptKey.ico 与 PromptKey_aiextract.png 派生，不重新设计",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-011",
+        "text": "轮盘定稿 A 案：280px 径向、跟随光标、边缘 clamp 16px、中心功能点、打字过滤、数字键直选",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-012",
+        "text": "市场改造为本地优先模板库：内置精选包 + URL/文件导入 + promptkey-pack v1 导出，无社区后端",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-013",
+        "text": "拆分 6 个分支各自 PR、全部 --base master、不 auto-merge；每 Task 一 commit 格式 'feat: <what> (LOOM TASK-00X)'",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
+      },
+      {
+        "id": "F-014",
+        "text": "本机无 cargo：Rust 写对不编译验证，交付逐文件列未验证清单；前端用 node --check",
+        "source": "conversation",
+        "at": "2026-10-06T09:50:52.567Z"
       }
     ],
     "assumptions": [
       {
         "id": "A-001",
         "text": "市场功能在本地优先约束下优先内置精选库+URL 源导入，不做需要后端的社区形态；最终以 MARKET_DECISION.md 为准",
-        "status": "active",
+        "status": "retired",
         "source": "agent",
         "at": "2026-10-06T08:17:37.241Z"
       },
       {
         "id": "A-002",
         "text": "提示词+轮盘合并的理解为：轮盘配置内联进提示词列表（pin 为一级操作），轮盘独立导航页取消；最终以 MERGE_ARCHITECTURE.md 为准",
-        "status": "active",
+        "status": "retired",
         "source": "agent",
         "at": "2026-10-06T08:17:37.241Z"
       },
       {
         "id": "A-003",
         "text": "UI 延续 Zinc 深色工业风并扩展为明暗双套；不默认引入重型框架，倾向 vanilla+设计 token 化；最终以 UI_UX_REDESIGN.md 为准",
-        "status": "active",
+        "status": "retired",
         "source": "agent",
         "at": "2026-10-06T08:17:37.241Z"
       }
@@ -85,27 +121,117 @@
         "id": "Q-001",
         "question": "Wayland 下全局热键与注入的硬限制是否被接受为'Linux Wayland 降级为半可用'的产品立场？",
         "impact": "high",
-        "status": "open",
-        "at": "2026-10-06T08:17:37.241Z"
+        "status": "resolved",
+        "at": "2026-10-06T08:17:37.241Z",
+        "resolution": "接受。CROSS_PLATFORM_PLAN 已定 Wayland 诚实降级（自动注入依赖 ydotool/uinput/portal 等显式能力），Phase2 仅做 trait 抽象不实装 Linux，由 brief 与 Owner 文档边界授权",
+        "resolved_at": "2026-10-06T09:50:52.567Z"
       },
       {
         "id": "Q-002",
         "question": "是否接受 macOS 辅助功能权限带来的首启引导成本？",
         "impact": "medium",
-        "status": "open",
-        "at": "2026-10-06T08:17:37.241Z"
+        "status": "resolved",
+        "at": "2026-10-06T08:17:37.241Z",
+        "resolution": "接受。macOS 在 Phase3 实装，首启走 Accessibility 权限引导流程，已在 CROSS_PLATFORM_PLAN 承诺",
+        "resolved_at": "2026-10-06T09:50:52.567Z"
       },
       {
         "id": "Q-003",
         "question": "内置精选提示词库的内容来源与版权审核由谁负责？",
         "impact": "medium",
-        "status": "open",
-        "at": "2026-10-06T08:17:37.241Z"
+        "status": "resolved",
+        "at": "2026-10-06T08:17:37.241Z",
+        "resolution": "Owner 指派给执行 Agent 策展；按 MARKET_DECISION 采用自撰措辞避免版权风险",
+        "resolved_at": "2026-10-06T09:50:52.567Z"
       }
     ]
   },
   "keeper": {
-    "status": "not_run",
-    "attempts": []
+    "status": "passed",
+    "attempts": [
+      {
+        "run_id": "keeper-20261006T095855Z-fresh-subagent-1",
+        "prepared_digest": "e129df9675d0f7cf2b07ab2593b56f7167102c47fb7a1d679bfc2292f9ab2a7d",
+        "verdict": "needs_revision",
+        "summary": "The intent→design→task→executable-step chain is intact and verified: PROJECT.md states intent/boundaries/operating reality, five substantive design docs each own a decision surface, four capability dossiers contain source-cited decision trees, and TASK-001 (sole executable, depends_on=[]) has all 10 reads present on disk with statable first edits and checkable acceptance. However, recorded state contradicts itself in three minor ways a fresh agent would trip on: all four dossiers hooked by tasks still report lifecycle status 'researching' with no recorded scenario confirmation or provisional-use assumption; tasks.json contains 'reads' entries the project's own validator rejects (TASK-005 names nonexistent dir src/js/, TASK-006 names directory service/src/, TASK-001 omits src/main_simple.js which it must split) leaving `loom check` healthy:false as the delivery baseline; STRUCTURE.md remains the uncustomized template. None blocks starting TASK-001; all should be absorbed per the keeper loop before a pass.",
+        "evidence": [
+          "loom context --keeper and loom keeper prompt: Keeper attempt 1, prepared_digest e129df9675d0f7cf2b07ab2593b56f7167102c47fb7a1d679bfc2292f9ab2a7d, work map 6 open / 0 done",
+          "loom check: healthy:false — errors: 'TASK-005: Task context file does not exist: src/js/' and 'TASK-006: Task context must name a file, not a directory: service/src/'; warnings: STRUCTURE.md template, 4 capabilities researching-not-confirmed, uncovered DLV-001/002 (Phase-1 artifacts already delivered)",
+          ".loom/tasks.json: TASK-001 depends_on=[], all 10 reads verified present on disk (UI_UX_REDESIGN.md, prototypes/main-window.html + wheel-a-radial.html, src/index.html, src/styles.css, src/wheel.{html,css,js}, src/main.rs, src/icons/README.md); acceptance criteria each carry criterion/verify_by; boundaries declared; TASK-002..006 form clean DAG (002←001, 003←002, 004←002, 005←001+003, 006←004)",
+          ".loom/capabilities/*/status.json: all four status='researching', scenario='', confirmed_at='', while capability.md files contain complete decision trees (verified: design-system C1-C4, injection-engine C1-C5, market-model C1-C3, product-architecture C1-C4)",
+          ".loom/STRUCTURE.md: contains only template boilerplate sections (Source code / Tests / Documents / Configuration and build / Assets and fixtures / Conventions with 'Example:' text)",
+          "Spot-verified citations: service/src/main.rs:~139-163 logs success=true/'Injected' before inject() returns; service/src/db.rs:401-414 find_prompt_for_context ignores _app_name/_window_title; service/src/hotkey/mod.rs:103 comment 'ID 1 (Inject) and ID 3 (Selector) removed'; src/main.rs:95-98 embedded service thread + resolve_service_exe_path dead_code; src/index.html:9 body class=theme-light hardcode; src/index.html:44-58 hand-drawn rect SVG icons + icon-plus/icon-search classes; src/wheel.html:77,81 ◀▶ glyphs; src/main_simple.js alert() at 42/50/78/84/569/654/667/796; North_Star.md:27-28 boundaries; src/fuse.min.js vendored",
+          "git: on feat/phase1-research-design (3 doc commits ahead of master, pushed to origin); .loom/ absent on master; .loom working-tree files modified-uncommitted (expected pre-implementation keeper state); task-brief-phase2.md directs branches from feat/phase1-research-design with PRs --base master"
+        ],
+        "gaps": [
+          {
+            "gap": "Capability lifecycle state contradicts usage: .loom/capabilities/{design-system,injection-engine,market-model,product-architecture}/status.json all report status 'researching' with empty scenario and confirmed_at, yet tasks.json capability_hooks reference their decision nodes (design-system#C3, design-system#C4, product-architecture#C1, market-model#C2, injection-engine#C1, injection-engine#C5) and PROJECT.md presents them as the project's capability map. The protocol requires unconfirmed dossiers not be referenced by Tasks, or that provisional use be recorded as an assumption; state.json records no such assumption (A-001..003 are all retired Phase-1 items).",
+            "severity": "minor",
+            "why_it_blocks_start": "Does not block TASK-001 — the dossier content (full decision trees with sources and counterexamples) is on disk and readable. The gap is authority ambiguity: a fresh agent cannot tell from recorded state whether the trees carry confirmed scenario authority or are provisional drafts, and `loom check` emits four 'researching, not confirmed' warnings as the standing baseline.",
+            "evidence_to_close": "Each .loom/capabilities/*/status.json advanced past 'researching' with non-empty scenario and confirmed_at via `loom capability synthesize` + `loom capability confirm --scenario <text> --source human|agent`, OR a recorded assumption/decision stating tasks reference the dossiers provisionally; `loom check` emits no 'researching, not confirmed' warnings."
+          },
+          {
+            "gap": "tasks.json 'reads' entries fail the project's own validator: TASK-005 reads 'src/js/' which does not exist (it is produced by TASK-001, a listed dependency), TASK-006 reads 'service/src/' which is a directory while reads must name files, and TASK-001 omits 'src/main_simple.js' — the 1365-line file its acceptance criterion splits into ES modules. `loom check` exits non-zero: healthy:false with 2 errors.",
+            "severity": "minor",
+            "why_it_blocks_start": "Does not block TASK-001 — all ten of its reads exist and first edits are unambiguous (the missing main_simple.js entry is self-evident since the task names it in outcome/touches). The concrete consequence is a failing baseline health check: the delivery loop's first verification command reports errors before any work, so a fresh agent cannot distinguish pre-existing defects from regressions it introduces.",
+            "evidence_to_close": "`loom check` reports zero errors (healthy:true): TASK-005 and TASK-006 reads name concrete files (enumerating the actual modules to load rather than directories), and 'src/main_simple.js' is added to TASK-001 reads."
+          },
+          {
+            "gap": ".loom/STRUCTURE.md is still the uncustomized LOOM template — every section contains generic 'Example:' boilerplate (e.g. 'Example: `src/` for application logic') — while PROJECT.md §Project structure directs agents to it as the source for where files live. The real layout facts exist only inline in PROJECT.md (src/ Tauri shell + vanilla frontend, service/src/ embedded service, src/icons/, .loom/).",
+            "severity": "minor",
+            "why_it_blocks_start": "Does not block TASK-001 — PROJECT.md's inline summary plus `ls` suffices to navigate. The consequence is a declared structure file containing zero project truth, flagged by `loom check` ('STRUCTURE.md still contains template instructions'), so an agent reading the pointer finds a placeholder instead of the map.",
+            "evidence_to_close": "STRUCTURE.md replaced with this project's actual layout and conventions (src/, service/src/, src/icons/, .loom/, prototypes) such that `loom check` no longer emits the template warning."
+          }
+        ],
+        "review": {
+          "mode": "independent",
+          "reviewer_id": "devin-subagent-keeper-attempt1",
+          "evidence": "Fresh subagent session spawned solely for this Keeper attempt with no access to the shaping conversation; all findings derived from `loom context --keeper`, `loom keeper prompt`, `loom check`, git inspection, and on-disk files under /home/haa/sites/promptkey."
+        },
+        "can_auto_pass": false,
+        "at": "2026-10-06T09:59:40.726Z",
+        "closure_results": []
+      },
+      {
+        "run_id": "keeper-20261006T-attempt2-fresh-subagent-b7e2",
+        "prepared_digest": "49dfcd2cc06fcaf698cbd8fcae76fe400328531246988bd6bcf7688499151441",
+        "verdict": "passed",
+        "summary": "All three prior minor gaps are verifiably closed and no new distortions introduced. Capability dossiers are no longer 'researching': all four status.json files now show status='provisional' with non-empty scenario, source='agent', and selected_at set — byte-for-byte the output of `loom capability synthesize` + `loom capability confirm --source agent` (store.js:419-424 requires status in {synthesized,provisional}, sets scenario/source/selected_at, and intentionally leaves confirmed_at empty for agent-source so it 'remains visibly provisional until a human confirms'). The ambiguity the gap cited — whether trees carried confirmed authority or were drafts — is resolved: recorded state now truthfully declares provisional-agent authority and `loom check` surfaces exactly that as non-blocking warnings ('provisional, not confirmed; tasks referencing it proceed provisionally'), satisfying the gap's alternative closure prong (a recorded statement that tasks reference dossiers provisionally). Every tasks.json `reads` path now names an existing file (verified programmatically: zero missing, zero directories; TASK-001 includes src/main_simple.js; TASK-005/TASK-006 enumerate real files), so `loom check` reports healthy:true with zero errors. STRUCTURE.md is fully customized (real src/, service/src/, src/icons/, src/packs/, .loom/ layout plus conventions; no 'Example:' boilerplate; no template warning). The integrity chain is intact: PROJECT.md states intent/boundaries/operating reality tied to 14 confirmed facts and verbatim owner quotes; five substantive design docs each own a distinct decision surface with file:line citations spot-verified against the code; four distinct professional fields have source-cited, counterexample-backed decision trees whose hooked nodes all exist; TASK-001 is the sole entry (depends_on=[]) with all 11 reads on disk and statable first edits + reproducible verification; completion is observable by the owner via 6 PRs --base master and an unverified-Rust list.",
+        "evidence": [
+          "loom check: healthy:true, errors:[]; warnings = 4x 'Capability <slug> is provisional, not confirmed; tasks referencing it proceed provisionally' + 'Uncovered deliverables: design-docs, hi-fi-prototypes' (DLV-001/002 are Phase-1 artifacts already delivered on disk — honest, non-blocking) + '9 deliverable(s) are covered only by Tasks not yet done' (correct pre-implementation state)",
+          "keeper result required shape honored: run_id=keeper-20261006T-attempt2-fresh-subagent-b7e2, prepared_digest=49dfcd2cc06fcaf698cbd8fcae76fe400328531246988bd6bcf7688499151441",
+          ".loom/capabilities/*/status.json: all four status='provisional', scenario non-empty, source='agent', selected_at set; verified against cli/src/store.js:404-424 that this state requires `capability synthesize` then `capability confirm --source agent`; capability.md decision trees intact (design-system C1-C4, injection-engine C1-C5, market-model C1-C3, product-architecture C1-C4) with per-node source+counterexample; all 6 task capability_hook nodes resolve to existing ### Cn sections",
+          ".loom/tasks.json: all 46 `reads` paths are existing files (python os.path.isfile check); TASK-001 sole entry depends_on=[] with 11 readable inputs incl. src/main_simple.js; TASK-002..006 DAG clean (002<-001, 003<-002, 004<-002, 005<-001+003, 006<-004); every acceptance criterion carries criterion+verify_by; boundaries declared on all tasks",
+          ".loom/STRUCTURE.md: customized real layout, no template boilerplate; .loom/PROJECT.md: intent, operating reality (no cargo locally, Windows-API-dependent injector, node --check for frontend), boundaries, doc/capability/work maps, staged-visibility rules",
+          "First executable Task statable: TASK-001 first edits = vendor Lucide SVGs + LICENSE into src/icons/lucide/, split src/main_simple.js (1365 lines, verified) into src/js/{app,store,i18n,toast}.js + js/views/*.js, replace src/index.html:9 'theme-light' hardcode with token-driven theme-auto, rewrite wheel.html/css/js to 280px cursor-following radial per prototypes/wheel-a-radial.html; verification = `node --check src/js/*.js src/js/views/*.js src/wheel.js` + grep for residual hand-drawn icons/alert() + prototype walkthrough via static server",
+          "Spot-verified design citations: src/index.html:9 body theme-light, :44-58 rect icons, :60 icon-plus, :111 market-panel, :138 wheel-panel; src/main_simple.js alert() at 42/50/78/84/569/654/667/796; src/wheel.html:77,81 glyph icons; src/main.rs:1 windows_subsystem, :95-98 embedded service thread, :113 resolve_service_exe_path dead code; service/src/main.rs log_usage(success=true,'Injected') written before injector.inject() call",
+          "git: on feat/phase1-research-design (per task-brief-phase2.md branch directive); .loom/ files modified-uncommitted — expected pre-implementation keeper state; North_Star.md boundaries (no password injection, local-first) reflected in state.json F-001..F-014 and resolved questions Q-001..Q-003"
+        ],
+        "gaps": [],
+        "review": {
+          "mode": "independent",
+          "reviewer_id": "devin-subagent-keeper-attempt2",
+          "evidence": "Fresh subagent session spawned solely for Keeper attempt 2 with no access to the shaping conversation or attempt-1 review beyond the prior gaps embedded in .loom/state.json. All findings derived independently from `loom context --keeper`, `loom keeper prompt`, `loom check`, on-disk files under /home/haa/sites/promptkey, programmatic existence checks of every tasks.json `reads` path, and the loom CLI source (store.js) to confirm `confirm --source agent` semantics."
+        },
+        "can_auto_pass": false,
+        "at": "2026-10-06T10:09:39.780Z",
+        "closure_results": [
+          {
+            "gap": "Capability lifecycle state contradicts usage: .loom/capabilities/{design-system,injection-engine,market-model,product-architecture}/status.json all report status 'researching' with empty scenario and confirmed_at, yet tasks.json capability_hooks reference their decision nodes (design-system#C3, design-system#C4, product-architecture#C1, market-model#C2, injection-engine#C1, injection-engine#C5) and PROJECT.md presents them as the project's capability map. The protocol requires unconfirmed dossiers not be referenced by Tasks, or that provisional use be recorded as an assumption; state.json records no such assumption (A-001..003 are all retired Phase-1 items).",
+            "evidence": "All four status.json now report status='provisional' with non-empty scenario text, source='agent', selected_at='2026-10-06T10:03:03.*Z'. CLI source (cli/src/store.js:410-424) proves this state is only produced by `loom capability confirm --scenario <text> --source agent` (synthesize sets only status='synthesized'; confirmed_at is intentionally '' for agent-source — the designed 'visibly provisional' state since the human channel is unavailable mid-task). Each research/ dir contains phase1-synthesis.md and every decision node cites it (synthesize validation requires sources+counterexamples and would have failed otherwise). `loom check` emits zero 'researching, not confirmed' warnings; the replacement warnings ('provisional, not confirmed; tasks referencing it proceed provisionally') are the recorded provisional-use statement the gap's second prong required, and are non-blocking (healthy:true)."
+          },
+          {
+            "gap": "tasks.json 'reads' entries fail the project's own validator: TASK-005 reads 'src/js/' which does not exist (it is produced by TASK-001, a listed dependency), TASK-006 reads 'service/src/' which is a directory while reads must name files, and TASK-001 omits 'src/main_simple.js' — the 1365-line file its acceptance criterion splits into ES modules. `loom check` exits non-zero: healthy:false with 2 errors.",
+            "evidence": "Programmatic check of all 46 reads entries across TASK-001..006: zero missing paths, zero directories. TASK-005 reads now name files (.loom/design/UI_UX_REDESIGN.md, src/index.html, src/main_simple.js, src/wheel.js, src/styles.css); TASK-006 reads enumerate concrete files (service/src/main.rs, injector/mod.rs, context/mod.rs, hotkey/mod.rs, db.rs, src/main.rs, Cargo.toml, service/Cargo.toml, build.rs); TASK-001 reads include src/main_simple.js. `loom check` reports healthy:true, errors:[]."
+          },
+          {
+            "gap": ".loom/STRUCTURE.md is still the uncustomized LOOM template — every section contains generic 'Example:' boilerplate (e.g. 'Example: `src/` for application logic') — while PROJECT.md §Project structure directs agents to it as the source for where files live. The real layout facts exist only inline in PROJECT.md (src/ Tauri shell + vanilla frontend, service/src/ embedded service, src/icons/, .loom/).",
+            "evidence": "STRUCTURE.md now declares this project's real layout: src/ (Tauri shell + vanilla frontend incl. planned src/js/ ES-module dirs and src/i18n/), service/src/ module map, src/icons/ (lucide/ + LICENSE + ICONS.md provenance), src/packs/, config gating rules (windows/winres under cfg(windows), protected tauri.conf.json fields), verification approach (node --check; Rust unverifiable locally), and commit/PR conventions. Zero 'Example:' boilerplate; `loom check` emits no template warning."
+          }
+        ]
+      }
+    ],
+    "prepared_digest": "49dfcd2cc06fcaf698cbd8fcae76fe400328531246988bd6bcf7688499151441",
+    "prepared_attempt": 2
   }
 }
