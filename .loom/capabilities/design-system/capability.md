@@ -6,7 +6,7 @@
 
 ## Project scenario
 
-Tauri 桌面应用，vanilla 技术栈（决策：不引框架），延续 GUI_RENOVATION_GUIDE.md 的 Zinc 深色系扩展到明暗双套 + 中英双版 + 动效规范。三个窗口：主窗（1000×700）、透明轮盘窗、（废弃 selector）。
+Tauri 单进程桌面工具：vanilla 前端 + 多窗口 + 全局热键唤出的透明轮盘，需明暗双主题与中英双版运行时切换
 
 ## Decision tree
 
@@ -17,7 +17,7 @@ Tauri 桌面应用，vanilla 技术栈（决策：不引框架），延续 GUI_R
   - A: Vanilla + ES modules 结构化 → 默认答案
   - B: 构建链框架 → 仅当证明 vanilla 无法维护且接受 beforeBuildCommand 改造 → leads_to: 重估（当前否决）
 - decide_by: 打包体积增量、构建链复杂度、动画是否需框架级状态同步（本应用不需要）
-- source: UI_UX_REDESIGN.md §1 选型表
+- source: phase1-synthesis.md（原始依据：UI_UX_REDESIGN.md §1 选型表）
 - counterexample: 若未来状态复杂度爆炸（多端实时同步）可启用 Preact+htm 无构建退路
 - output: 技术栈决策
 
@@ -28,7 +28,7 @@ Tauri 桌面应用，vanilla 技术栈（决策：不引框架），延续 GUI_R
   - A: 只碰 transform/opacity、时长 ≤280ms、reduced-motion 降级 → 放行
   - B: 碰 layout 属性/超长动画 → 拒绝
 - decide_by: GPU 合成层规则 + prefers-reduced-motion 尊重
-- source: UI_UX_REDESIGN.md §2.3 性能红线
+- source: phase1-synthesis.md（原始依据：UI_UX_REDESIGN.md §2.3 性能红线）
 - counterexample: 轮盘 backdrop-blur >24px 在集成显卡掉帧 → 设上限
 - output: 动效 token
 
@@ -39,7 +39,7 @@ Tauri 桌面应用，vanilla 技术栈（决策：不引框架），延续 GUI_R
   - A: CSS 变量 + data-i18n 属性批量替换 + IPC 广播三窗 → 方案
   - B: 整页重载 → 拒绝（状态丢失）
 - decide_by: 切换后是否需要重渲且能否保留窗口状态
-- source: UI_UX_REDESIGN.md §5-6
+- source: phase1-synthesis.md（原始依据：UI_UX_REDESIGN.md §5-6）
 - counterexample: 轮盘是独立窗口——切换需跨窗 IPC 通知，不能只改主窗
 - output: 切换机制
 
@@ -50,7 +50,7 @@ Tauri 桌面应用，vanilla 技术栈（决策：不引框架），延续 GUI_R
   - A: alert/静默失败/裸 invoke → 拦截，转 toast + store 包装
   - B: 正规错误边界 → 放行
 - decide_by: UI_UX_REDESIGN.md §8 加固清单
-- source: main_simple.js:564/655 alert 现状
+- source: phase1-synthesis.md（原始依据：main_simple.js:564/655 alert 现状）
 - counterexample: 无——防护清单必须全做
 - output: 合并闸口
 

@@ -1,4 +1,466 @@
 {
   "schema_version": 2,
-  "tasks": []
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Phase2: icons + design system (theme/i18n/motion) + Wheel-A 280px rewrite",
+      "outcome": "Main window rebuilt on design tokens with dark/light + zh/en runtime switching; wheel is a 280px cursor-following radial with type-to-filter; all UI icons come from Lucide (vendored, licensed); selector.* and main_simple.js deleted.",
+      "acceptance": [
+        {
+          "criterion": "Theme (light/dark/auto) and language (zh/en) switch at runtime in settings and persist across restart via localStorage + app_settings",
+          "verify_by": "code review of js/theme.js, js/i18n.js, settings view; grep for persisted keys",
+          "evidence": ""
+        },
+        {
+          "criterion": "Wheel window is 280px content, positioned at cursor with 16px screen-edge clamp, center circle shows filter state; typing filters via Fuse; digits 1-6 select; Esc/blur closes; prefers-reduced-motion honored",
+          "verify_by": "review wheel.html/css/js against prototypes/wheel-a-radial.html and UI_UX_REDESIGN.md §3",
+          "evidence": ""
+        },
+        {
+          "criterion": "No hand-drawn SVG icons, no emoji/glyph icons remain; all icons resolve from vendored Lucide set; src/icons contains raw SVGs + LICENSE + provenance",
+          "verify_by": "grep for icon-plus/icon-search/◀/▶/⭐ in src/; ls src/icons/lucide/",
+          "evidence": ""
+        },
+        {
+          "criterion": "main_simple.js split into ES modules under src/js/ with zero build; node --check passes on all modules",
+          "verify_by": "node --check src/js/*.js src/js/views/*.js src/wheel.js",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "Does not change injection behavior or service internals beyond wheel window sizing/positioning in src/main.rs",
+        "Does not implement merge/frecency/import-export logic beyond the data shapes the new views need"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/UI_UX_REDESIGN.md",
+        ".loom/design/prototypes/main-window.html",
+        ".loom/design/prototypes/wheel-a-radial.html",
+        "src/index.html",
+        "src/main_simple.js",
+        "src/styles.css",
+        "src/wheel.html",
+        "src/wheel.css",
+        "src/wheel.js",
+        "src/main.rs",
+        "src/icons/README.md"
+      ],
+      "touches": [
+        "src/index.html",
+        "src/styles.css",
+        "src/wheel.html",
+        "src/wheel.css",
+        "src/wheel.js",
+        "src/js/",
+        "src/i18n/",
+        "src/icons/",
+        "src/main.rs",
+        "src/selector.html",
+        "src/selector.css",
+        "src/selector.js",
+        "src/main_simple.js"
+      ],
+      "implements": "ui-ux-redesign",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "design-system#C3",
+          "at": "runtime theme/language switching",
+          "must_produce": "persisted dual-scope switch + auto mode"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-004",
+        "DLV-005",
+        "DLV-006"
+      ],
+      "status": "active",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T10:10:15.758Z"
+    },
+    {
+      "id": "TASK-002",
+      "title": "Phase2: prompts+wheel merge, N1-N5 required features, D1-D5 deferred features",
+      "outcome": "Nav is 4 items; pin is an inline star on each card; wheel order = frecency over success-only usage logs; explicit default-prompt mode for quick-inject hotkey; JSON pack import/export exists; {{clipboard}}/{{date}} auto-vars render at injection; manual pin ordering toggle; prompt preview; wheel quick-create; variable fill form before injection.",
+      "acceptance": [
+        {
+          "criterion": "wheel-panel page + nav item gone; star toggle calls toggle_prompt_pin per card",
+          "verify_by": "grep index.html for wheel-panel; review prompts view",
+          "evidence": ""
+        },
+        {
+          "criterion": "get_top_prompts_paginated/get_prompts_view order by frecency (usage_count over success=1 logs + recency decay), pinned first",
+          "verify_by": "review SQL in src/main.rs/service db",
+          "evidence": ""
+        },
+        {
+          "criterion": "default_prompt_mode last_used|fixed + default_prompt_id honored by service quick-inject path; quick hotkey (Ctrl+Alt+A default) registered as hotkey id=1",
+          "verify_by": "review service/src/main.rs, config/mod.rs, hotkey/mod.rs",
+          "evidence": ""
+        },
+        {
+          "criterion": "export_prompts_json emits promptkey-pack v1; import_prompts_json validates format+version and inserts rows",
+          "verify_by": "review Rust commands + js/views/library.js wiring",
+          "evidence": ""
+        },
+        {
+          "criterion": "{{clipboard}}/{{date}}/{{time}} replaced server-side before inject; custom {{vars}} collect via form (wheel) and travel through extended pipe protocol; preview renders merged text client-side",
+          "verify_by": "review service/src/vars.rs, ipc/inject_server.rs, js/views/prompts.js preview, wheel.js var form",
+          "evidence": ""
+        },
+        {
+          "criterion": "Manual wheel order (drag) is an explicit wheel_sort=manual switch overriding auto frecency",
+          "verify_by": "review reorder IPC + mirror list drag + settings row",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "Does not add app-scope auto-matching, multi-wheel, or community features",
+        "Does not modify Phase 1 design docs"
+      ],
+      "depends_on": [
+        "TASK-001"
+      ],
+      "reads": [
+        ".loom/design/MERGE_ARCHITECTURE.md",
+        ".loom/design/UI_UX_REDESIGN.md",
+        "service/src/db.rs",
+        "service/src/main.rs",
+        "service/src/ipc/inject_server.rs",
+        "service/src/config/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "src/main.rs"
+      ],
+      "touches": [
+        "service/src/db.rs",
+        "service/src/main.rs",
+        "service/src/ipc/inject_server.rs",
+        "service/src/config/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/vars.rs",
+        "src/main.rs",
+        "src/inject_pipe_client.rs",
+        "src/js/views/prompts.js",
+        "src/js/views/settings.js",
+        "src/wheel.js",
+        "src/i18n/"
+      ],
+      "implements": "merge-architecture",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "product-architecture#C1",
+          "at": "merge semantics",
+          "must_produce": "pin-as-property model end to end"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-003",
+        "DLV-004"
+      ],
+      "status": "open",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T09:49:31.857Z"
+    },
+    {
+      "id": "TASK-003",
+      "title": "Phase2: template library (builtin packs + URL/file import + export UI)",
+      "outcome": "Market page becomes Library with three sources: curated builtin promptkey-pack JSON files, paste-URL fetch via backend (ureq), local file import; export-my-prompts; source-disclaimer on URL import; zero alert() placeholders remain.",
+      "acceptance": [
+        {
+          "criterion": "At least 3 curated packs (writing/dev/translate, zh+en mix, ~10+ prompts each) ship under src/packs/ in promptkey-pack v1 format",
+          "verify_by": "validate JSON schema + count prompts per pack",
+          "evidence": ""
+        },
+        {
+          "criterion": "URL import fetches via backend command (not webview fetch), shows source-trust disclaimer, previews before inserting",
+          "verify_by": "review fetch_pack_url command + library.js flow",
+          "evidence": ""
+        },
+        {
+          "criterion": "File import uses tauri-plugin-dialog Rust-side picker + fs read; export writes pack JSON to user-chosen path",
+          "verify_by": "review commands + js/views/library.js",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No ratings/comments/update-check/installed-pack management",
+        "No new npm dependencies; Rust deps limited to ureq"
+      ],
+      "depends_on": [
+        "TASK-002"
+      ],
+      "reads": [
+        ".loom/design/MARKET_DECISION.md",
+        ".loom/design/prototypes/main-window.html",
+        "src/main.rs",
+        "Cargo.toml"
+      ],
+      "touches": [
+        "src/js/views/library.js",
+        "src/packs/",
+        "src/main.rs",
+        "Cargo.toml",
+        "src/i18n/"
+      ],
+      "implements": "market-decision",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "market-model#C2",
+          "at": "source trust",
+          "must_produce": "curated builtin packs + disclaimer on URL import"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-011"
+      ],
+      "status": "open",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T09:49:31.919Z"
+    },
+    {
+      "id": "TASK-004",
+      "title": "Phase2: injection hardening (secure-field gate + full clipboard backup + truthful logs)",
+      "outcome": "Injection refuses confirmed password fields (ES_PASSWORD + UIA IsPassword probe, fail-open with log); clipboard backup enumerates all formats and restores them; usage logs are written after inject() with real strategy/latency/success; frecency counts success-only.",
+      "acceptance": [
+        {
+          "criterion": "probe_secure_field uses GetGUIThreadInfo/ES_PASSWORD and UIA IsPassword read-only; confirmed secure -> inject aborts with logged refusal; probe failure -> proceed + log gate_unchecked",
+          "verify_by": "review service/src/injector/ gate code + Cargo feature Win32_UI_Accessibility already present",
+          "evidence": ""
+        },
+        {
+          "criterion": "Clipboard backup enumerates EnumClipboardFormats, copies HGLOBAL data + duplicates CF_BITMAP/CF_ENHMETAFILE handles, restores all captured formats; pollution window shortened",
+          "verify_by": "review inject_via_clipboard rewrite",
+          "evidence": ""
+        },
+        {
+          "criterion": "usage_logs rows reflect actual inject() result: strategy, real ms, success flag, error text; written after injection",
+          "verify_by": "review handle_injection_request ordering",
+          "evidence": ""
+        },
+        {
+          "criterion": "usage stats/frecency count only success=1 rows",
+          "verify_by": "review SQL WHERE clauses",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No WM_PASTE fast path, no integrity-level compare, no pipe ACL (documented deferrals)",
+        "No UIA injection path restoration — read-only probe only"
+      ],
+      "depends_on": [
+        "TASK-002"
+      ],
+      "reads": [
+        ".loom/design/INJECTION_RESEARCH.md",
+        "service/src/injector/mod.rs",
+        "service/src/main.rs",
+        "service/src/context/mod.rs",
+        "service/Cargo.toml",
+        "North_Star.md"
+      ],
+      "touches": [
+        "service/src/injector/mod.rs",
+        "service/src/main.rs",
+        "service/src/config/mod.rs",
+        "src/main.rs"
+      ],
+      "implements": "injection-research",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "injection-engine#C1",
+          "at": "secure-field gate",
+          "must_produce": "fail-open gate blocking only confirmed secure fields"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-007"
+      ],
+      "status": "open",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T09:49:31.981Z"
+    },
+    {
+      "id": "TASK-005",
+      "title": "Phase2: frontend stability hardening",
+      "outcome": "No alert()/confirm() fallbacks remain; all IPC calls go through store with timeout+toast error; DOM lookups guard with qs(); global error/unhandledrejection → toast; wheel/keyboard listeners release on window blur/hide; debug-info channel removed.",
+      "acceptance": [
+        {
+          "criterion": "grep finds zero alert(/confirm( in src/js + wheel.js",
+          "verify_by": "grep -rn 'alert\\|confirm' src/",
+          "evidence": ""
+        },
+        {
+          "criterion": "All invoke() calls wrapped by store.call with 5s timeout and user-visible error toast",
+          "verify_by": "review js/store.js usage across views",
+          "evidence": ""
+        },
+        {
+          "criterion": "window.onerror + unhandledrejection installed; keyboard listeners teardown on blur",
+          "verify_by": "review js/app.js + wheel.js lifecycle",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "Does not change backend behavior",
+        "No new dependencies"
+      ],
+      "depends_on": [
+        "TASK-001",
+        "TASK-003"
+      ],
+      "reads": [
+        ".loom/design/UI_UX_REDESIGN.md",
+        "src/index.html",
+        "src/main_simple.js",
+        "src/wheel.js",
+        "src/styles.css"
+      ],
+      "touches": [
+        "src/js/store.js",
+        "src/js/app.js",
+        "src/js/views/",
+        "src/wheel.js"
+      ],
+      "implements": "ui-ux-redesign",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "design-system#C4",
+          "at": "error surfaces",
+          "must_produce": "toast-based user-visible errors, no alert()"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-008"
+      ],
+      "status": "open",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T10:03:24.797Z"
+    },
+    {
+      "id": "TASK-006",
+      "title": "Phase2 P1: Injector/Context/Hotkey trait abstraction + Windows impl migration",
+      "outcome": "service exposes platform traits; Windows code moves to cfg(windows) impls; AppContext.window_handle is opaque u64; windows_subsystem cfg_attr-gated; windows/winres deps moved to cfg(windows) targets; resolve_service_exe_path deleted; Linux/macOS impls stay Phase 3 stubs out of scope.",
+      "acceptance": [
+        {
+          "criterion": "service/src/{injector,context,hotkey} expose traits; service main loop uses trait objects with zero cfg at call sites",
+          "verify_by": "review service module structure",
+          "evidence": ""
+        },
+        {
+          "criterion": "window_handle is u64/isize end-to-end; Windows impl casts to HWND internally",
+          "verify_by": "grep for HWND in service non-windows-impl code",
+          "evidence": ""
+        },
+        {
+          "criterion": "Cargo.toml moves windows+winres under cfg(windows); #![windows_subsystem] becomes cfg_attr; resolve_service_exe_path gone",
+          "verify_by": "review Cargo.toml, build.rs, src/main.rs head",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No functional behavior change on Windows",
+        "No Linux/macOS implementations in this phase"
+      ],
+      "depends_on": [
+        "TASK-004"
+      ],
+      "reads": [
+        ".loom/design/CROSS_PLATFORM_PLAN.md",
+        "service/src/main.rs",
+        "service/src/injector/mod.rs",
+        "service/src/context/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/db.rs",
+        "src/main.rs",
+        "Cargo.toml",
+        "service/Cargo.toml",
+        "build.rs"
+      ],
+      "touches": [
+        "service/src/injector/",
+        "service/src/context/",
+        "service/src/hotkey/",
+        "service/src/main.rs",
+        "service/src/vars.rs",
+        "src/main.rs",
+        "build.rs",
+        "Cargo.toml",
+        "service/Cargo.toml"
+      ],
+      "implements": "cross-platform-plan",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "injection-engine#C5",
+          "at": "platform boundary",
+          "must_produce": "trait surface usable by X11/macOS ports"
+        }
+      ],
+      "capability_exemption": "",
+      "integrity_version": 1,
+      "covers": [
+        "DLV-009",
+        "DLV-010"
+      ],
+      "status": "open",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-06T09:46:47.002Z",
+      "updated_at": "2026-10-06T10:03:24.851Z"
+    }
+  ]
 }
