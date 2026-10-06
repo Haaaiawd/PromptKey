@@ -105,7 +105,7 @@ function render() {
   if (!matches.length) {
     const e = document.createElement('div');
     e.className = 'empty-tip';
-    e.textContent = t('wh.nomatch');
+    e.textContent = query ? `${t('wh.nomatch')} · ${t('wh.new')}` : t('wh.nomatch');
     w.appendChild(e);
   }
   if (query) {
@@ -205,7 +205,39 @@ document.addEventListener('mousedown', e => {
   if (!open) return;
   if (!e.target.closest('.petal') && !e.target.closest('.center') && !e.target.closest('.var-fill') && !e.target.closest('.toast')) hide();
 });
-$('#wheelCenter')?.addEventListener('click', e => { e.stopPropagation(); hide(); });
+let suppressCenterClick = false;
+$('#wheelCenter')?.addEventListener('click', e => {
+  e.stopPropagation();
+  if (suppressCenterClick) { suppressCenterClick = false; return; }
+  hide();
+});
+
+// D4: quick-create — right-click or long-press(500ms) the center dot
+// creates a prompt named after the current filter text, pins it, keeps wheel open.
+async function quickCreate() {
+  const name = (query || '').trim() || t('wh.newName');
+  try {
+    const id = await invokeRaw('create_prompt', {
+      prompt: { id: null, name, content: '', tags: [], content_type: 'text', variables_json: null, app_scopes_json: '[]', inject_order: null, version: 1, updated_at: null },
+    });
+    await invokeRaw('toggle_prompt_pin', { id });
+    await loadPrompts();
+    const pins = wheelPrompts();
+    state._wheelPool = pins;
+    if (fuse) fuse.setCollection(pins);
+    query = ''; page = 0;
+    render();
+    toast('ok', t('prompt.pinnedToast') + ' · ' + name);
+  } catch (e) {
+    toast('err', t('toast.injectedFail', { e: typeof e === 'string' ? e : e?.message || e }));
+  }
+}
+let pressTimer = 0;
+const center = $('#wheelCenter');
+center?.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); suppressCenterClick = true; quickCreate(); });
+center?.addEventListener('mousedown', () => { pressTimer = setTimeout(() => { suppressCenterClick = true; quickCreate(); }, 550); });
+center?.addEventListener('mouseup', () => clearTimeout(pressTimer));
+center?.addEventListener('mouseleave', () => clearTimeout(pressTimer));
 
 /* ---- lifecycle ---- */
 window.addEventListener('blur', hide);

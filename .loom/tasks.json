@@ -9,22 +9,22 @@
         {
           "criterion": "Theme (light/dark/auto) and language (zh/en) switch at runtime in settings and persist across restart via localStorage + app_settings",
           "verify_by": "code review of js/theme.js, js/i18n.js, settings view; grep for persisted keys",
-          "evidence": ""
+          "evidence": "js/theme.js + js/i18n.js persist to localStorage (pk-theme, pk-lang); sidebar segment controls switch at runtime; verified in dark+zh screenshot."
         },
         {
           "criterion": "Wheel window is 280px content, positioned at cursor with 16px screen-edge clamp, center circle shows filter state; typing filters via Fuse; digits 1-6 select; Esc/blur closes; prefers-reduced-motion honored",
           "verify_by": "review wheel.html/css/js against prototypes/wheel-a-radial.html and UI_UX_REDESIGN.md §3",
-          "evidence": ""
+          "evidence": "wheel.css 280px circle in 320 stage; main.rs present_wheel centers on cursor; js/wheel.js clampToViewport uses monitor bounds with 16*scaleFactor margin; keydown handler + Fuse; CSS reduced-motion media query; screenshot /tmp/pk-wheel5.png."
         },
         {
           "criterion": "No hand-drawn SVG icons, no emoji/glyph icons remain; all icons resolve from vendored Lucide set; src/icons contains raw SVGs + LICENSE + provenance",
           "verify_by": "grep for icon-plus/icon-search/◀/▶/⭐ in src/; ls src/icons/lucide/",
-          "evidence": ""
+          "evidence": "55 SVGs + LICENSE in src/icons/lucide; ICONS.md documents Lucide v1.48.0 + brand derivation from PromptKey_aiextract.png; grep clean."
         },
         {
           "criterion": "main_simple.js split into ES modules under src/js/ with zero build; node --check passes on all modules",
           "verify_by": "node --check src/js/*.js src/js/views/*.js src/wheel.js",
-          "evidence": ""
+          "evidence": "js/{app,store,i18n,theme,dom,toast,icons}.js + js/views/*.js + js/wheel.js; main_simple.js + selector.* deleted; all files node --check clean."
         }
       ],
       "done_when": [],
@@ -51,15 +51,19 @@
         "src/styles.css",
         "src/wheel.html",
         "src/wheel.css",
-        "src/wheel.js",
         "src/js/",
-        "src/i18n/",
         "src/icons/",
+        "src/fuse.min.js",
         "src/main.rs",
-        "src/selector.html",
-        "src/selector.css",
-        "src/selector.js",
-        "src/main_simple.js"
+        "src/ipc_listener.rs",
+        "src/inject_pipe_client.rs",
+        "Cargo.toml",
+        "service/src/main.rs",
+        "service/src/db.rs",
+        "service/src/config/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/injector/mod.rs",
+        "service/src/ipc/inject_server.rs"
       ],
       "implements": "ui-ux-redesign",
       "design_exemption": "",
@@ -77,15 +81,45 @@
         "DLV-005",
         "DLV-006"
       ],
-      "status": "active",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "Browser walkthrough via agent-browser screenshots: light+EN, dark+zh, prompts drawer, library tabs, log stats/table, 280px wheel with 4 petals + center status — all render correctly.",
+        "node --check passed on all src/js modules (app, store, i18n, theme, dom, toast, wheel, views/*, i18n/*).",
+        "i18n audit: 156 keys, zero missing in either zh-CN or en-US.",
+        "DOM id audit: every $('#id') referenced in JS exists in index.html (except dynamic lib- prefix).",
+        "grep confirms zero alert()/confirm() and zero hand-drawn/emoji icons in active frontend.",
+        "Rust changes (uncompiled locally — no cargo on this machine, Windows-API dependent): src/main.rs, src/ipc_listener.rs, src/inject_pipe_client.rs, service/src/main.rs, service/src/db.rs, service/src/config/mod.rs, service/src/hotkey/mod.rs, service/src/injector/mod.rs, service/src/ipc/inject_server.rs, Cargo.toml.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "Theme (light/dark/auto) and language (zh/en) switch at runtime in settings and persist across restart via localStorage + app_settings",
+              "evidence": "js/theme.js + js/i18n.js persist to localStorage (pk-theme, pk-lang); sidebar segment controls switch at runtime; verified in dark+zh screenshot."
+            },
+            {
+              "criterion": "Wheel window is 280px content, positioned at cursor with 16px screen-edge clamp, center circle shows filter state; typing filters via Fuse; digits 1-6 select; Esc/blur closes; prefers-reduced-motion honored",
+              "evidence": "wheel.css 280px circle in 320 stage; main.rs present_wheel centers on cursor; js/wheel.js clampToViewport uses monitor bounds with 16*scaleFactor margin; keydown handler + Fuse; CSS reduced-motion media query; screenshot /tmp/pk-wheel5.png."
+            },
+            {
+              "criterion": "No hand-drawn SVG icons, no emoji/glyph icons remain; all icons resolve from vendored Lucide set; src/icons contains raw SVGs + LICENSE + provenance",
+              "evidence": "55 SVGs + LICENSE in src/icons/lucide; ICONS.md documents Lucide v1.48.0 + brand derivation from PromptKey_aiextract.png; grep clean."
+            },
+            {
+              "criterion": "main_simple.js split into ES modules under src/js/ with zero build; node --check passes on all modules",
+              "evidence": "js/{app,store,i18n,theme,dom,toast,icons}.js + js/views/*.js + js/wheel.js; main_simple.js + selector.* deleted; all files node --check clean."
+            }
+          ],
+          "at": "2026-10-06T10:52:34.794Z"
+        }
+      ],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T10:10:15.758Z"
+      "updated_at": "2026-10-06T10:52:34.795Z",
+      "completed_at": "2026-10-06T10:52:34.795Z"
     },
     {
       "id": "TASK-002",
@@ -170,7 +204,7 @@
         "DLV-003",
         "DLV-004"
       ],
-      "status": "open",
+      "status": "active",
       "progress": {
         "completed": [],
         "current": "",
@@ -178,7 +212,7 @@
       },
       "evidence": [],
       "created_at": "2026-10-06T09:46:47.002Z",
-      "updated_at": "2026-10-06T09:49:31.857Z"
+      "updated_at": "2026-10-06T10:54:01.858Z"
     },
     {
       "id": "TASK-003",
