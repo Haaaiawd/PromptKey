@@ -28,6 +28,39 @@ pub enum InjectionStrategy {
 
 // EditorType and EditorDetection removed (UIA-specific, no longer used)
 
+/// Phase 2 D1: read current CF_UNICODETEXT clipboard content for {{clipboard}}.
+/// Best-effort: returns None if the clipboard can't be opened or has no text.
+pub fn clipboard_text() -> Option<String> {
+    unsafe {
+        if OpenClipboard(HWND(std::ptr::null_mut())).is_err() {
+            return None;
+        }
+        let mut result = None;
+        if IsClipboardFormatAvailable(CF_UNICODETEXT_CONST).is_ok() {
+            if let Ok(h) = GetClipboardData(CF_UNICODETEXT_CONST) {
+                let hg = HGLOBAL(h.0);
+                let ptr = GlobalLock(hg) as *const u16;
+                if !ptr.is_null() {
+                    let mut buf: Vec<u16> = Vec::new();
+                    let mut p = ptr;
+                    for _ in 0..MAX_CLIPBOARD_SIZE {
+                        let ch = *p;
+                        if ch == 0 {
+                            break;
+                        }
+                        buf.push(ch);
+                        p = p.add(1);
+                    }
+                    let _ = GlobalUnlock(hg);
+                    result = Some(String::from_utf16_lossy(&buf));
+                }
+            }
+        }
+        let _ = CloseClipboard();
+        result
+    }
+}
+
 pub struct Injector {
     config: Config,
 }

@@ -48,28 +48,10 @@ pub fn start_ipc_listener(app: AppHandle) {
                     let msg_clean = msg.trim();
                     println!("[IPC] Received: {}", msg_clean);
 
-                    if msg_clean == "SHOW_SELECTOR" {
-                        if let Some(window) = app_handle.get_webview_window("selector-panel") {
-                            // Show and focus window
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            // Reset frontend state
-                            let _ = window.emit("reset-state", ());
-                            println!("[IPC] Selector window shown via IPC");
-                        } else {
-                            eprintln!("[IPC] Selector window not found!");
-                        }
-                    } else if msg_clean == "SHOW_WHEEL" {
-                        // TW013: Handle SHOW_WHEEL message
-                        if let Some(window) = app_handle.get_webview_window("wheel-panel") {
-                            // Show and focus window
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            // Reset frontend state
-                            let _ = window.emit("reset-state", ());
-                            println!("[IPC] Wheel window shown via IPC");
-                        } else {
-                            eprintln!("[IPC] Wheel window not found!");
+                    if msg_clean == "SHOW_WHEEL" {
+                        // Phase 2: wheel window follows the cursor (positioned in main.rs)
+                        if let Err(e) = crate::present_wheel(&app_handle) {
+                            eprintln!("[IPC] Failed to show wheel: {}", e);
                         }
                     }
                 }

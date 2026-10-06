@@ -75,15 +75,18 @@ pub struct HotkeyService {
     hotkey_manager: HotkeyManager,
     should_quit: Arc<AtomicBool>,
     hotkey: String,
+    quick_hotkey: String,
     thread_handle: Option<JoinHandle<StdResult<(), Box<dyn std::error::Error + Send + 'static>>>>,
 }
 
 impl HotkeyService {
-    pub fn new(hotkey: String) -> Self {
+    /// `hotkey` opens the wheel (id 4); `quick_hotkey` injects the default prompt (id 5)
+    pub fn new(hotkey: String, quick_hotkey: String) -> Self {
         HotkeyService {
             hotkey_manager: HotkeyManager::new(),
             should_quit: Arc::new(AtomicBool::new(false)),
             hotkey,
+            quick_hotkey,
             thread_handle: None,
         }
     }
@@ -91,6 +94,7 @@ impl HotkeyService {
     pub fn start(&mut self) -> StdResult<(), Box<dyn std::error::Error + Send + 'static>> {
         let should_quit = self.should_quit.clone();
         let hotkey_str = self.hotkey.clone();
+        let quick_hotkey_str = self.quick_hotkey.clone();
         let tx = self.hotkey_manager.tx.clone();
 
         let handle = std::thread::spawn(
@@ -107,6 +111,15 @@ impl HotkeyService {
                     log::error!("注册轮盘热键失败: {}", e);
                 } else {
                     println!("✅ [HOTKEY] 轮盘触发热键已注册: {}", hotkey_str);
+                }
+
+                // Phase 2 N4: 注册"默认提示词直注"热键
+                if !quick_hotkey_str.is_empty() && quick_hotkey_str != hotkey_str {
+                    if let Err(e) = manager.register(5, &quick_hotkey_str) {
+                        log::error!("注册快捷热键失败: {}", e);
+                    } else {
+                        println!("✅ [HOTKEY] 默认提示词热键已注册: {}", quick_hotkey_str);
+                    }
                 }
 
                 let mut msg = MSG::default();

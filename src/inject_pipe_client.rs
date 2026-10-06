@@ -22,6 +22,17 @@ pub fn send_inject_request(prompt_id: i32) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+/// Phase 2 D5: send inject request with collected {{var}} values
+/// Format: INJECT_PROMPT:{id}:VARS:{urlencoded_json}\n
+pub fn send_inject_request_vars(prompt_id: i32, vars_json: String) -> Result<(), Box<dyn std::error::Error>> {
+    let mut pipe = OpenOptions::new().write(true).open(PIPE_NAME)?;
+    // vars_json may contain ':' so it's delimited by the third ':'-prefix
+    let message = format!("INJECT_PROMPT:{}:VARS:{}\n", prompt_id, vars_json);
+    pipe.write_all(message.as_bytes())?;
+    pipe.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

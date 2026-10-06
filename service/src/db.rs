@@ -142,6 +142,28 @@ impl Database {
             [],
         )?;
 
+        // Phase 2: prompts columns that may be missing on legacy DBs
+        for (col, decl) in [
+            ("is_pinned", "INTEGER DEFAULT 0"),
+            ("variables_json", "TEXT"),
+            ("app_scopes_json", "TEXT"),
+            ("inject_order", "TEXT"),
+        ] {
+            let _ = self.conn.execute(
+                &format!("ALTER TABLE prompts ADD COLUMN {} {}", col, decl),
+                [],
+            );
+        }
+
+        // Phase 2: key/value settings (default_prompt_mode, default_prompt_id, ...)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )",
+            [],
+        )?;
+
         // TW007: Ensure action column exists in usage_logs
         let mut table_info = self.conn.prepare("PRAGMA table_info(usage_logs)")?;
         let has_action: bool = table_info
@@ -398,11 +420,55 @@ impl Database {
         }
     }
 
-    pub fn find_prompt_for_context(
-        &self,
-        _app_name: &str,
-        _window_title: &str,
-    ) -> Result<Option<Prompt>, Box<dyn std::error::Error>> {
+    /// Phase 2: read a key/value app setting (None if absent)
+    pub fn app_setting(&self, key: &str) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = ?1",
+                [key],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+    }
+
+    /// Phase 2 N4: explicit default-prompt policy.
+    /// `default_prompt_mode` = "fixed" → `default_prompt_id`;
+    /// anything else → "last_used" (most recent successful injection),
+    /// falling back to the legacy selected_prompt row.
+    pub fn resolve_default_prompt(&self) -> Result<Option<Prompt>, Box<dyn std::error::Error>> {
+        let mode = self
+            .app_setting("default_prompt_mode")
+            .unwrap_or_else(|| "last_used".to_string());
+
+        if mode == "fixed" {
+            if let Some(id_str) = self.app_setting("default_prompt_id") {
+                if let Ok(id) = id_str.parse::<i32>() {
+                    if let Ok(p) = self.get_prompt_by_id(id) {
+                        return Ok(Some(p));
+                    }
+                }
+            }
+            return Ok(None);
+        }
+
+        // last_used: most recent successful injection
+        let last_id: Option<i32> = self
+            .conn
+            .query_row(
+                "SELECT prompt_id FROM usage_logs
+                 WHERE success = 1 AND prompt_id IS NOT NULL
+                 ORDER BY created_at DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if let Some(id) = last_id {
+            if let Ok(p) = self.get_prompt_by_id(id) {
+                return Ok(Some(p));
+            }
+        }
+
+        // Legacy fallback: selected_prompt table
         let selected_id = self.get_selected_prompt_id()?;
         if selected_id == 0 {
             return Ok(None);
@@ -411,5 +477,13 @@ impl Database {
             Ok(p) => Ok(Some(p)),
             Err(_) => Ok(None),
         }
+    }
+
+    pub fn find_prompt_for_context(
+        &self,
+        _app_name: &str,
+        _window_title: &str,
+    ) -> Result<Option<Prompt>, Box<dyn std::error::Error>> {
+        self.resolve_default_prompt()
     }
 }
