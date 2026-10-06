@@ -4,7 +4,7 @@
     "name": "promptkey",
     "status": "complete",
     "created_at": "2026-10-06T08:16:56.246Z",
-    "updated_at": "2026-10-06T12:08:28.340Z"
+    "updated_at": "2026-10-06T13:50:35.393Z"
   },
   "understanding": {
     "confirmed": [
@@ -127,6 +127,30 @@
         "text": "Preview distributed: https://box.haaaiawd.live/dl/promptkey-preview/ (index/wheel/packs 200).",
         "source": "conversation",
         "at": "2026-10-06T12:08:28.340Z"
+      },
+      {
+        "id": "F-021",
+        "text": "GitHub Actions CI 已落地：ci.yml（PR/master → cargo check+clippy+test @ windows-latest + 前端静态检查 @ ubuntu）与 release.yml（v* tag / dispatch → cargo check 闸 → tauri build → NSIS+MSI → tag 时发 GitHub Release）。真实运行验证通过。",
+        "source": "conversation",
+        "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "F-022",
+        "text": "Phase 2 未编译的 11+ Rust 文件现已全部通过编译；首轮 CI 暴露 3 个真实错误（CoCreateInstance 泛型签名漂移、unsafe 缺失、to_socket_addrs 返回迭代器），均已修复。",
+        "source": "conversation",
+        "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "F-023",
+        "text": "v2.0.0 已发布：https://github.com/Haaaiawd/PromptKey/releases/tag/v2.0.0 ，资产 PromptKey_2.0.0_x64-setup.exe (3.4MB NSIS) + PromptKey_2.0.0_x64_en-US.msi (4.7MB)，已分发至 https://box.haaaiawd.live/dl/promptkey/ 。",
+        "source": "conversation",
+        "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "F-024",
+        "text": "版本号单一权威源为 tauri.conf.json（2.0.0），同步点：Cargo.toml/Cargo.lock crate 版本、src/index.html 关于页。",
+        "source": "conversation",
+        "at": "2026-10-06T13:50:35.393Z"
       }
     ],
     "assumptions": [
@@ -184,8 +208,24 @@
         "id": "Q-004",
         "question": "Windows-only verification pending: cargo check of the 11 uncompiled Rust files (windows 0.52/0.58 API drift risk), real hotkey+pipe+SendInput/clipboard injection on a multi-monitor Windows box, COM/UIA password-gate behavior.",
         "impact": "high",
+        "status": "resolved",
+        "at": "2026-10-06T12:08:28.340Z",
+        "resolution": "",
+        "resolved_at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "Q-005",
+        "question": "Windows 实机行为验证（CI 只证编译）：热键+管道+SendInput/剪贴板注入在多显示器环境实测，COM/UIA 密码门禁实测，安装包装/卸/升级，WebView2 缺失表现",
+        "impact": "high",
         "status": "open",
-        "at": "2026-10-06T12:08:28.340Z"
+        "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "Q-006",
+        "question": "是否购买代码签名（Azure Trusted Signing ~$10/月 vs OV 证书 $100-400/年）以消除 SmartScreen 拦截",
+        "impact": "medium",
+        "status": "open",
+        "at": "2026-10-06T13:50:35.393Z"
       }
     ]
   },
