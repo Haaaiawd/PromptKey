@@ -47,7 +47,8 @@ impl MacosContext {
         if c.is_null() {
             return None;
         }
-        Some(CStr::from_ptr(c).to_string_lossy().into_owned())
+        // Edition 2024: unsafe ops inside an unsafe fn still want a block.
+        unsafe { Some(CStr::from_ptr(c).to_string_lossy().into_owned()) }
     }
 }
 
