@@ -132,17 +132,27 @@ select:hover,.btn:hover{border-color:var(--border-strong)}
 }
 .sec-title{font-size:var(--fs-caption);color:var(--text-muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:0 4px 8px;display:flex;align-items:center;gap:5px}
 .wheel-mirror{display:flex;flex-direction:column;gap:2px}
+.wheel-mirror.drag-live,.wheel-mirror.drag-live *{cursor:grabbing!important}
 .wm-item{
   display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--r-sm);
-  font-size:var(--fs-small);color:var(--text-secondary);cursor:pointer;border:1px solid transparent;
+  font-size:var(--fs-small);color:var(--text-secondary);cursor:grab;border:1px solid transparent;
+  user-select:none;touch-action:pan-y;
 }
 .wm-item:hover{background:var(--bg-surface);color:var(--text-primary)}
 .wm-item .num{width:14px;font-size:10px;color:var(--text-muted);text-align:center;flex-shrink:0}
 .wm-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wm-item .drag{opacity:0;color:var(--text-muted);cursor:grab}
-.wm-item:hover .drag{opacity:1}
-.wm-item.dragging{opacity:.45;border-style:dashed;border-color:var(--border-strong)}
-.wm-item.dragover{border-color:var(--accent)}
+.wm-item .drag{opacity:0;color:var(--text-muted);cursor:grab;touch-action:none}
+.wm-item:hover .drag,.wm-item:focus-within .drag{opacity:1}
+/* pointer drag (not HTML5 DnD): the row lifts out of flow and tracks the
+   pointer; .wm-insert marks the landing slot so siblings reflow around it */
+.wm-item.dragging{
+  position:fixed;z-index:40;pointer-events:none;cursor:grabbing;
+  background:var(--bg-elevated);border-color:var(--border-strong);box-shadow:var(--shadow-md);
+}
+.wm-insert{
+  border:1.5px dashed var(--accent);border-radius:var(--r-sm);
+  background:var(--accent-soft);flex-shrink:0;
+}
 .wm-empty{font-size:var(--fs-small);color:var(--text-muted);padding:8px}
 .wheel-sort-row{padding:2px 4px}
 .tags-cloud{display:flex;flex-wrap:wrap;gap:6px}
