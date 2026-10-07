@@ -1655,3 +1655,76 @@ fn restart_service(app: AppHandle) -> Result<String, String> {
         Err(e) => Err(e)
     }
 }
+#[cfg(test)]
+mod capability_regression_tests {
+    //! P0 regression guard — 2.0.1/2.0.2 shipped with an EMPTY capability set:
+    //! Tauri 2 then ACL-denies every `plugin:*` IPC call (event.listen,
+    //! window.set_position, window.hide…). App commands still answered, so the
+    //! UI looked healthy while the wheel window was permanently deaf — and
+    //! every e2e test mocked window.__TAURI__, so nothing caught it.
+    //! This test fails `cargo test` before that can ship again.
+
+    use std::path::Path;
+
+    #[test]
+    fn capabilities_cover_both_windows() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities");
+        assert!(
+            dir.is_dir(),
+            "capabilities/ directory is missing — Tauri 2 will deny every plugin:* IPC call"
+        );
+
+        let mut windows_covered: Vec<String> = Vec::new();
+        let mut permissions: Vec<String> = Vec::new();
+        let mut files = 0usize;
+        for entry in std::fs::read_dir(&dir).expect("capabilities/ readable") {
+            let path = entry.expect("dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            files += 1;
+            let text = std::fs::read_to_string(&path).expect("capability file readable");
+            let v: serde_json::Value = serde_json::from_str(&text)
+                .unwrap_or_else(|e| panic!("invalid capability JSON {}: {}", path.display(), e));
+            if let Some(ws) = v.get("windows").and_then(|w| w.as_array()) {
+                for w in ws {
+                    if let Some(s) = w.as_str() {
+                        windows_covered.push(s.to_string());
+                    }
+                }
+            }
+            if let Some(ps) = v.get("permissions").and_then(|p| p.as_array()) {
+                for p in ps {
+                    if let Some(s) = p.as_str() {
+                        permissions.push(s.to_string());
+                    } else if let Some(s) = p.get("identifier").and_then(|i| i.as_str()) {
+                        permissions.push(s.to_string());
+                    }
+                }
+            }
+        }
+        assert!(files > 0, "capabilities/ contains no .json file");
+
+        let covered = |label: &str| windows_covered.iter().any(|w| w == "*" || w == label);
+        assert!(covered("main"), "no capability covers the 'main' window");
+        assert!(
+            covered("wheel-panel"),
+            "no capability covers the 'wheel-panel' window — wheel event.listen/setPosition/hide will be ACL-denied"
+        );
+
+        // The load-bearing grants the JS layer actually calls:
+        //   core:default                 → event:listen + window read APIs
+        //   core:window:allow-hide       → wheel.js hide()
+        //   core:window:allow-set-position → wheel.js clampToViewport
+        for need in [
+            "core:default",
+            "core:window:allow-hide",
+            "core:window:allow-set-position",
+        ] {
+            assert!(
+                permissions.iter().any(|p| p == need),
+                "permission '{need}' missing from capabilities — a real JS call site depends on it"
+            );
+        }
+    }
+}

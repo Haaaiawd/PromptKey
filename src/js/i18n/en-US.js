@@ -38,6 +38,8 @@ export default {
   "wh.new": "+ New",
   "wh.centerHint": "Click to close · right-click/hold = new prompt",
   "wh.page": "{a}/{b}",
+  "wh.envNoBridge": "Runtime problem: Tauri bridge not injected — wheel cannot work",
+  "wh.envAcl": "IPC denied by ACL — capabilities missing, wheel cannot work",
 
   "tags.section": "Tags",
 
@@ -199,7 +201,11 @@ export default {
 
   "ipc.fail": "Operation failed: {e}",
   "ipc.timeout": "Request timed out — service may be down",
-  "ipc.noTauri": "Desktop runtime not ready",
+  "ipc.noTauri": "Tauri bridge not injected (window.__TAURI__ missing)",
+  "ipc.envNoBridge": "Runtime problem: desktop bridge (Tauri) not injected",
+  "ipc.envNoBridgeSub": "No IPC call can work. Expected when previewing in a plain browser; if this is the installed desktop app, reinstall it or send a screenshot of this message to the developers.",
+  "ipc.envAcl": "Runtime problem: IPC permissions (capabilities) missing",
+  "ipc.envAclSub": "Event and window APIs were denied by ACL: {e}. Wheel summon and quick-create will not work — upgrade to a build that ships capabilities, or report this message to the developers.",
   "err.generic": "Error: {e}",
 
   "rel.justnow": "just now",

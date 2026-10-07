@@ -45,6 +45,29 @@ jobs:
       - name: Build + bundle (tauri build)
         run: tauri build --verbose
 
+      # tauri-build resolves capabilities/ at compile time and rewrites
+      # gen/schemas/capabilities.json with the resolved map — this file is the
+      # build-time proof that capabilities made it into the binary's context.
+      # {} here = the 2.0.x bug: every plugin:* IPC call ACL-denied at runtime.
+      - name: Verify resolved capabilities made it into the build
+        shell: pwsh
+        run: |
+          $caps = Get-Content gen/schemas/capabilities.json -Raw | ConvertFrom-Json
+          $names = @($caps.PSObject.Properties.Name)
+          if ($names.Count -eq 0) { throw "tauri build resolved ZERO capabilities — plugin:* IPC would be ACL-denied at runtime (the 2.0.x regression)" }
+          $labels = @()
+          foreach ($n in $names) {
+            foreach ($w in @($caps.$n.windows)) {
+              $labels += $(if ($w -is [string]) { $w } else { $w.identifier })
+            }
+          }
+          foreach ($req in @('main','wheel-panel')) {
+            if ($labels -notcontains $req -and $labels -notcontains '*') {
+              throw "resolved capabilities do not cover window '$req' ($($labels -join ', '))"
+            }
+          }
+          Write-Host "resolved capabilities: $($names -join ', ') — windows: $($labels -join ', ')"
+
       - name: List + verify bundle artifacts
         shell: pwsh
         run: |

@@ -13,6 +13,9 @@
     <div class="center-txt" id="centerTxt"></div>
   </div>
 </div>
+<!-- visible when IPC init failed — without it a broken environment renders an
+     invisible always-on-top overlay with zero feedback -->
+<div class="env-err" id="envErr"></div>
 <div class="toasts" id="toasts"></div>
 <script src="fuse.min.js"></script>
 <script type="module" src="js/wheel.js"></script>

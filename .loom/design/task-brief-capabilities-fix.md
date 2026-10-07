@@ -137,3 +137,46 @@ deliverables:
 status: success
 errors: none
 ```
+
+---
+
+# TASK-009 实施记录（源码级结论修正）
+
+## 机制修正（对原 brief 的一处更正）
+
+原 brief 说「没有 capability，`window.__TAURI__` 根本不会注入」。读 Tauri 2 源码后需要修正为更精确的两层模型：
+
+- **`__TAURI__` 注入**由 `app.withGlobalTauri` 控制（tauri-utils config + `read_global_api_scripts` → webview init script），**与 capabilities 无关**。真机上 `hasTauri()` 是 `true`，app command（`generate_handler!` 注册的自定义命令）照常可用——这解释了为什么 2.0.x 的界面能加载、提示词能渲染、服务状态灯正常。
+- **capabilities 管的是 `plugin:*` 命令的 ACL**。`Resolved::resolve` 里 app command 走 `is_allowed`（本地 origin + 无 `__app-acl__` manifest → 直通），plugin command 走 `invoke.acl` 查表。capabilities 为空 → `plugin:event|listen`、`plugin:window|hide`/`set_position` 全部被拒。
+- 所以真实的死法不是「`__TAURI__` 没注入」，而是**「桥在，但轮盘听 `wheel-show` 的 `event.listen` 被 ACL 拒掉」**：Rust 照常 `show()` 出 320px 透明窗口，JS 却永远等不到事件——屏幕上是一个看不见的 always-on-top 覆盖层。比「没反应」更糟，它还会吞点击。
+- 因此降级检测不能只看 `hasTauri()`，必须**实探一个 plugin:* 命令**（`event.listen` 最廉价）。`probeIpcEnvironment()` 区分 `no-bridge` / `acl-denied` 两种死因。
+
+## 录制器症状的归因（与 capabilities 无关）
+
+`apply_settings` / `check_hotkeys` 都是 app command，不受 ACL 门控——录制器的「提交被拒」不是 IPC 拒绝，而是 `commitHotkey` 的回滚路径：`check_hotkeys` 报告 hotkey 注册非 ok（冲突 / 引擎重启失败 / rep 为 null）→ 字段值与配置一起回滚 + toast。这是真实的注册失败被正确表面化。若升级后仍复现，用「链路诊断」按钮的 JSON 回报发回。
+
+## 权限 → 调用点映射（逐条有据）
+
+| 权限（解析后） | 调用点 | 窗口 |
+|---|---|---|
+| `core:event:allow-listen`（由 `core:default`→`core:event:default` 提供） | `wheel.js init()`：`listen('wheel-show')`/`listen('wheel-hide')`；`app.js`：`listen('wheel-new-prompt')` | 两个 |
+| `core:event:allow-unlisten` | listen 返回的 unlisten（探针调用） | 两个 |
+| `core:window:allow-outer-position` / `outer-size` / `current-monitor`（由 `core:default`→`core:window:default` 提供） | `wheel.js clampToViewport()` | wheel-panel |
+| `core:window:allow-set-position`（显式授予，不在 default） | `clampToViewport()` → `w.setPosition(PhysicalPosition)` | wheel-panel |
+| `core:window:allow-hide`（显式授予，不在 default） | `wheel.js hide()` → `win().hide()` | wheel-panel |
+
+**未授予及理由**：`allow-show`/`allow-set-focus`/`allow-start-dragging`/`allow-close` 等窗口写操作在 JS 侧无调用点（show/focus/hide 由 Rust 侧执行，不经 ACL）；`shell:`/`dialog:`/`fs:`/`core:webview:*` 变更类权限同理——JS 从不 invoke 这些 plugin 命令。
+
+## app command 不需要 capability 的依据
+
+`tauri-build` 的 `has_app_manifest` = `commands().len()>0 || permissions/ 非空 || permission_sets 非空`。本仓库 `build.rs` 仅 `tauri_build::build()`（默认 `AppManifest`，commands 空），无 `permissions/` 目录 → 无 `__app-acl__` manifest → `Resolved::resolve` 对 app command 只做 `is_local` 判断，本地 origin 直通。**若日后给 app command 建 manifest，则必须为每个 `invoke()` 命令建 `allow-<cmd>` 权限**——这是一个已记录的陷阱。
+
+## 拆还是不拆
+
+单一 `default` capability 覆盖两个窗口。理由：两个 webview 加载同一 `frontendDist` 的受信本地代码，所需权限差仅两条 window 写权限；拆成 main/wheel 两个文件只增加维护面，不增加安全边界（local-only app，无 remote 源）。
+
+## 构建链验证（对 Task 3 的源码级回答）
+
+- `tauri_build::build()` → `acl::build` → 默认 glob `./capabilities/**/*`（`capabilities_path_pattern` 未覆盖时），与 `frontendDist` 无关——能力文件不进前端产物，而是在 `generate_context!()` 编译期打进二进制的 `context.capabilities`。
+- `save_capabilities` 把解析结果写回 `gen/schemas/capabilities.json` 并 copy 进 `OUT_DIR`；release CI 在读它验证「构建产物确实含 capability」。
+- `validate_capabilities` 在 build.rs 阶段就会对未知权限 identifier 报错 → 拼错的权限过不了 `cargo check`。
