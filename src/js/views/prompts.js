@@ -46,7 +46,7 @@ function renderWheelMirror() {
   mirror.innerHTML = pins.length
     ? pins.map((p, i) => `<div class="wm-item" data-wheel-id="${p.id}">
         <span class="num">${i + 1}</span><span class="nm" title="${esc(p.name)}">${esc(p.name)}</span>
-        <span class="drag" data-drag="${p.id}" title="${esc(t('wheel.dragHint'))}">${icon('grip-vertical', 14)}</span>
+        <span class="drag" data-drag="${p.id}" tabindex="0" role="button" aria-label="${esc(t('wheel.dragHint'))}" title="${esc(t('wheel.dragHint'))}">${icon('grip-vertical', 14)}</span>
       </div>`).join('')
     : `<div class="wm-empty">${esc(t('wheel.empty'))}</div>`;
   const btn = $('#wheelSortBtn');
@@ -79,10 +79,6 @@ export function openDrawer(id, draft) {
   // drafts arriving from the wheel's quick-create gesture intend a petal, so
   // the pin switch starts on (the user can uncheck before saving).
   $('#fPin')?.classList.toggle('on', p ? !!p.is_pinned : !!draft?.pin);
-  let apps = [];
-  try { apps = p?.app_scopes_json ? JSON.parse(p.app_scopes_json) : []; } catch { apps = []; }
-  setV('#fApps', Array.isArray(apps) ? apps.join(', ') : '');
-  setV('#fOrder', p?.inject_order || '');
   const meta = $('#fMeta');
   if (meta) meta.innerHTML = p
     ? `<span>${esc(t('f.version', { v: p.version || 1, t: p.updated_at || '—' }))}</span>`
@@ -134,7 +130,6 @@ async function saveDrawer() {
   const content = contentEl.value;
   if (!name || !content.trim()) { toast('warn', t('err.generic', { e: t('f.name') + ' / ' + t('f.content') })); return; }
   const tags = ($('#fTags')?.value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
-  const apps = ($('#fApps')?.value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
   const p = state.prompts.find(x => x.id === editingId);
   const payload = {
     id: editingId,
@@ -143,8 +138,10 @@ async function saveDrawer() {
     tags,
     content_type: p?.content_type || 'text',
     variables_json: p?.variables_json || null,
-    app_scopes_json: JSON.stringify(apps),
-    inject_order: ($('#fOrder')?.value || '').trim() || null,
+    // internal fields — not user-editable; preserve stored values so a save
+    // never wipes scopes or a manual pin order written by set_pin_order
+    app_scopes_json: p?.app_scopes_json ?? null,
+    inject_order: p?.inject_order ?? null,
     version: (p?.version || 0) + (editingId ? 1 : 0) || 1,
     updated_at: null,
   };
@@ -159,35 +156,171 @@ async function saveDrawer() {
   } catch { /* ipc already toasted */ }
 }
 
+/* ---- wheel mirror manual reorder ----
+   Pointer-event implementation, not HTML5 drag-and-drop: toggling `draggable`
+   inside mousedown races WebView2's drag detector (dragstart may never fire),
+   and the old path silently preventDefault'd whenever wheelSort was 'auto'
+   (the default) — users saw a grip icon but nothing moved.
+
+   Model: pointerdown arms a gesture (mouse: anywhere on the row — the row has
+   no click action; touch/pen: only on the grip handle, so a vertical press on
+   a row still scrolls .leftcol via touch-action: pan-y). Once the pointer
+   passes DRAG_THRESHOLD the row lifts out of flow (position:fixed, follows
+   the pointer) and a .wm-insert placeholder marks the landing slot — sibling
+   rows reflow around it through normal flex layout, no FLIP math. Drop walks
+   the container children to build the id sequence, then commits via
+   set_pin_order. A reorder is itself an explicit ordering intent, so a commit
+   from auto mode flips wheelSort to 'manual' and persists it — the dropped
+   order must still be there after reload. Keyboard: focus the grip (or row)
+   and use ArrowUp/ArrowDown/Home/End for the same commit path. */
+const DRAG_THRESHOLD = 5;
+let mirrorDragBound = false;
+let mirrorDrag = null;
+let suppressClickUntil = 0;
+
 function bindMirrorDrag() {
-  let dragId = null;
-  $$('#wheelMirror [data-drag]').forEach(handle => {
-    const row = handle.closest('.wm-item');
-    handle.addEventListener('mousedown', () => { row.draggable = true; });
-    handle.addEventListener('mouseup', () => { row.draggable = false; });
-    row.addEventListener('dragstart', e => {
-      if (state.wheelSort !== 'manual') { e.preventDefault(); toast('info', t('wheel.sortSwitchToManual')); return; }
-      dragId = +row.dataset.wheelId;
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    row.addEventListener('dragend', () => { row.classList.remove('dragging'); row.draggable = false; });
-    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('dragover'); });
-    row.addEventListener('dragleave', () => row.classList.remove('dragover'));
-    row.addEventListener('drop', async e => {
-      e.preventDefault(); row.classList.remove('dragover'); row.draggable = false;
-      const overId = +row.dataset.wheelId;
-      if (!dragId || dragId === overId) return;
-      const pins = wheelPrompts().map(p => p.id);
-      const from = pins.indexOf(dragId), to = pins.indexOf(overId);
-      if (from < 0 || to < 0) return;
-      pins.splice(to, 0, pins.splice(from, 1)[0]);
-      try {
-        await ipc('set_pin_order', { ids: pins });
-        await loadPrompts(); rebuildIndex(); renderPrompts();
-      } catch { /* toasted */ }
-    });
+  const mirror = $('#wheelMirror');
+  if (!mirror || mirrorDragBound) return;
+  mirrorDragBound = true;
+  mirror.addEventListener('pointerdown', onMirrorPointerDown);
+  mirror.addEventListener('pointermove', onMirrorPointerMove);
+  mirror.addEventListener('pointerup', onMirrorPointerUp);
+  mirror.addEventListener('pointercancel', onMirrorPointerCancel);
+  mirror.addEventListener('lostpointercapture', onMirrorPointerCancel);
+  mirror.addEventListener('keydown', onMirrorKeyDown);
+  // a real drag must not end in a click landing on the row underneath
+  mirror.addEventListener('click', e => {
+    if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
+function onMirrorPointerDown(e) {
+  if (mirrorDrag) return;
+  const row = e.target.closest('.wm-item');
+  if (!row || !$('#wheelMirror')?.contains(row)) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const onHandle = !!e.target.closest('.drag');
+  if (e.pointerType !== 'mouse' && !onHandle) return;
+  if (e.pointerType !== 'mouse') e.preventDefault();
+  mirrorDrag = { pointerId: e.pointerId, row, id: +row.dataset.wheelId, startY: e.clientY, active: false, marker: null };
+  try { row.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+}
+
+function onMirrorPointerMove(e) {
+  const d = mirrorDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  const dy = e.clientY - d.startY;
+  if (!d.active) {
+    if (Math.abs(dy) < DRAG_THRESHOLD) return;
+    startMirrorDrag(d);
+  }
+  d.row.style.transform = `translate3d(0, ${dy}px, 0)`;
+  placeMirrorMarker(d, e.clientY);
+  autoScrollMirror(e.clientY);
+}
+
+function startMirrorDrag(d) {
+  const mirror = $('#wheelMirror');
+  d.active = true;
+  const rect = d.row.getBoundingClientRect();
+  const marker = document.createElement('div');
+  marker.className = 'wm-insert';
+  marker.style.height = `${rect.height}px`;
+  marker.setAttribute('aria-hidden', 'true');
+  d.marker = marker;
+  mirror.insertBefore(marker, d.row);
+  d.row.classList.add('dragging');
+  Object.assign(d.row.style, {
+    left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
   });
+  mirror.classList.add('drag-live');
+}
+
+function placeMirrorMarker(d, y) {
+  const mirror = $('#wheelMirror');
+  let before = null;
+  for (const r of $$('.wm-item', mirror)) {
+    if (r === d.row) continue;
+    const rc = r.getBoundingClientRect();
+    if (y < rc.top + rc.height / 2) { before = r; break; }
+  }
+  if (before) mirror.insertBefore(d.marker, before);
+  else mirror.appendChild(d.marker);
+}
+
+// edge-scroll the .leftcol while the pointer hovers near its top/bottom
+function autoScrollMirror(y) {
+  const col = $('#wheelMirror')?.closest('.leftcol');
+  if (!col) return;
+  const rc = col.getBoundingClientRect();
+  if (y < rc.top + 28) col.scrollTop -= 8;
+  else if (y > rc.bottom - 28) col.scrollTop += 8;
+}
+
+async function onMirrorPointerUp(e) {
+  const d = mirrorDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  mirrorDrag = null;
+  if (!d.active) return;
+  suppressClickUntil = Date.now() + 350;
+  const ids = [];
+  for (const child of $('#wheelMirror').children) {
+    if (child === d.marker) ids.push(d.id);
+    else if (child !== d.row && child.classList?.contains('wm-item')) ids.push(+child.dataset.wheelId);
+  }
+  cleanupMirrorDrag(d);
+  if (ids.join(',') === wheelPrompts().map(p => p.id).join(',')) return;
+  await commitPinOrder(ids);
+}
+
+function onMirrorPointerCancel(e) {
+  const d = mirrorDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  mirrorDrag = null;
+  cleanupMirrorDrag(d);
+}
+
+function cleanupMirrorDrag(d) {
+  d.marker?.remove();
+  d.row.classList.remove('dragging');
+  d.row.style.transform = '';
+  d.row.style.left = d.row.style.top = d.row.style.width = '';
+  $('#wheelMirror')?.classList.remove('drag-live');
+  try { d.row.releasePointerCapture(d.pointerId); } catch { /* released */ }
+}
+
+async function commitPinOrder(ids) {
+  const wasAuto = state.wheelSort !== 'manual';
+  try {
+    await ipc('set_pin_order', { ids });
+    // the drop IS an ordering intent — only flip once it actually persisted
+    if (wasAuto) { state.wheelSort = 'manual'; storage.set('pk-wheel-sort', 'manual'); }
+    await loadPrompts(); rebuildIndex(); renderPrompts();
+    if (wasAuto) toast('info', t('wheel.sortAutoSwitch'));
+  } catch { /* toasted */ }
+}
+
+async function onMirrorKeyDown(e) {
+  if (e.defaultPrevented || mirrorDrag) return;
+  const row = e.target.closest?.('.wm-item');
+  if (!row) return;
+  let j;
+  if (e.key === 'ArrowUp') j = -1;
+  else if (e.key === 'ArrowDown') j = 1;
+  else if (e.key === 'Home') j = -Infinity;
+  else if (e.key === 'End') j = Infinity;
+  else return;
+  const ids = wheelPrompts().map(p => p.id);
+  const i = ids.indexOf(+row.dataset.wheelId);
+  if (i < 0) return;
+  e.preventDefault();
+  const to = Math.max(0, Math.min(ids.length - 1, i + j));
+  if (to === i) return;
+  ids.splice(to, 0, ids.splice(i, 1)[0]);
+  const id = +row.dataset.wheelId;
+  await commitPinOrder(ids);
+  // renderPrompts rebuilt the list — hand focus back to the moved row's grip
+  $(`#wheelMirror .wm-item[data-wheel-id="${id}"] .drag`)?.focus();
 }
 
 /* ---- events (wired once by app.js) ---- */
@@ -242,7 +375,7 @@ export function wirePrompts({ openPreview }) {
   $('#cancelBtn')?.addEventListener('click', closeDrawer);
   $('#drawerMask')?.addEventListener('click', closeDrawer);
   $('#fPin')?.addEventListener('click', e => e.currentTarget.classList.toggle('on'));
-  ['fName', 'fContent', 'fTags', 'fApps', 'fOrder'].forEach(id =>
+  ['fName', 'fContent', 'fTags'].forEach(id =>
     $('#' + id)?.addEventListener('input', () => { dirty = true; if (id === 'fContent') updateVarHint(); }));
   $('#saveBtn')?.addEventListener('click', saveDrawer);
   $('#delBtn')?.addEventListener('click', async () => {

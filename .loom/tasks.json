@@ -940,6 +940,100 @@
       "created_at": "2026-10-07T04:17:40.992Z",
       "updated_at": "2026-10-07T04:30:31.807Z",
       "completed_at": "2026-10-07T04:30:31.807Z"
+    },
+    {
+      "id": "TASK-010",
+      "title": "Fix wheel mirror manual drag (pointer-based) + hide app-scope/order fields from drawer",
+      "outcome": "Wheel mirror list in the prompts view supports real pointer-driven reorder (mouse+touch) with insertion indicator, auto-switching to manual sort; the edit drawer no longer exposes app_scopes_json / inject_order inputs while backend fields stay intact.",
+      "acceptance": [
+        {
+          "criterion": "Dragging a wheel-mirror row by pointer reorders the DOM and calls set_pin_order with the new id sequence; verified by a Playwright test using real mouse.down/move/up events",
+          "verify_by": "python tests/e2e/wheel_sort_drag_e2e.py asserts DOM order change + set_pin_order payload",
+          "evidence": "tests/e2e/wheel_sort_drag_e2e.py: mouse.down on Delta row, move to above Beta, mouse.up -> __CALLS__ records set_pin_order ids=[1,4,2,3], DOM shows Alpha,Delta,Beta,Gamma. Mid-drag assertions verify .dragging lift + .wm-insert slot marker."
+        },
+        {
+          "criterion": "Drag works when wheelSort starts in 'auto' (default): first successful drag switches mode to manual, persists pk-wheel-sort, and the dropped order survives reload",
+          "verify_by": "e2e asserts wheelSortBtn label flips to manual + set_pin_order called once with final order",
+          "evidence": "e2e asserts localStorage pk-wheel-sort === 'manual' and sortBtn label 手动 after the drop; DOM order Alpha,Delta,Beta,Gamma is read back after loadPrompts re-render (mock writes inject_order per set_pin_order)."
+        },
+        {
+          "criterion": "Edit drawer shows no '应用范围'/'轮盘位置' inputs; saving an existing prompt preserves its app_scopes_json and inject_order instead of wiping them",
+          "verify_by": "e2e opens drawer: #fApps/#fOrder absent; update_prompt payload echoes stored values",
+          "evidence": "e2e: #fApps/#fOrder count 0, drawer text lacks both labels; update_prompt payload echoes app_scopes_json='[\"Code.exe\"]' and inject_order='1'."
+        },
+        {
+          "criterion": "i18n keys f.apps / f.order removed from both zh-CN.js and en-US.js; no dangling references; node --check clean on all JS",
+          "verify_by": "grep -rn 'f\\.apps\\|f\\.order' src/ returns nothing; find src -name '*.js' | node --check loop",
+          "evidence": "grep -rn 'f\\.apps\\|f\\.order\\|fApps\\|fOrder' src/ -> only a code comment remains; node --check loop clean."
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "Does not change backend/schema: prompts.app_scopes_json and prompts.inject_order columns, set_pin_order IPC, and store.js pinOrder parsing stay untouched",
+        "Does not change wheel.html/wheel.js runtime wheel ordering behavior"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/task-brief-manual-sort-and-hide-fields.md",
+        "src/js/views/prompts.js",
+        "src/js/store.js",
+        "src/index.html",
+        "src/styles.css",
+        "src/js/i18n/zh-CN.js",
+        "src/js/i18n/en-US.js",
+        "tests/e2e/hotkey_status_e2e.py"
+      ],
+      "touches": [
+        "src/js/views/prompts.js",
+        "src/index.html",
+        "src/styles.css",
+        "src/js/i18n/zh-CN.js",
+        "src/js/i18n/en-US.js",
+        "tests/e2e/wheel_sort_drag_e2e.py",
+        ".github/workflows/ci.yml"
+      ],
+      "implements": ".loom/design/task-brief-manual-sort-and-hide-fields.md",
+      "design_exemption": "",
+      "capability_hooks": [],
+      "capability_exemption": "Interaction fix within existing design-system tokens; no new professional field is engaged",
+      "integrity_version": 1,
+      "covers": [],
+      "status": "done",
+      "progress": {
+        "completed": [],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "Pointer-based manual sort replaces HTML5 DnD in bindMirrorDrag (prompts.js): mouse drags from anywhere on a row after 5px vertical threshold; touch drags only from the grip (touch-action:none) so row presses still scroll .leftcol. Dragged row lifts via position:fixed + translate3d; dashed .wm-insert slot marks the landing position through plain flex reflow. Drop commits via set_pin_order; commits from auto mode flip wheelSort to manual only after the write succeeds.",
+        "Drawer no longer renders 应用范围/轮盘位置 inputs; update_prompt now passes app_scopes_json/inject_order through unchanged so a save cannot wipe set_pin_order output or stored scopes. i18n keys f.apps/f.order removed in zh-CN + en-US; wheel.sortAutoSwitch added on both sides.",
+        "Local e2e: wheel_sort_drag_e2e.py 17/17, hotkey_status 10/10, hotkey_recorder 22/22, no_tauri 13/13; node --check clean on all src js; check_capabilities OK. Visual verification screenshots mid-drag/after-drop/drawer taken via Playwright.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "Dragging a wheel-mirror row by pointer reorders the DOM and calls set_pin_order with the new id sequence; verified by a Playwright test using real mouse.down/move/up events",
+              "evidence": "tests/e2e/wheel_sort_drag_e2e.py: mouse.down on Delta row, move to above Beta, mouse.up -> __CALLS__ records set_pin_order ids=[1,4,2,3], DOM shows Alpha,Delta,Beta,Gamma. Mid-drag assertions verify .dragging lift + .wm-insert slot marker."
+            },
+            {
+              "criterion": "Drag works when wheelSort starts in 'auto' (default): first successful drag switches mode to manual, persists pk-wheel-sort, and the dropped order survives reload",
+              "evidence": "e2e asserts localStorage pk-wheel-sort === 'manual' and sortBtn label 手动 after the drop; DOM order Alpha,Delta,Beta,Gamma is read back after loadPrompts re-render (mock writes inject_order per set_pin_order)."
+            },
+            {
+              "criterion": "Edit drawer shows no '应用范围'/'轮盘位置' inputs; saving an existing prompt preserves its app_scopes_json and inject_order instead of wiping them",
+              "evidence": "e2e: #fApps/#fOrder count 0, drawer text lacks both labels; update_prompt payload echoes app_scopes_json='[\"Code.exe\"]' and inject_order='1'."
+            },
+            {
+              "criterion": "i18n keys f.apps / f.order removed from both zh-CN.js and en-US.js; no dangling references; node --check clean on all JS",
+              "evidence": "grep -rn 'f\\.apps\\|f\\.order\\|fApps\\|fOrder' src/ -> only a code comment remains; node --check loop clean."
+            }
+          ],
+          "at": "2026-10-07T06:08:09.959Z"
+        }
+      ],
+      "created_at": "2026-10-07T05:55:04.721Z",
+      "updated_at": "2026-10-07T06:08:09.959Z",
+      "completed_at": "2026-10-07T06:08:09.959Z"
     }
   ]
 }

@@ -92,6 +92,11 @@ jobs:
       - name: Hotkey recorder e2e
         run: python tests/e2e/hotkey_recorder_e2e.py
 
+      # Real pointer input (mouse.down/move/up) — a fill()-style test would
+      # have passed while WebView2 refused every drag.
+      - name: Wheel mirror manual-sort drag e2e
+        run: python tests/e2e/wheel_sort_drag_e2e.py
+
       # No __TAURI__ mock — the previous blind spot. Asserts the app fails
       # LOUDLY (persistent banner / wheel error card) instead of silently.
       - name: Missing-Tauri visibility e2e (no mock)
