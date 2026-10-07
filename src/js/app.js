@@ -130,6 +130,16 @@ async function boot() {
   wireSettings({ syncShell });
   onLangChange(() => { syncShell(); VIEW_RENDER[currentView]?.(); });
 
+  // D4 hand-off: the wheel's quick-create gesture asks the main window to open
+  // a new-prompt draft seeded with the wheel's filter text. Nothing is stored
+  // until the user saves through the drawer (its non-empty-content check runs).
+  try {
+    await window.__TAURI__?.event?.listen('wheel-new-prompt', e => {
+      switchView('prompts');
+      openDrawer(null, { name: typeof e?.payload === 'string' ? e.payload : '', pin: true });
+    });
+  } catch (e) { console.warn('wheel-new-prompt listen failed', e); }
+
   // data
   try {
     await loadPrompts();

@@ -65,7 +65,7 @@ function renderTags() {
 }
 
 /* ---- drawer ---- */
-export function openDrawer(id) {
+export function openDrawer(id, draft) {
   const drawer = $('#drawer');
   if (!drawer) { console.warn('[prompts] #drawer missing'); return; }
   const setV = (sel, v) => { const n = $(sel); if (n) n.value = v; };
@@ -73,22 +73,27 @@ export function openDrawer(id) {
   editingId = id;
   const title = $('#drawerTitle');
   if (title) title.textContent = p ? t('drawer.edit') : t('drawer.new');
-  setV('#fName', p?.name || '');
+  setV('#fName', p ? p.name : (draft?.name || ''));
   setV('#fContent', p?.content || '');
   setV('#fTags', (p?.tags || []).join(', '));
-  $('#fPin')?.classList.toggle('on', !!p?.is_pinned);
+  // drafts arriving from the wheel's quick-create gesture intend a petal, so
+  // the pin switch starts on (the user can uncheck before saving).
+  $('#fPin')?.classList.toggle('on', p ? !!p.is_pinned : !!draft?.pin);
   let apps = [];
   try { apps = p?.app_scopes_json ? JSON.parse(p.app_scopes_json) : []; } catch { apps = []; }
   setV('#fApps', Array.isArray(apps) ? apps.join(', ') : '');
   setV('#fOrder', p?.inject_order || '');
   const meta = $('#fMeta');
-  if (meta) meta.innerHTML = p ? `<span>${esc(t('f.version', { v: p.version || 1, t: p.updated_at || '—' }))}</span>` : '';
+  if (meta) meta.innerHTML = p
+    ? `<span>${esc(t('f.version', { v: p.version || 1, t: p.updated_at || '—' }))}</span>`
+    : (draft ? `<span>${esc(t('drawer.fromWheel'))}</span>` : '');
   updateVarHint();
   dirty = false;
   drawer.classList.add('show');
   $('#drawerMask')?.classList.add('show');
   drawer.setAttribute('aria-hidden', 'false');
-  $('#fName')?.focus();
+  // a seeded draft already carries a name — drop the cursor where content goes
+  (draft?.name ? $('#fContent') : $('#fName'))?.focus();
 }
 
 export function drawerOpen() { return $('#drawer')?.classList.contains('show'); }

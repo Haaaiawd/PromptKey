@@ -36,7 +36,7 @@ export default {
   "wh.nomatch": "No match",
   "wh.filtering": "Filter",
   "wh.new": "+ New",
-  "wh.newName": "New prompt",
+  "wh.centerHint": "Click to close · right-click/hold = new prompt",
   "wh.page": "{a}/{b}",
 
   "tags.section": "Tags",
@@ -138,6 +138,7 @@ export default {
   "f.version": "v{v} · updated {t}",
   "drawer.new": "New prompt",
   "drawer.edit": "Edit prompt",
+  "drawer.fromWheel": "New from wheel · not created yet — fill in content and save",
 
   "common.delete": "Delete",
   "common.cancel": "Cancel",

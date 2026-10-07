@@ -156,6 +156,7 @@ fn main() {
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
             trigger_wheel_injection_vars,  // Phase2: inject with {{var}} values
             show_wheel_window,             // TW012: Show PromptWheel window (cursor-following)
+            present_main_window_new_prompt, // D4 fix: wheel quick-create hands off to the main editor
             create_prompt,
             update_prompt,
             delete_prompt,
@@ -484,6 +485,27 @@ pub(crate) fn present_wheel(app: &AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn show_wheel_window(app: AppHandle) -> Result<(), String> {
     present_wheel(&app)
+}
+
+// Phase 2 D4 fix: the wheel's quick-create gesture cannot author a prompt body
+// inside a transient 320px overlay, so it hands the typed filter text to the
+// main window's editor instead of fabricating a record. The drawer enforces
+// non-empty content, so nothing half-baked can reach the wheel.
+#[tauri::command]
+fn present_main_window_new_prompt(app: AppHandle, name: String) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        // Stage the draft first — even if presenting the window fails, the
+        // seeded drawer is waiting the next time it is shown.
+        window
+            .emit("wheel-new-prompt", name)
+            .map_err(|e| format!("Emit failed: {}", e))?;
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err("Main window not found".to_string())
+    }
 }
 
 // Wheel: Toggle prompt pin status
