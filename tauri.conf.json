@@ -28,8 +28,16 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "PromptKey.ico"
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
     ],
+    "category": "Utility",
+    "shortDescription": "Radial prompt injection",
+    "longDescription": "PromptKey is a global-hotkey prompt manager: a radial wheel surfaces your prompt library at the cursor and injects it into the focused app.",
     "externalBin": [],
     "windows": {
       "webviewInstallMode": {
