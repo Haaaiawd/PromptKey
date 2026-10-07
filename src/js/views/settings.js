@@ -4,6 +4,7 @@ import { setThemeMode, getThemeMode } from '../theme.js';
 import { toast, confirmModal } from '../toast.js';
 import { ipc, state } from '../store.js';
 import { previewPackJson } from './library.js';
+import { attachRecorder } from '../hotkey_recorder.js';
 
 export async function renderSettings() {
   // sync selects with current prefs
@@ -108,10 +109,61 @@ export function wireSettings({ syncShell }) {
       } else {
         toast('ok', t('hk.saved'));
       }
-    } catch { /* toasted */ }
+      return rep;
+    } catch { return null; /* toasted */ }
   };
-  $('#hotkeyInput')?.addEventListener('change', saveHotkeys);
-  $('#quickHotkeyInput')?.addEventListener('change', saveHotkeys);
+
+  // Hotkey fields are recorders, not text boxes: focus arms capture, the next
+  // chord is normalized to the Rust parser's canonical form and committed.
+  // Esc / clicking away cancels and restores the previous combo.
+  const HOTKEY_ID = { wheel: 4, quick: 5 };
+  const commitHotkey = async (field, combo, restore) => {
+    const rep = await saveHotkeys();
+    const rec = (rep?.hotkeys || []).find(h => h.id === HOTKEY_ID[field]);
+    const failed = !rep || rep.engine === 'failed'
+      || (rec && !['ok', 'disabled'].includes(rec.status));
+    if (!failed) return;
+    // The combo was rejected (or the engine is dead) — but apply_settings may
+    // already have persisted it. Roll the field AND the config back so an
+    // unusable hotkey never silently sticks.
+    const input = $(field === 'wheel' ? '#hotkeyInput' : '#quickHotkeyInput');
+    if (input) {
+      input.value = restore;
+      input.classList.add('invalid');
+      setTimeout(() => input.classList.remove('invalid'), 1600);
+    }
+    await saveHotkeys();
+    toast('info', t('hk.recReverted'));
+  };
+  attachRecorder($('#hotkeyInput'), {
+    stateEl: $('#hotkeyWheelState'),
+    onCommit: (combo, restore) => commitHotkey('wheel', combo, restore),
+  });
+  attachRecorder($('#quickHotkeyInput'), {
+    stateEl: $('#hotkeyQuickState'),
+    onCommit: (combo, restore) => commitHotkey('quick', combo, restore),
+  });
+
+  // diagnose_hotkey_pipeline: per-link snapshot of the hotkey→wheel chain.
+  // The status line shows localized hints; the full JSON is on hover so a bug
+  // report can quote it verbatim.
+  $('#btnHotkeyDiag')?.addEventListener('click', async () => {
+    const el = $('#hotkeyDiagState');
+    if (!el) return;
+    el.className = 'sub hk-state muted';
+    el.textContent = t('diag.running');
+    try {
+      const d = await ipc('diagnose_hotkey_pipeline', {}, { silent: true });
+      const hints = Array.isArray(d?.hints) ? d.hints : [];
+      const ok = hints.length === 1 && hints[0] === 'ok';
+      el.className = `sub hk-state ${ok ? 'ok' : 'err'}`;
+      el.textContent = hints.map(h => t(`diag.${h}`)).join('；') || t('diag.ok');
+      el.title = JSON.stringify(d);
+    } catch {
+      el.className = 'sub hk-state err';
+      el.textContent = t('diag.failed');
+    }
+  });
   ['#swClipboard', '#swRestore', '#swGate'].forEach(id =>
     $(id)?.addEventListener('click', e => { e.currentTarget.classList.toggle('on'); saveHotkeys(); }));
 

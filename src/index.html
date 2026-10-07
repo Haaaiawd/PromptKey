@@ -150,11 +150,13 @@
         </div>
         <div class="set-group"><h4 data-i18n="set.hotkey">全局热键</h4>
           <div class="set-row"><div><div class="lbl" data-i18n="hk.wheel">呼出轮盘</div><div class="sub hk-state" id="hotkeyWheelState"></div></div>
-            <input class="hotkey-input" id="hotkeyInput" spellcheck="false"></div>
+            <input class="hotkey-input" id="hotkeyInput" spellcheck="false" readonly data-i18n-ph="hk.hint"></div>
           <div class="set-row"><div><div class="lbl" data-i18n="hk.direct">快速注入（默认提示词）</div><div class="sub" data-i18n="hk.directSub">目标 = 最近使用第 1 位，可改为固定提示词</div><div class="sub hk-state" id="hotkeyQuickState"></div></div>
-            <input class="hotkey-input" id="quickHotkeyInput" spellcheck="false"></div>
+            <input class="hotkey-input" id="quickHotkeyInput" spellcheck="false" readonly data-i18n-ph="hk.hint"></div>
           <div class="set-row"><div><div class="lbl" data-i18n="hk.default">默认提示词</div></div>
             <select id="defaultPromptSel"></select></div>
+          <div class="set-row"><div><div class="lbl" data-i18n="hk.diag">链路诊断</div><div class="sub" data-i18n="hk.diagSub">热键 → 管道 → 轮盘窗口，逐环定位断点</div></div>
+            <div class="row-gap"><button class="btn btn-ghost" id="btnHotkeyDiag"><span data-i18n="hk.diagRun">运行</span></button><span class="sub hk-state" id="hotkeyDiagState"></span></div></div>
         </div>
         <div class="set-group"><h4 data-i18n="set.inject">注入</h4>
           <div class="set-row"><div><div class="lbl" data-i18n="inj.clipboard">允许剪贴板策略</div><div class="sub" data-i18n="inj.clipboardSub">关闭后仅使用逐字输入（更慢）</div></div><button class="switch" id="swClipboard" aria-label="allow clipboard"></button></div>
