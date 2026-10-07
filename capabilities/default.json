@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "IPC surface for the two local webviews: the main settings window and the wheel-panel overlay. Every permission below maps to a concrete JS call site — see PR body for the mapping table.",
+  "windows": [
+    "main",
+    "wheel-panel"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-position",
+    "core:window:allow-hide"
+  ]
+}

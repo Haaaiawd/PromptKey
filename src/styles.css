@@ -84,6 +84,18 @@ button{font-family:inherit}
 .topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
 .pill-hint{font-size:var(--fs-caption);color:var(--text-muted)}
 
+/* Fatal IPC-environment banner — persistent by design (never auto-dismisses;
+   a missing capabilities set must not hide behind a transient toast) */
+.env-banner{
+  display:flex;gap:10px;align-items:flex-start;flex-shrink:0;
+  margin:var(--sp-3) var(--sp-5) 0;padding:10px 14px;
+  border:1px solid var(--danger);border-left-width:3px;border-radius:var(--r-md);
+  background:var(--bg-surface);font-size:var(--fs-small);
+}
+.env-banner>.ico{color:var(--danger);flex-shrink:0;margin-top:1px}
+.env-banner-title{display:block;font-size:var(--fs-body);font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.env-banner-body{line-height:1.55;color:var(--text-secondary);word-break:break-word}
+
 /* ============ Views ============ */
 .view{display:none;flex:1;min-height:0}
 .view.active{display:flex}

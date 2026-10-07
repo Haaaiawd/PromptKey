@@ -58,13 +58,19 @@ jobs:
       - name: Validate JSON configs
         run: |
           set -e
-          for f in tauri.conf.json src/packs/*.json; do
+          for f in tauri.conf.json capabilities/*.json src/packs/*.json; do
             echo "validating $f"
             node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$f"
           done
 
+      # Tauri 2 capabilities regression gate — 2.0.x shipped zero capability
+      # files; every plugin:* IPC call (event.listen, window.hide, …) was
+      # ACL-denied while all e2e mocked __TAURI__. Never again.
+      - name: Verify Tauri capabilities cover both windows
+        run: node scripts/check_capabilities.mjs
+
   e2e:
-    name: playwright e2e (mocked Tauri)
+    name: playwright e2e
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -85,3 +91,8 @@ jobs:
 
       - name: Hotkey recorder e2e
         run: python tests/e2e/hotkey_recorder_e2e.py
+
+      # No __TAURI__ mock — the previous blind spot. Asserts the app fails
+      # LOUDLY (persistent banner / wheel error card) instead of silently.
+      - name: Missing-Tauri visibility e2e (no mock)
+        run: python tests/e2e/no_tauri_e2e.py

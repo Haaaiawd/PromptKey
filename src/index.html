@@ -44,6 +44,16 @@
       <div class="topbar-right"><span class="pill-hint" id="topHint"></span></div>
     </div>
 
+    <!-- Fatal environment banner — persistent (not a toast) when the IPC
+         bridge is absent or ACL-denied; filled by app.js probeIpcEnvironment -->
+    <div class="env-banner hidden" id="envBanner" role="alert">
+      <span class="ico" data-icon="octagon-alert"></span>
+      <div class="env-banner-text">
+        <b class="env-banner-title" id="envBannerTitle"></b>
+        <div class="env-banner-body" id="envBannerBody"></div>
+      </div>
+    </div>
+
     <!-- Prompts -->
     <section class="view active" id="view-prompts">
       <div class="view-col">

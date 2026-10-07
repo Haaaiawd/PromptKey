@@ -6,6 +6,32 @@ export function hasTauri() {
   return !!(window.__TAURI__ && (window.__TAURI__.core?.invoke || window.__TAURI__.invoke));
 }
 
+// Distinguishes the two ways IPC dies:
+//   'no-bridge'  — window.__TAURI__ was never injected (plain browser, or
+//                  withGlobalTauri off): nothing works at all.
+//   'acl-denied' — bridge exists but no capability authorizes plugin:* calls.
+//                  event.listen / window.* are rejected while app commands
+//                  still answer, so the app LOOKS healthy — this is the
+//                  2.0.x failure mode (capabilities/ dir was missing).
+export async function probeIpcEnvironment() {
+  if (!hasTauri()) {
+    return { ok: false, kind: 'no-bridge', detail: 'window.__TAURI__.core.invoke not injected' };
+  }
+  const listen = window.__TAURI__.event?.listen;
+  if (typeof listen !== 'function') {
+    return { ok: false, kind: 'no-bridge', detail: 'window.__TAURI__.event.listen missing' };
+  }
+  try {
+    // Cheapest ACL-gated probe: registers a listener on a channel nothing
+    // ever emits. Rejects iff capabilities are absent/mis-scoped.
+    const unlisten = await listen('pk-env-probe', () => {});
+    if (typeof unlisten === 'function') unlisten();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, kind: 'acl-denied', detail: String(e?.message || e) };
+  }
+}
+
 function rawInvoke() {
   return window.__TAURI__.core?.invoke || window.__TAURI__.invoke;
 }

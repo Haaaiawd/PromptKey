@@ -38,6 +38,8 @@ export default {
   "wh.new": "+ 新建",
   "wh.centerHint": "点击关闭 · 右键/长按 = 新建提示词",
   "wh.page": "{a}/{b}",
+  "wh.envNoBridge": "环境异常：桌面桥接（window.__TAURI__）未注入 — 轮盘无法工作",
+  "wh.envAcl": "IPC 被 ACL 拒绝 — capabilities 缺失，轮盘无法工作",
 
   "tags.section": "标签",
 
@@ -199,7 +201,11 @@ export default {
 
   "ipc.fail": "操作失败：{e}",
   "ipc.timeout": "请求超时，服务可能未响应",
-  "ipc.noTauri": "桌面环境未就绪",
+  "ipc.noTauri": "桌面桥接未注入（window.__TAURI__ 缺失）",
+  "ipc.envNoBridge": "运行环境异常：桌面桥接（Tauri）未注入",
+  "ipc.envNoBridgeSub": "所有 IPC 调用不可用。浏览器中预览属预期；若这是已安装的桌面版，请重新安装，或将此提示截图反馈给开发者。",
+  "ipc.envAcl": "运行环境异常：IPC 权限（capabilities）缺失",
+  "ipc.envAclSub": "事件与窗口接口被 ACL 拒绝：{e}。轮盘唤起、快速新建将不可用 — 请升级到包含 capabilities 的构建，或把此提示反馈给开发者。",
   "err.generic": "出错了：{e}",
 
   "rel.justnow": "刚刚",

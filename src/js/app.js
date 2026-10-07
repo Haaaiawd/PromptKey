@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import { t, initI18n, setLangPref, getLangPref, onLangChange } from './i18n.js';
 import { applyTheme, setThemeMode, getThemeMode, resolvedTheme } from './theme.js';
 import { toast, modalOpen, modalEscape } from './toast.js';
-import { state, ipc, loadPrompts, rebuildIndex, renderVars, customVars, wheelPrompts } from './store.js';
+import { state, ipc, loadPrompts, rebuildIndex, renderVars, customVars, wheelPrompts, probeIpcEnvironment } from './store.js';
 import { wirePrompts, renderPrompts, openDrawer, closeDrawer, drawerOpen } from './views/prompts.js';
 import { wireLibrary, renderLibrary, previewPackJson } from './views/library.js';
 import { wireLog, renderLog } from './views/log.js';
@@ -139,6 +139,21 @@ async function boot() {
       openDrawer(null, { name: typeof e?.payload === 'string' ? e.payload : '', pin: true });
     });
   } catch (e) { console.warn('wheel-new-prompt listen failed', e); }
+
+  // Prove the IPC environment loudly. 2.0.x shipped with zero capabilities —
+  // every plugin:* call (event.listen, window.*) was ACL-denied while app
+  // commands still worked, so the app looked fine and the wheel was deaf.
+  // A toast is invisible for that; a persistent banner is not.
+  const env = await probeIpcEnvironment();
+  window.__PK_IPC_ENV__ = env;
+  if (!env.ok) {
+    const banner = $('#envBanner');
+    if (banner) {
+      $('#envBannerTitle').textContent = env.kind === 'acl-denied' ? t('ipc.envAcl') : t('ipc.envNoBridge');
+      $('#envBannerBody').textContent = env.kind === 'acl-denied' ? t('ipc.envAclSub', { e: env.detail }) : t('ipc.envNoBridgeSub');
+      banner.classList.remove('hidden');
+    }
+  }
 
   // data
   try {

@@ -263,12 +263,28 @@ center?.addEventListener('mouseleave', () => clearTimeout(pressTimer));
 window.addEventListener('blur', hide);
 
 function onShow() { prepare(); }
+
+// IPC failure must be VISIBLE in the wheel: when the listener never registers,
+// Rust still shows this transparent overlay on every hotkey press — a silent
+// catch is how 2.0.x shipped an invisible dead window over the user's work.
+function envError(msg) {
+  const el = $('#envErr');
+  if (el) { el.textContent = msg; el.classList.add('show'); }
+}
 async function init() {
   syncPrefs();
   // first paint state
+  const listen = window.__TAURI__?.event?.listen;
+  if (typeof listen !== 'function') {
+    envError(t('wh.envNoBridge'));
+    return;
+  }
   try {
-    await window.__TAURI__?.event?.listen('wheel-show', onShow);
-    await window.__TAURI__?.event?.listen('wheel-hide', () => hide());
-  } catch (e) { console.warn('wheel event listen failed', e); }
+    await listen('wheel-show', onShow);
+    await listen('wheel-hide', () => hide());
+  } catch (e) {
+    console.warn('wheel event listen failed', e);
+    envError(t('wh.envAcl'));
+  }
 }
 init();
