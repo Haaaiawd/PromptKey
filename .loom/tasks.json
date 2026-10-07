@@ -1034,6 +1034,190 @@
       "created_at": "2026-10-07T05:55:04.721Z",
       "updated_at": "2026-10-07T06:08:09.959Z",
       "completed_at": "2026-10-07T06:08:09.959Z"
+    },
+    {
+      "id": "TASK-011",
+      "title": "Cross-platform impl (P2 Linux-X11 + P3 macOS) + README/release-notes/docs overhaul",
+      "outcome": "service + GUI compile and run on Windows/Linux-X11/macOS with honest degradation (Wayland warn, macOS AX onboarding); IPC works via Unix sockets; README rewritten against verified facts; docs/COMPONENTS.md + docs/PLATFORMS.md added; CHANGELOG covers 2.0.3+2.0.4; release notes v2.0.0-v2.0.4 rewritten with symptom→root-cause; zero Windows behavior regression.",
+      "acceptance": [
+        {
+          "criterion": "cargo check -p service passes on Linux with new enigo/arboard/x11rb/global-hotkey impls",
+          "verify_by": "cargo check -p service (local rustup toolchain)",
+          "evidence": "cargo check --workspace local + CI ubuntu job green; deps resolved: global-hotkey 0.6.4, arboard 3.6.1, enigo 0.6.1, x11rb 0.13.2"
+        },
+        {
+          "criterion": "Windows code paths unchanged behaviorally: windows_impl files untouched except cfg gating",
+          "verify_by": "git diff review of service/src/**/windows_impl.rs and shared mod files",
+          "evidence": "git diff: windows_impl.rs files show no logic edits; IPC debounce/retry semantics preserved (unix twin test added, windows test kept); Windows CI check/clippy/test green"
+        },
+        {
+          "criterion": "GUI-side IPC (selector listener + inject client) works on unix domain sockets; named-pipe path untouched on Windows",
+          "verify_by": "code review; cargo check -p service + cargo check where sysdeps allow",
+          "evidence": "ipc_listener.rs + inject_pipe_client.rs dual transports; service inject_server_uds.rs mirrors one-line protocol; UDS paths from platform:: endpoints with 0700/0600 perms"
+        },
+        {
+          "criterion": "Platform status surfaces honestly: Wayland warning + macOS AX permission request UI, zh+en i18n",
+          "verify_by": "e2e-style browser screenshot of settings platform section; node --check passes",
+          "evidence": "settings.js refreshPlatformState renders status_json() (os/session/notes); wayland_degraded/no_display/ax_permission_missing localized zh+en; AX row appears only on ax_permission_missing with Grant button re-triggering system prompt"
+        },
+        {
+          "criterion": "Icons: icons/ PNG set + icon.icns + monochrome template tray generated from brand master; tauri.conf.json updated",
+          "verify_by": "file inventory + icon format header check",
+          "evidence": "scripts/make_icons.py derives PNGs + real PNG-payload .icns (file(1)-verified) + tray-template.png silhouette from 1024px master; tauri.conf.json icon list + macOS icon_as_template wired"
+        },
+        {
+          "criterion": "CI: new linux+macos cargo check jobs green; existing windows check/clippy/test + playwright e2e green",
+          "verify_by": "gh run view on pushed branch",
+          "evidence": "gh run 37587905594: 5/5 success (win check+clippy+test, ubuntu check, macos check, frontend static, playwright e2e)"
+        },
+        {
+          "criterion": "README states only verified facts (hotkeys Ctrl+Alt+Space / Ctrl+Alt+Q etc.), platform matrix with verification column, labelled screenshots",
+          "verify_by": "manual review against code",
+          "evidence": "README verified against code: quick hotkey default is Ctrl+Alt+A (config/mod.rs:121 — brief's Ctrl+Alt+Q was test-fixture data, corrected); matrix has explicit verification column; 3 screenshots are real UI headless renders, provenance-labeled"
+        },
+        {
+          "criterion": "docs/COMPONENTS.md covers modules/design-system/components/i18n/icons/tests from real code",
+          "verify_by": "manual review",
+          "evidence": "COMPONENTS.md: tokens extracted from styles.css :root, all classes cited with line refs, i18n/icons mechanics documented from source"
+        },
+        {
+          "criterion": "Release notes v2.0.0-v2.0.4 updated via gh with symptom→root-cause and verification status",
+          "verify_by": "gh release view",
+          "evidence": "gh release edit applied to all 5 tags; each notes file has symptom/root-cause/fix + explicit verification state"
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No Wayland-native injection/hotkey (P4 out of scope; documented)",
+        "No notarized macOS build (no paid account; documented)",
+        "capabilities/ existing conclusions not modified (autostart wrapped as app commands, no new plugin perms needed)",
+        "Windows behavior must not regress — windows_impl logic untouched"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/CROSS_PLATFORM_PLAN.md",
+        ".loom/design/task-brief-readme-release-and-crossplatform.md",
+        "service/src/injector/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/context/mod.rs",
+        "service/src/ipc/mod.rs",
+        "service/src/ipc/inject_server.rs",
+        "src/main.rs",
+        "src/ipc_listener.rs",
+        "src/inject_pipe_client.rs",
+        "service/src/config/mod.rs",
+        "tauri.conf.json",
+        "src/js/views/settings.js",
+        "src/index.html",
+        "src/styles.css",
+        "src/js/i18n/zh-CN.js",
+        "src/js/i18n/en-US.js",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "README.md",
+        "CHANGELOG.md",
+        "tests/e2e/no_tauri_e2e.py",
+        "tests/e2e/hotkey_recorder_e2e.py"
+      ],
+      "touches": [
+        "service/src/",
+        "src/",
+        "Cargo.toml",
+        "service/Cargo.toml",
+        "tauri.conf.json",
+        "capabilities/",
+        ".github/workflows/",
+        "icons/",
+        "scripts/make_icons.py",
+        "README.md",
+        "CHANGELOG.md",
+        "docs/COMPONENTS.md",
+        "docs/PLATFORMS.md",
+        "docs/screenshots/",
+        ".loom/"
+      ],
+      "implements": "cross-platform-plan",
+      "design_exemption": "",
+      "capability_hooks": [
+        {
+          "node": "injection-engine#C3",
+          "at": "clipboard+paste injector on linux/macos",
+          "must_produce": "clipboard restore + secure-field gate parity or honest gap doc"
+        },
+        {
+          "node": "injection-engine#C5",
+          "at": "wayland session detection",
+          "must_produce": "detect + user-visible degrade notice"
+        }
+      ],
+      "capability_exemption": "README/COMPONENTS/release-notes portions are documentation work over already-confirmed dossiers; no new professional judgment surface.",
+      "integrity_version": 1,
+      "covers": [],
+      "status": "done",
+      "progress": {
+        "completed": [
+          "P1 traits extracted; windows_impl logic untouched (diff-verified)",
+          "P2 Linux-X11: x11rb context + enigo/XTEST injector + global-hotkey + arboard + UDS IPC + XDG autostart + Wayland degrade",
+          "P3 macOS: AX injector + clipboard fallback + AXIsProcessTrusted onboarding + NSWorkspace context + icns/template tray + LaunchAgent",
+          "GUI: platform status surface + AX permission row + autostart toggle + bilingual i18n + null-safe status",
+          "README rewrite + docs/PLATFORMS.md + docs/COMPONENTS.md + CHANGELOG 2.0.3 filled",
+          "Release notes v2.0.0-v2.0.4 rewritten via gh (symptom→root-cause)",
+          "Local verify: cargo check --workspace, clippy, service tests 9/9, playwright 4 suites 62/62",
+          "CI rust-check job added for win/ubuntu/macos; macOS compile iteratively fixed (unsafe extern, features)"
+        ],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "PR #15 feat/readme-release-notes-and-cross-platform → master (open, not merged). CI run 37587905594: all 5 jobs green on Windows+Linux+macOS.",
+        "cargo check --workspace clean locally (Linux w/ GTK sysroot); service tests 9/9; Playwright 4 suites: 22+10+17+13=62/62 locally and CI-green.",
+        "macOS compile was iterated via CI (unsafe-extern edition-2024, macos_ax visibility, macos-private-api + image-png features) — now green.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "cargo check -p service passes on Linux with new enigo/arboard/x11rb/global-hotkey impls",
+              "evidence": "cargo check --workspace local + CI ubuntu job green; deps resolved: global-hotkey 0.6.4, arboard 3.6.1, enigo 0.6.1, x11rb 0.13.2"
+            },
+            {
+              "criterion": "Windows code paths unchanged behaviorally: windows_impl files untouched except cfg gating",
+              "evidence": "git diff: windows_impl.rs files show no logic edits; IPC debounce/retry semantics preserved (unix twin test added, windows test kept); Windows CI check/clippy/test green"
+            },
+            {
+              "criterion": "GUI-side IPC (selector listener + inject client) works on unix domain sockets; named-pipe path untouched on Windows",
+              "evidence": "ipc_listener.rs + inject_pipe_client.rs dual transports; service inject_server_uds.rs mirrors one-line protocol; UDS paths from platform:: endpoints with 0700/0600 perms"
+            },
+            {
+              "criterion": "Platform status surfaces honestly: Wayland warning + macOS AX permission request UI, zh+en i18n",
+              "evidence": "settings.js refreshPlatformState renders status_json() (os/session/notes); wayland_degraded/no_display/ax_permission_missing localized zh+en; AX row appears only on ax_permission_missing with Grant button re-triggering system prompt"
+            },
+            {
+              "criterion": "Icons: icons/ PNG set + icon.icns + monochrome template tray generated from brand master; tauri.conf.json updated",
+              "evidence": "scripts/make_icons.py derives PNGs + real PNG-payload .icns (file(1)-verified) + tray-template.png silhouette from 1024px master; tauri.conf.json icon list + macOS icon_as_template wired"
+            },
+            {
+              "criterion": "CI: new linux+macos cargo check jobs green; existing windows check/clippy/test + playwright e2e green",
+              "evidence": "gh run 37587905594: 5/5 success (win check+clippy+test, ubuntu check, macos check, frontend static, playwright e2e)"
+            },
+            {
+              "criterion": "README states only verified facts (hotkeys Ctrl+Alt+Space / Ctrl+Alt+Q etc.), platform matrix with verification column, labelled screenshots",
+              "evidence": "README verified against code: quick hotkey default is Ctrl+Alt+A (config/mod.rs:121 — brief's Ctrl+Alt+Q was test-fixture data, corrected); matrix has explicit verification column; 3 screenshots are real UI headless renders, provenance-labeled"
+            },
+            {
+              "criterion": "docs/COMPONENTS.md covers modules/design-system/components/i18n/icons/tests from real code",
+              "evidence": "COMPONENTS.md: tokens extracted from styles.css :root, all classes cited with line refs, i18n/icons mechanics documented from source"
+            },
+            {
+              "criterion": "Release notes v2.0.0-v2.0.4 updated via gh with symptom→root-cause and verification status",
+              "evidence": "gh release edit applied to all 5 tags; each notes file has symptom/root-cause/fix + explicit verification state"
+            }
+          ],
+          "at": "2026-10-07T07:38:06.884Z"
+        }
+      ],
+      "created_at": "2026-10-07T06:47:00.011Z",
+      "updated_at": "2026-10-07T07:38:06.889Z",
+      "completed_at": "2026-10-07T07:38:06.889Z"
     }
   ]
 }

@@ -92,6 +92,7 @@ IPC 仍走命名管道；引擎重启/防抖语义不变（失败重发不锁防
 | 自动启动 | `tauri-plugin-autostart`（SMAppService） | ⚠️ 同上 |
 | 配置路径 | `~/Library/Application Support/PromptKey/` | ⚠️ 同上 |
 | 图标 | `icons/icon.icns`（`scripts/make_icons.py` 生成，PNG-payload icns）+ 单色 template tray icon | ⚠️ 生成产物已验证，视觉未真机 |
+| 轮盘窗口 | 透明无边框需要 Tauri `macos-private-api` feature（未文档化的 WKWebView API）——已按 `cfg(macos)` 作用域启用；**App Store 审核风险不适用**（本应用走未签名 dmg 直发） | ⚠️ 同上 |
 | 打包 | `tauri build` → `.app` + `.dmg`；**未公证**（需付费账号，文档说明绕过方式） | ⚠️ CI 仅验证编译 |
 
 **权限缺失时的行为**：`status_json()` 报告 `injection=needs-permission` + `notes=["ax_permission_missing"]`，
