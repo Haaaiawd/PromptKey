@@ -22,6 +22,12 @@ export async function renderSettings() {
     if ($('#swGate')) $('#swGate').classList.toggle('on', s.secure_gate !== false);
   } catch { /* leave defaults */ }
 
+  // launch-at-login reflects the OS registration, not a stored preference
+  try {
+    const on = await ipc('get_launch_at_login', {}, { silent: true });
+    if ($('#swAutostart')) $('#swAutostart').classList.toggle('on', !!on);
+  } catch { /* leave off */ }
+
   // default prompt selector
   const sel = $('#defaultPromptSel');
   if (sel) {
@@ -39,8 +45,41 @@ export async function renderSettings() {
   }
 
   refreshHotkeyStates();
+  refreshPlatformState();
 }
 function esc0(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// Platform capability surface: shows Wayland degradation / headless sessions /
+// missing macOS Accessibility permission instead of letting the user discover
+// it via a dead hotkey. The raw status JSON stays on hover for bug reports.
+async function refreshPlatformState() {
+  const el = $('#platformState');
+  const axRow = $('#axPermRow');
+  if (!el) return;
+  let p;
+  try {
+    p = await ipc('get_platform_status', {}, { silent: true });
+  } catch {
+    p = null;
+  }
+  if (!p || typeof p !== 'object') {
+    el.className = 'sub hk-state err';
+    el.textContent = t('plat.statusFail');
+    return;
+  }
+  const osLabel = { windows: 'Windows', macos: 'macOS', linux: 'Linux' }[p.os] || p.os;
+  const sessLabel = { x11: 'X11', wayland: 'Wayland', native: '', unknown: '?' }[p.session] ?? p.session;
+  const notes = Array.isArray(p.notes) ? p.notes : [];
+  let cls = 'ok', msg = t('plat.ok');
+  if (notes.includes('wayland_degraded')) { cls = 'warn'; msg = t('plat.wayland'); }
+  else if (notes.includes('no_display')) { cls = 'err'; msg = t('plat.noDisplay'); }
+  else if (notes.includes('ax_permission_missing')) { cls = 'warn'; msg = t('plat.axMissing'); }
+  el.className = `sub hk-state ${cls}`;
+  el.textContent = `${osLabel}${sessLabel ? ' · ' + sessLabel : ''} · ${msg}`;
+  el.title = JSON.stringify(p);
+  // `.set-row{display:flex}` beats the `hidden` attribute — use the class.
+  if (axRow) axRow.classList.toggle('hidden', !notes.includes('ax_permission_missing'));
+}
 
 // Self-check surface: shows what the engine ACTUALLY registered per hotkey —
 // ok / conflict / unsupported / failed / not_registered. A dead engine or a
@@ -166,6 +205,24 @@ export function wireSettings({ syncShell }) {
   });
   ['#swClipboard', '#swRestore', '#swGate'].forEach(id =>
     $(id)?.addEventListener('click', e => { e.currentTarget.classList.toggle('on'); saveHotkeys(); }));
+
+  // Launch-at-login: flip the OS registration (XDG .desktop / LaunchAgent /
+  // registry Run). Roll the switch back when the platform call fails.
+  $('#swAutostart')?.addEventListener('click', async e => {
+    const on = e.currentTarget.classList.toggle('on');
+    try {
+      await ipc('set_launch_at_login', { enabled: on });
+    } catch {
+      e.currentTarget.classList.toggle('on', !on);
+    }
+  });
+
+  // macOS AX onboarding: the system prompt deep-links to Settings; granting
+  // happens on Apple's side, so re-poll the status instead of trusting a return.
+  $('#btnAxPerm')?.addEventListener('click', async () => {
+    try { await ipc('request_ax_permission', {}, { silent: true }); } catch { /* toasted */ }
+    setTimeout(refreshPlatformState, 1000);
+  });
 
   $('#defaultPromptSel')?.addEventListener('change', async e => {
     const v = e.target.value;

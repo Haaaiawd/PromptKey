@@ -24,19 +24,11 @@ mod windows_impl;
 #[cfg(windows)]
 pub use windows_impl::WindowsHotkey;
 
-/// Fallback for platforms whose hotkey backend is not implemented yet.
-#[cfg(not(windows))]
-pub struct NullHotkey;
-
-#[cfg(not(windows))]
-impl Hotkey for NullHotkey {
-    fn start(&mut self) -> StdResult<(), Box<dyn std::error::Error + Send + 'static>> {
-        Err("global hotkeys are not implemented on this platform".into())
-    }
-    fn stop(&mut self) {}
-    fn wait_for_hotkey(&self) -> Option<u32> { None }
-    fn try_wait_for_hotkey(&self) -> Option<u32> { None }
-}
+/// Shared impl for Linux-X11 + macOS on the `global-hotkey` crate.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod unix_impl;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use unix_impl::GlobalHotkey;
 
 /// Construct the platform hotkey service.
 /// `hotkey` opens the wheel (id 4); `quick_hotkey` injects the default prompt (id 5).
@@ -45,10 +37,14 @@ pub fn create(hotkey: String, quick_hotkey: String) -> Box<dyn Hotkey> {
     {
         Box::new(WindowsHotkey::new(hotkey, quick_hotkey))
     }
-    #[cfg(not(windows))]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        Box::new(GlobalHotkey::new(hotkey, quick_hotkey))
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = (hotkey, quick_hotkey);
-        Box::new(NullHotkey)
+        compile_error!("no Hotkey implementation for this platform");
     }
 }
 

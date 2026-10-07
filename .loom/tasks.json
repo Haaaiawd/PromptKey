@@ -1037,106 +1037,187 @@
     },
     {
       "id": "TASK-011",
-      "title": "Fix wheel-mirror stale order after pin-order commit (pinOrder parse + e2e blind spots)",
-      "outcome": "After a pointer/keyboard reorder commit, #wheelMirror immediately renders the persisted order, the order survives reload, a rejected commit rolls back the visual order, and the e2e proves each of these against a durable mock backend.",
+      "title": "Cross-platform impl (P2 Linux-X11 + P3 macOS) + README/release-notes/docs overhaul",
+      "outcome": "service + GUI compile and run on Windows/Linux-X11/macOS with honest degradation (Wayland warn, macOS AX onboarding); IPC works via Unix sockets; README rewritten against verified facts; docs/COMPONENTS.md + docs/PLATFORMS.md added; CHANGELOG covers 2.0.3+2.0.4; release notes v2.0.0-v2.0.4 rewritten with symptom→root-cause; zero Windows behavior regression.",
       "acceptance": [
         {
-          "criterion": "store.js pinOrder() honors any finite inject_order (including 0 / weight-0 pack data); only missing/unparseable values get the 9999 tail sentinel",
-          "verify_by": "read src/js/store.js pinOrder; e2e 'inject_order 0 ranks first' case",
-          "evidence": "src/js/store.js:93 `return Number.isFinite(n) ? n : 9999;` — 0-based and '0' weight writes now rank as explicit positions"
+          "criterion": "cargo check -p service passes on Linux with new enigo/arboard/x11rb/global-hotkey impls",
+          "verify_by": "cargo check -p service (local rustup toolchain)",
+          "evidence": "cargo check --workspace local + CI ubuntu job green; deps resolved: global-hotkey 0.6.4, arboard 3.6.1, enigo 0.6.1, x11rb 0.13.2"
         },
         {
-          "criterion": "e2e mock set_pin_order is durable (localStorage-backed) and writes 1-based inject_order strings matching Rust (i+1).to_string()",
-          "verify_by": "read tests/e2e/wheel_sort_drag_e2e.py INIT block",
-          "evidence": "tests/e2e/wheel_sort_drag_e2e.py INIT: db in localStorage '__pk_e2e_prompts__', writes String(i+1), persist() after each mutation"
+          "criterion": "Windows code paths unchanged behaviorally: windows_impl files untouched except cfg gating",
+          "verify_by": "git diff review of service/src/**/windows_impl.rs and shared mod files",
+          "evidence": "git diff: windows_impl.rs files show no logic edits; IPC debounce/retry semantics preserved (unix twin test added, windows test kept); Windows CI check/clippy/test green"
         },
         {
-          "criterion": "e2e asserts post-drop DOM order equals submitted set_pin_order ids for pointer AND keyboard commits",
-          "verify_by": "python3 tests/e2e/wheel_sort_drag_e2e.py — 'submitted ids == rendered DOM order' checks",
-          "evidence": "'submitted ids == rendered DOM order' + 'keyboard commit: submitted ids == rendered DOM order' checks PASS"
+          "criterion": "GUI-side IPC (selector listener + inject client) works on unix domain sockets; named-pipe path untouched on Windows",
+          "verify_by": "code review; cargo check -p service + cargo check where sysdeps allow",
+          "evidence": "ipc_listener.rs + inject_pipe_client.rs dual transports; service inject_server_uds.rs mirrors one-line protocol; UDS paths from platform:: endpoints with 0700/0600 perms"
         },
         {
-          "criterion": "e2e covers reload persistence, reject-rollback (DOM + backend data unchanged, no mid-state), and inject_order=0 ordering",
-          "verify_by": "python3 tests/e2e/wheel_sort_drag_e2e.py ALL PASS (26 checks)",
-          "evidence": "'order persisted after reload', 'failed commit: DOM rolls back / no mid-state residue / backend data untouched', \"inject_order '0' ranks first, not last\" — all PASS (26/26)"
+          "criterion": "Platform status surfaces honestly: Wayland warning + macOS AX permission request UI, zh+en i18n",
+          "verify_by": "e2e-style browser screenshot of settings platform section; node --check passes",
+          "evidence": "settings.js refreshPlatformState renders status_json() (os/session/notes); wayland_degraded/no_display/ax_permission_missing localized zh+en; AX row appears only on ax_permission_missing with Grant button re-triggering system prompt"
         },
         {
-          "criterion": "e2e provably catches the bug class: with the refresh chain removed it FAILs on named DOM-order checks; with pinOrder reverted it FAILs the '0' check",
-          "verify_by": "local runs recorded in PR body / session evidence",
-          "evidence": "Broken-prompts.js run: FAIL 'DOM re-rendered to committed order', 'submitted ids == rendered DOM order', 'sort toggle now shows manual', + 2 keyboard-path FAILs. Reverted pinOrder run: FAIL \"inject_order '0' ranks first\" (got ['1','3','4','2'])"
+          "criterion": "Icons: icons/ PNG set + icon.icns + monochrome template tray generated from brand master; tauri.conf.json updated",
+          "verify_by": "file inventory + icon format header check",
+          "evidence": "scripts/make_icons.py derives PNGs + real PNG-payload .icns (file(1)-verified) + tray-template.png silhouette from 1024px master; tauri.conf.json icon list + macOS icon_as_template wired"
         },
         {
-          "criterion": "CI green; PR opened against master, not merged",
-          "verify_by": "gh pr checks on fix/wheel-drag-commit-no-refresh",
-          "evidence": "PR #16 https://github.com/Haaaiawd/PromptKey/pull/16 — cargo check/clippy/test pass, frontend static pass, playwright e2e pass; open, not merged"
+          "criterion": "CI: new linux+macos cargo check jobs green; existing windows check/clippy/test + playwright e2e green",
+          "verify_by": "gh run view on pushed branch",
+          "evidence": "gh run 37587905594: 5/5 success (win check+clippy+test, ubuntu check, macos check, frontend static, playwright e2e)"
+        },
+        {
+          "criterion": "README states only verified facts (hotkeys Ctrl+Alt+Space / Ctrl+Alt+Q etc.), platform matrix with verification column, labelled screenshots",
+          "verify_by": "manual review against code",
+          "evidence": "README verified against code: quick hotkey default is Ctrl+Alt+A (config/mod.rs:121 — brief's Ctrl+Alt+Q was test-fixture data, corrected); matrix has explicit verification column; 3 screenshots are real UI headless renders, provenance-labeled"
+        },
+        {
+          "criterion": "docs/COMPONENTS.md covers modules/design-system/components/i18n/icons/tests from real code",
+          "verify_by": "manual review",
+          "evidence": "COMPONENTS.md: tokens extracted from styles.css :root, all classes cited with line refs, i18n/icons mechanics documented from source"
+        },
+        {
+          "criterion": "Release notes v2.0.0-v2.0.4 updated via gh with symptom→root-cause and verification status",
+          "verify_by": "gh release view",
+          "evidence": "gh release edit applied to all 5 tags; each notes file has symptom/root-cause/fix + explicit verification state"
         }
       ],
       "done_when": [],
       "boundaries": [
-        "No change to Rust backend or schema; inject_order stays TEXT 1-based writes",
-        "No change to drag arming rules: mouse may drag from anywhere on a row, touch/pen only from the .drag grip",
-        "Windows behavior must not regress"
+        "No Wayland-native injection/hotkey (P4 out of scope; documented)",
+        "No notarized macOS build (no paid account; documented)",
+        "capabilities/ existing conclusions not modified (autostart wrapped as app commands, no new plugin perms needed)",
+        "Windows behavior must not regress — windows_impl logic untouched"
       ],
       "depends_on": [],
       "reads": [
-        ".loom/design/task-brief-wheel-drag-refresh.md",
-        "src/js/views/prompts.js",
-        "src/js/store.js",
+        ".loom/design/CROSS_PLATFORM_PLAN.md",
+        ".loom/design/task-brief-readme-release-and-crossplatform.md",
+        "service/src/injector/mod.rs",
+        "service/src/hotkey/mod.rs",
+        "service/src/context/mod.rs",
+        "service/src/ipc/mod.rs",
+        "service/src/ipc/inject_server.rs",
         "src/main.rs",
-        "tests/e2e/wheel_sort_drag_e2e.py"
+        "src/ipc_listener.rs",
+        "src/inject_pipe_client.rs",
+        "service/src/config/mod.rs",
+        "tauri.conf.json",
+        "src/js/views/settings.js",
+        "src/index.html",
+        "src/styles.css",
+        "src/js/i18n/zh-CN.js",
+        "src/js/i18n/en-US.js",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "README.md",
+        "CHANGELOG.md",
+        "tests/e2e/no_tauri_e2e.py",
+        "tests/e2e/hotkey_recorder_e2e.py"
       ],
       "touches": [
-        "src/js/store.js",
-        "tests/e2e/wheel_sort_drag_e2e.py"
+        "service/src/",
+        "src/",
+        "Cargo.toml",
+        "service/Cargo.toml",
+        "tauri.conf.json",
+        "capabilities/",
+        ".github/workflows/",
+        "icons/",
+        "scripts/make_icons.py",
+        "README.md",
+        "CHANGELOG.md",
+        "docs/COMPONENTS.md",
+        "docs/PLATFORMS.md",
+        "docs/screenshots/",
+        ".loom/"
       ],
-      "implements": ".loom/design/task-brief-wheel-drag-refresh.md",
+      "implements": "cross-platform-plan",
       "design_exemption": "",
-      "capability_hooks": [],
-      "capability_exemption": "Bugfix within existing design-system/interaction scope — sort-parse defect + test strengthening; no new professional capability surface.",
+      "capability_hooks": [
+        {
+          "node": "injection-engine#C3",
+          "at": "clipboard+paste injector on linux/macos",
+          "must_produce": "clipboard restore + secure-field gate parity or honest gap doc"
+        },
+        {
+          "node": "injection-engine#C5",
+          "at": "wayland session detection",
+          "must_produce": "detect + user-visible degrade notice"
+        }
+      ],
+      "capability_exemption": "README/COMPONENTS/release-notes portions are documentation work over already-confirmed dossiers; no new professional judgment surface.",
       "integrity_version": 1,
       "covers": [],
       "status": "done",
       "progress": {
-        "completed": [],
+        "completed": [
+          "P1 traits extracted; windows_impl logic untouched (diff-verified)",
+          "P2 Linux-X11: x11rb context + enigo/XTEST injector + global-hotkey + arboard + UDS IPC + XDG autostart + Wayland degrade",
+          "P3 macOS: AX injector + clipboard fallback + AXIsProcessTrusted onboarding + NSWorkspace context + icns/template tray + LaunchAgent",
+          "GUI: platform status surface + AX permission row + autostart toggle + bilingual i18n + null-safe status",
+          "README rewrite + docs/PLATFORMS.md + docs/COMPONENTS.md + CHANGELOG 2.0.3 filled",
+          "Release notes v2.0.0-v2.0.4 rewritten via gh (symptom→root-cause)",
+          "Local verify: cargo check --workspace, clippy, service tests 9/9, playwright 4 suites 62/62",
+          "CI rust-check job added for win/ubuntu/macos; macOS compile iteratively fixed (unsafe extern, features)"
+        ],
         "current": "complete",
         "next": ""
       },
       "evidence": [
-        "Local: python3 tests/e2e/wheel_sort_drag_e2e.py 26/26 ALL PASS; hotkey_status 10/10; hotkey_recorder 22/22; no_tauri 13/13; user's Linux smoke script 16/17 -> 17/17 unchanged. Negative proofs: refresh chain removed -> 5 named FAILs; pinOrder reverted -> inject_order-0 FAIL. CI: PR #16 all checks green.",
+        "PR #15 feat/readme-release-notes-and-cross-platform → master (open, not merged). CI run 37587905594: all 5 jobs green on Windows+Linux+macOS.",
+        "cargo check --workspace clean locally (Linux w/ GTK sysroot); service tests 9/9; Playwright 4 suites: 22+10+17+13=62/62 locally and CI-green.",
+        "macOS compile was iterated via CI (unsafe-extern edition-2024, macos_ax visibility, macos-private-api + image-png features) — now green.",
         {
           "type": "acceptance_results",
           "results": [
             {
-              "criterion": "store.js pinOrder() honors any finite inject_order (including 0 / weight-0 pack data); only missing/unparseable values get the 9999 tail sentinel",
-              "evidence": "src/js/store.js:93 `return Number.isFinite(n) ? n : 9999;` — 0-based and '0' weight writes now rank as explicit positions"
+              "criterion": "cargo check -p service passes on Linux with new enigo/arboard/x11rb/global-hotkey impls",
+              "evidence": "cargo check --workspace local + CI ubuntu job green; deps resolved: global-hotkey 0.6.4, arboard 3.6.1, enigo 0.6.1, x11rb 0.13.2"
             },
             {
-              "criterion": "e2e mock set_pin_order is durable (localStorage-backed) and writes 1-based inject_order strings matching Rust (i+1).to_string()",
-              "evidence": "tests/e2e/wheel_sort_drag_e2e.py INIT: db in localStorage '__pk_e2e_prompts__', writes String(i+1), persist() after each mutation"
+              "criterion": "Windows code paths unchanged behaviorally: windows_impl files untouched except cfg gating",
+              "evidence": "git diff: windows_impl.rs files show no logic edits; IPC debounce/retry semantics preserved (unix twin test added, windows test kept); Windows CI check/clippy/test green"
             },
             {
-              "criterion": "e2e asserts post-drop DOM order equals submitted set_pin_order ids for pointer AND keyboard commits",
-              "evidence": "'submitted ids == rendered DOM order' + 'keyboard commit: submitted ids == rendered DOM order' checks PASS"
+              "criterion": "GUI-side IPC (selector listener + inject client) works on unix domain sockets; named-pipe path untouched on Windows",
+              "evidence": "ipc_listener.rs + inject_pipe_client.rs dual transports; service inject_server_uds.rs mirrors one-line protocol; UDS paths from platform:: endpoints with 0700/0600 perms"
             },
             {
-              "criterion": "e2e covers reload persistence, reject-rollback (DOM + backend data unchanged, no mid-state), and inject_order=0 ordering",
-              "evidence": "'order persisted after reload', 'failed commit: DOM rolls back / no mid-state residue / backend data untouched', \"inject_order '0' ranks first, not last\" — all PASS (26/26)"
+              "criterion": "Platform status surfaces honestly: Wayland warning + macOS AX permission request UI, zh+en i18n",
+              "evidence": "settings.js refreshPlatformState renders status_json() (os/session/notes); wayland_degraded/no_display/ax_permission_missing localized zh+en; AX row appears only on ax_permission_missing with Grant button re-triggering system prompt"
             },
             {
-              "criterion": "e2e provably catches the bug class: with the refresh chain removed it FAILs on named DOM-order checks; with pinOrder reverted it FAILs the '0' check",
-              "evidence": "Broken-prompts.js run: FAIL 'DOM re-rendered to committed order', 'submitted ids == rendered DOM order', 'sort toggle now shows manual', + 2 keyboard-path FAILs. Reverted pinOrder run: FAIL \"inject_order '0' ranks first\" (got ['1','3','4','2'])"
+              "criterion": "Icons: icons/ PNG set + icon.icns + monochrome template tray generated from brand master; tauri.conf.json updated",
+              "evidence": "scripts/make_icons.py derives PNGs + real PNG-payload .icns (file(1)-verified) + tray-template.png silhouette from 1024px master; tauri.conf.json icon list + macOS icon_as_template wired"
             },
             {
-              "criterion": "CI green; PR opened against master, not merged",
-              "evidence": "PR #16 https://github.com/Haaaiawd/PromptKey/pull/16 — cargo check/clippy/test pass, frontend static pass, playwright e2e pass; open, not merged"
+              "criterion": "CI: new linux+macos cargo check jobs green; existing windows check/clippy/test + playwright e2e green",
+              "evidence": "gh run 37587905594: 5/5 success (win check+clippy+test, ubuntu check, macos check, frontend static, playwright e2e)"
+            },
+            {
+              "criterion": "README states only verified facts (hotkeys Ctrl+Alt+Space / Ctrl+Alt+Q etc.), platform matrix with verification column, labelled screenshots",
+              "evidence": "README verified against code: quick hotkey default is Ctrl+Alt+A (config/mod.rs:121 — brief's Ctrl+Alt+Q was test-fixture data, corrected); matrix has explicit verification column; 3 screenshots are real UI headless renders, provenance-labeled"
+            },
+            {
+              "criterion": "docs/COMPONENTS.md covers modules/design-system/components/i18n/icons/tests from real code",
+              "evidence": "COMPONENTS.md: tokens extracted from styles.css :root, all classes cited with line refs, i18n/icons mechanics documented from source"
+            },
+            {
+              "criterion": "Release notes v2.0.0-v2.0.4 updated via gh with symptom→root-cause and verification status",
+              "evidence": "gh release edit applied to all 5 tags; each notes file has symptom/root-cause/fix + explicit verification state"
             }
           ],
-          "at": "2026-10-07T07:31:11.294Z"
+          "at": "2026-10-07T07:38:06.884Z"
         }
       ],
-      "created_at": "2026-10-07T07:25:40.131Z",
-      "updated_at": "2026-10-07T07:31:11.305Z",
-      "completed_at": "2026-10-07T07:31:11.305Z"
+      "created_at": "2026-10-07T06:47:00.011Z",
+      "updated_at": "2026-10-07T07:38:06.889Z",
+      "completed_at": "2026-10-07T07:38:06.889Z"
     }
   ]
 }

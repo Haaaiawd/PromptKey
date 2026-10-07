@@ -27,16 +27,15 @@ mod windows_impl;
 #[cfg(windows)]
 pub use windows_impl::WindowsContext;
 
-/// Fallback for platforms whose context provider is not implemented yet.
-#[cfg(not(windows))]
-pub struct NullContext;
+#[cfg(target_os = "linux")]
+mod x11_impl;
+#[cfg(target_os = "linux")]
+pub use x11_impl::X11Context;
 
-#[cfg(not(windows))]
-impl Context for NullContext {
-    fn get_foreground_context(&self) -> StdResult<AppContext, Box<dyn std::error::Error>> {
-        Err("context capture is not implemented on this platform".into())
-    }
-}
+#[cfg(target_os = "macos")]
+mod macos_impl;
+#[cfg(target_os = "macos")]
+pub use macos_impl::MacosContext;
 
 /// Construct the platform context provider.
 pub fn create() -> Box<dyn Context> {
@@ -44,8 +43,16 @@ pub fn create() -> Box<dyn Context> {
     {
         Box::new(WindowsContext::new())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        Box::new(NullContext)
+        Box::new(X11Context::new())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Box::new(MacosContext::new())
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        compile_error!("no Context implementation for this platform");
     }
 }

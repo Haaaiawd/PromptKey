@@ -1,36 +1,44 @@
-// TW004: GUI IPC Client for Inject Pipe
-// Sends INJECT_PROMPT:{id}\n messages to Service via Named Pipe
+// TW004: GUI IPC Client for Inject endpoint
+// Sends INJECT_PROMPT:{id}\n messages to Service.
+// Windows: named pipe opened via OpenOptions. Unix: domain socket connect —
+// same line protocol either way; endpoint from service::platform.
 
-use std::fs::OpenOptions;
 use std::io::Write;
 
-const PIPE_NAME: &str = r"\\.\pipe\promptkey_inject";
+fn open_writer() -> Result<Box<dyn Write>, Box<dyn std::error::Error>> {
+    write_to(&service::platform::inject_endpoint())
+}
+
+#[cfg(windows)]
+fn write_to(endpoint: &str) -> Result<Box<dyn Write>, Box<dyn std::error::Error>> {
+    let pipe = std::fs::OpenOptions::new().write(true).open(endpoint)?;
+    Ok(Box::new(pipe))
+}
+
+#[cfg(unix)]
+fn write_to(endpoint: &str) -> Result<Box<dyn Write>, Box<dyn std::error::Error>> {
+    let stream = std::os::unix::net::UnixStream::connect(endpoint)?;
+    Ok(Box::new(stream))
+}
+
+fn send(message: String) -> Result<(), Box<dyn std::error::Error>> {
+    let mut w = open_writer()?;
+    w.write_all(message.as_bytes())?;
+    w.flush()?;
+    Ok(())
+}
 
 /// Send inject request to Service
 /// Returns Ok(()) if message sent successfully
 pub fn send_inject_request(prompt_id: i32) -> Result<(), Box<dyn std::error::Error>> {
-    // Open named pipe as client
-    let mut pipe = OpenOptions::new().write(true).open(PIPE_NAME)?;
-
-    // Format message: INJECT_PROMPT:{id}\n
-    let message = format!("INJECT_PROMPT:{}\n", prompt_id);
-
-    // Write and flush
-    pipe.write_all(message.as_bytes())?;
-    pipe.flush()?;
-
-    Ok(())
+    send(format!("INJECT_PROMPT:{}\n", prompt_id))
 }
 
 /// Phase 2 D5: send inject request with collected {{var}} values
 /// Format: INJECT_PROMPT:{id}:VARS:{urlencoded_json}\n
 pub fn send_inject_request_vars(prompt_id: i32, vars_json: String) -> Result<(), Box<dyn std::error::Error>> {
-    let mut pipe = OpenOptions::new().write(true).open(PIPE_NAME)?;
     // vars_json may contain ':' so it's delimited by the third ':'-prefix
-    let message = format!("INJECT_PROMPT:{}:VARS:{}\n", prompt_id, vars_json);
-    pipe.write_all(message.as_bytes())?;
-    pipe.flush()?;
-    Ok(())
+    send(format!("INJECT_PROMPT:{}:VARS:{}\n", prompt_id, vars_json))
 }
 
 #[cfg(test)]

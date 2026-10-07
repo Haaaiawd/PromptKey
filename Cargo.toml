@@ -51,8 +51,19 @@ windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.0.0"
+# Launch-at-login across all three OSes: XDG autostart file on Linux,
+# SMAppService LaunchAgent on macOS, registry Run key on Windows.
+tauri-plugin-autostart = "2.0.0"
 sysinfo = "0.30.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# macOS-only additions — kept off the Windows/Linux dependency trees.
+# `macos-private-api` is required for WebviewWindowBuilder::transparent on
+# macOS (the wheel overlay); it calls an undocumented WKWebView API, which
+# is acceptable here because the app ships unsigned/un-notarized outside
+# the App Store. `image-png` unlocks Image::from_bytes for the tray icon.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2.0.0", features = ["macos-private-api", "image-png"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

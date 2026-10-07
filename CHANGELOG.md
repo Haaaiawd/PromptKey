@@ -24,6 +24,43 @@
 
 后端字段保留，且保存时会把原值透传回去，避免一次普通编辑顺手抹掉刚排好的顺序。
 
+## 2.0.3 — 2026-10-07
+
+补丁版本。修复自 2.0.0 起**装机后两轮修复都没命中的根因**：Tauri 2 capabilities 整个缺失。
+
+### 症状
+
+2.0.1 / 2.0.2 装机后始终存在：
+
+- 轮盘永远不显示（按热键毫无反应，但直注可以）
+- 热键录制器提交时被拒
+
+### 根因
+
+**Tauri 2 把 IPC 改成了白名单制**：`tauri.conf.json` 没有 `app.security.capabilities`，
+仓库根也没有 `capabilities/` 目录，生成的 `gen/schemas/capabilities.json` 是空对象。
+没有 capability，`window.__TAURI__` **根本不会注入到 webview**——所有 `invoke()`/`event.listen()` 都断。
+
+链条很隐蔽：
+
+- 轮盘 `loadPrompts()` → `hasTauri()` false → 静默空转，轮盘窗口弹出一个吃点击的透明壳
+- 录制器 `onCommit` → `ipc('apply_settings')` → `hasTauri()` false → throw
+- **直注却能用**——它完全在 service 内部执行，不经过 Tauri IPC，是个误导性线索
+- Playwright e2e 全绿也帮了倒忙：测试是手动 mock `__TAURI__` 的，掩盖了真实环境的缺失
+
+`withGlobalTauri: true` 是 Tauri 1 遗留配置，只决定 `__TAURI__` 是否全局，**不授予 IPC 权限**。
+
+### 修复
+
+- 新建 `capabilities/default.json`：`main` + `wheel-panel` 两个 webview 的最小权限集
+  （`core:default` + window set-position/hide）
+- 新增 `scripts/check_capabilities.mjs` 静态检查脚本并接入 CI——JS 调用的每条 IPC 都必须在
+  capabilities 里有对应权限，防止再次「代码有、权限没」
+- 主界面与轮盘各加环境错误横幅（`env-err`）：`__TAURI__` 未注入或权限被拒时**直接显示**，
+  不再是静默失败的透明壳
+
+---
+
 ## 2.0.2 — 2026-10-07
 
 补丁版本。修复 2.0.1 装机后暴露的两个阻塞性问题。

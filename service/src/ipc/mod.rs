@@ -1,30 +1,19 @@
-// IPC Client Module - Service → GUI Communication via Named Pipe
+// IPC Client Module - Service → GUI Communication
 // T1-006: Quick Selection Panel IPC Layer
+//
+// The wire protocol is platform-neutral (one line per message); only the
+// endpoint differs: Windows named pipes, unix domain sockets elsewhere
+// (paths from crate::platform::{selector,inject}_endpoint).
 
 #[cfg(windows)]
-pub mod inject_server; // TW001: Inject pipe server
+pub mod inject_server; // TW001: Inject pipe server (named pipes)
 
-/// Phase 2 Task8: named pipes are Windows-only. The stub keeps the service
-/// compiling on other platforms and simply never yields a request.
-#[cfg(not(windows))]
-pub mod inject_server {
-    use std::sync::Arc;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::mpsc;
-
-    #[derive(Debug, Clone)]
-    pub struct InjectionRequest {
-        pub prompt_id: i32,
-        pub vars_json: Option<String>,
-    }
-
-    pub fn start(_stop: Arc<AtomicBool>) -> mpsc::Receiver<InjectionRequest> {
-        let (_tx, rx) = mpsc::channel::<InjectionRequest>();
-        rx
-    }
-}
+#[cfg(unix)]
+#[path = "inject_server_uds.rs"]
+pub mod inject_server; // P2/P3: same protocol over unix domain sockets
 
 use std::error::Error;
+#[cfg(windows)]
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::Mutex;
@@ -77,12 +66,14 @@ const OPEN_STEP: Duration = Duration::from_millis(40);
 ///   2   ERROR_FILE_NOT_FOUND — zero instances (listener mid-recreate)
 ///   231 ERROR_PIPE_BUSY     — every instance is connected to a client
 /// Anything else (access denied, invalid name) fails immediately.
+#[cfg(windows)]
 const RETRYABLE_OPEN_CODES: [i32; 2] = [2, 231];
 
 /// Open the pipe for writing, retrying the transient "no listening instance"
 /// window. The GUI listener drops each served instance and creates the next
 /// one inside the same loop iteration — a press landing in that gap used to
 /// die on ERROR_FILE_NOT_FOUND after a single attempt.
+#[cfg(windows)]
 fn open_pipe_write(pipe_name: &str, budget: Duration) -> std::io::Result<std::fs::File> {
     let deadline = Instant::now() + budget;
     loop {
@@ -91,6 +82,29 @@ fn open_pipe_write(pipe_name: &str, budget: Duration) -> std::io::Result<std::fs
             Err(e) => {
                 let retryable =
                     matches!(e.raw_os_error(), Some(c) if RETRYABLE_OPEN_CODES.contains(&c));
+                if !retryable || Instant::now() >= deadline {
+                    return Err(e);
+                }
+                std::thread::sleep(OPEN_STEP);
+            }
+        }
+    }
+}
+
+/// Unix equivalent: connect() to the socket path, retrying the same
+/// transient gap — NotFound covers the listener recreating its socket file,
+/// ConnectionRefused covers "socket exists but the new listener isn't up".
+#[cfg(unix)]
+fn open_pipe_write(socket_path: &str, budget: Duration) -> std::io::Result<std::os::unix::net::UnixStream> {
+    let deadline = Instant::now() + budget;
+    loop {
+        match std::os::unix::net::UnixStream::connect(socket_path) {
+            Ok(s) => return Ok(s),
+            Err(e) => {
+                let retryable = matches!(
+                    e.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                );
                 if !retryable || Instant::now() >= deadline {
                     return Err(e);
                 }
@@ -117,9 +131,10 @@ impl IPCClient {
         }
     }
 
-    /// Default constructor using standard pipe name
+    /// Default constructor using the platform endpoint
+    /// (\\.\pipe\promptkey_selector on Windows, unix socket elsewhere).
     pub fn default() -> Self {
-        Self::new("\\\\.\\pipe\\promptkey_selector".to_string())
+        Self::new(crate::platform::selector_endpoint())
     }
 
     /// Debounced send. Returns Ok(()) when debounced (the previous send still
@@ -204,6 +219,7 @@ mod tests {
     /// A failed send must NOT latch the debounce window: two presses in a row
     /// on a dead pipe must each attempt the open (and each return Err), never
     /// a silent Ok. Regression guard for the "press → nothing" symptom.
+    #[cfg(windows)]
     #[test]
     fn failed_send_does_not_debounce() {
         let mut client = IPCClient::new("\\\\.\\pipe\\promptkey_test_no_listener".to_string());
@@ -220,13 +236,36 @@ mod tests {
         assert!(rec.at_ms > 0);
     }
 
+    /// Unix twin of the dead-pipe test — a nonexistent socket path must fail
+    /// the same way (ENOENT), and debounce must not swallow the retry.
+    #[cfg(unix)]
+    #[test]
+    fn failed_send_does_not_debounce() {
+        let mut client = IPCClient::new("/tmp/promptkey_test_no_listener.sock".to_string());
+        client.open_budget = Duration::ZERO;
+        let first = client.send_show_wheel();
+        let second = client.send_show_wheel();
+        assert!(first.is_err(), "first send to a dead socket must fail");
+        assert!(
+            second.is_err(),
+            "second send must retry, not be debounce-swallowed"
+        );
+        let rec = last_wheel_send().expect("attempt recorded");
+        assert_eq!(rec.kind, "open_failed");
+        assert!(rec.at_ms > 0);
+    }
+
     /// Debounce still suppresses real repeat sends: after a successful send the
     /// next press within the window returns Ok without touching the pipe.
     /// (No live server exists to accept, so emulate via a recorded timestamp.)
     #[test]
     fn debounce_latch_only_on_success() {
+        #[cfg(windows)]
+        let endpoint = "\\\\.\\pipe\\promptkey_test_no_listener";
+        #[cfg(unix)]
+        let endpoint = "/tmp/promptkey_test_no_listener.sock";
         let client = IPCClient {
-            pipe_name: "\\\\.\\pipe\\promptkey_test_no_listener".to_string(),
+            pipe_name: endpoint.to_string(),
             last_send: Mutex::new(Some(Instant::now())),
             open_budget: Duration::ZERO,
         };

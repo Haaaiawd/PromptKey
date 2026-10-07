@@ -6,7 +6,6 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
-docs/
 
 ###############
 # Rust / Cargo #
@@ -63,3 +62,4 @@ nul
 *.bak
 implementation_plan.md
 task.md
+tests/e2e/__pycache__/

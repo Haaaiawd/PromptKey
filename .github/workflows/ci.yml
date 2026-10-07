@@ -35,6 +35,47 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
+  # P2/P3 compile evidence: the unix platform impls must at least type-check
+  # on their target OS. Runtime behavior is still real-device-unverified —
+  # see docs/PLATFORMS.md for the honest status matrix.
+  rust-unix:
+    name: cargo check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Tauri system deps (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libglib2.0-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo check (workspace, all targets)
+        run: cargo check --workspace --all-targets
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
+
+      # Service unit tests (hotkey parser, IPC debounce) — no display needed.
+      - name: cargo test (service)
+        run: cargo test -p service
+
   frontend:
     name: frontend static checks
     runs-on: ubuntu-latest

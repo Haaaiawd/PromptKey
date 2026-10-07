@@ -5,6 +5,7 @@ pub mod db;
 pub mod hotkey;
 pub mod injector;
 pub mod ipc;
+pub mod platform;
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -55,6 +56,11 @@ pub fn run_service(stop: Arc<AtomicBool>) {
     )
     .try_init();
     set_engine_state(EngineState::Starting);
+    log::info!(
+        "platform: os={} session={:?}",
+        crate::platform::os(),
+        crate::platform::session()
+    );
     println!("🔥 [INTERNAL_ENGINE] 提示词引擎正在子线程启动...");
 
     // 1. 初始化配置 (Moved up to get DB path)
