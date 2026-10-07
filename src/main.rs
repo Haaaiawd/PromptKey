@@ -12,8 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 // 服务进程句柄
-#[cfg(windows)]
-mod ipc_listener; // named pipes (tokio::net::windows) are Windows-only
+mod ipc_listener; // service→GUI listener: named pipe (Windows) / unix socket (elsewhere)
 mod inject_pipe_client; // TW004: GUI → Service injection command client
 
 
@@ -153,7 +152,15 @@ fn main() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init());
+        .plugin(tauri_plugin_fs::init())
+        // Launch-at-login: registry Run key (Windows), XDG autostart
+        // ~/.config/autostart/promptkey.desktop (Linux), SMAppService
+        // LaunchAgent (macOS) — all via the plugin, wrapped by our own
+        // set/get_launch_at_login commands so no capability change is needed.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ));
     
     // 为桌面平台添加单实例插件
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
@@ -200,6 +207,10 @@ fn main() {
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
             trigger_wheel_injection_vars,  // Phase2: inject with {{var}} values
             show_wheel_window,             // TW012: Show PromptWheel window (cursor-following)
+            get_platform_status,           // P2/P3: Wayland/AX capability surface
+            request_ax_permission,         // P3: macOS Accessibility onboarding
+            get_launch_at_login,           // P2/P3: autostart state (XDG/LaunchAgent/registry)
+            set_launch_at_login,
             diagnose_hotkey_pipeline,      // P0 fix: locate where the hotkey→wheel chain breaks
             present_main_window_new_prompt, // D4 fix: wheel quick-create hands off to the main editor
             create_prompt,
@@ -222,15 +233,26 @@ fn main() {
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
             
-            // T1-010: Start IPC Listener (named pipe → Windows-only)
-            #[cfg(windows)]
+            // T1-010: Start IPC Listener (named pipe on Windows, unix socket elsewhere)
             ipc_listener::start_ipc_listener(app.handle().clone());
             
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
             
             // 创建系统托盘图标
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            // macOS menu-bar icons must be monochrome "template" images — a
+            // colored icon renders as a dark blob that ignores light/dark
+            // switching. scripts/make_icons.py emits the silhouette variant.
+            #[cfg(target_os = "macos")]
+            let tray_builder = TrayIconBuilder::new()
+                .icon(
+                    tauri::image::Image::from_bytes(include_bytes!("icons/brand/tray-template.png"))
+                        .expect("tray-template.png must decode"),
+                )
+                .icon_as_template(true);
+            #[cfg(not(target_os = "macos"))]
+            let tray_builder = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone());
+            let _tray = tray_builder
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
@@ -610,7 +632,7 @@ fn diagnose_hotkey_pipeline(app: AppHandle) -> Result<serde_json::Value, String>
         service::EngineState::Stopped => ("stopped", None),
     };
 
-    #[cfg(windows)]
+    // Real listener on every platform now (named pipe / unix socket).
     let (listener, listener_alive, listener_last_msg_at) = {
         let st = ipc_listener::listener_state();
         (
@@ -619,12 +641,6 @@ fn diagnose_hotkey_pipeline(app: AppHandle) -> Result<serde_json::Value, String>
             st.last_message_at_ms,
         )
     };
-    #[cfg(not(windows))]
-    let (listener, listener_alive, listener_last_msg_at) = (
-        serde_json::json!({ "alive": false, "platform": "named pipes are Windows-only" }),
-        false,
-        None,
-    );
 
     let last_send = service::ipc::last_wheel_send();
     let last_send_json = serde_json::to_value(&last_send).unwrap_or_default();
@@ -648,16 +664,8 @@ fn diagnose_hotkey_pipeline(app: AppHandle) -> Result<serde_json::Value, String>
     if engine != "running" {
         hints.push("engine_not_running".into());
     }
-    #[cfg(windows)]
-    {
-        if !listener_alive {
-            hints.push("listener_not_running".into());
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = listener_last_msg_at;
-        hints.push("unsupported_platform".into());
+    if !listener_alive {
+        hints.push("listener_not_running".into());
     }
     if let Some(s) = &last_send {
         if s.kind == "open_failed" || s.kind == "write_failed" {
@@ -715,6 +723,52 @@ fn diagnose_hotkey_pipeline(app: AppHandle) -> Result<serde_json::Value, String>
 #[tauri::command]
 fn show_wheel_window(app: AppHandle) -> Result<(), String> {
     present_wheel(&app)
+}
+
+/// Platform capability surface for the settings UI: os, session (x11/wayland/
+/// native), per-capability state, machine-keyed `notes` the JS localizes —
+/// "wayland_degraded", "no_display", "ax_permission_missing".
+#[tauri::command]
+fn get_platform_status() -> Result<serde_json::Value, String> {
+    Ok(service::platform::status_json())
+}
+
+/// macOS only: show the system Accessibility-permission prompt. Returns the
+/// CURRENT trust state — granting still requires the user to flip the switch
+/// in System Settings, and the UI keeps polling `get_platform_status`.
+#[tauri::command]
+fn request_ax_permission() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(service::injector::request_ax_trust())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // No such permission elsewhere — report "granted" so the UI hides
+        // the banner instead of pretending there's a state to manage.
+        Ok(true)
+    }
+}
+
+/// Launch-at-login state — backed by tauri-plugin-autostart
+/// (XDG autostart on Linux, LaunchAgent on macOS, registry Run on Windows).
+#[tauri::command]
+fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|e| format!("读取自启状态失败: {}", e))
+}
+
+#[tauri::command]
+fn set_launch_at_login(app: AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let m = app.autolaunch();
+    if enabled {
+        m.enable().map_err(|e| format!("开启自启失败: {}", e))
+    } else {
+        m.disable().map_err(|e| format!("关闭自启失败: {}", e))
+    }
 }
 
 // Phase 2 D4 fix: the wheel's quick-create gesture cannot author a prompt body
@@ -1386,8 +1440,9 @@ fn default_true() -> bool { true }
 fn default_uia_value_pattern_mode() -> String { "overwrite".into() }
 
 fn config_path() -> Result<std::path::PathBuf, String> {
-    let appdata = std::env::var("APPDATA").map_err(|e| format!("读取APPDATA失败: {}", e))?;
-    let dir = std::path::Path::new(&appdata).join("PromptKey");
+    // Platform-aware: %APPDATA%\PromptKey on Windows, XDG config on Linux,
+    // ~/Library/Application Support on macOS — same dir the service uses.
+    let dir = service::platform::app_config_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
     Ok(dir.join("config.yaml"))
 }
@@ -1399,12 +1454,8 @@ fn load_or_default_config() -> Result<AppConfig, String> {
         let cfg: AppConfig = serde_yaml::from_str(&s).map_err(|e| format!("解析配置失败: {}", e))?;
         Ok(cfg)
     } else {
-        // database_path 默认与服务一致
-        let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-            format!("{}\\PromptKey\\promptmgr.db", appdata)
-        } else {
-            "promptmgr.db".to_string()
-        };
+        // database_path 默认与服务一致 (platform::default_database_path)
+        let database_path = service::platform::default_database_path();
         Ok(AppConfig {
             hotkey: default_hotkey(),
             quick_hotkey: default_quick_hotkey(),

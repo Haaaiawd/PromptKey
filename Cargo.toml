@@ -51,6 +51,9 @@ windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.0.0"
+# Launch-at-login across all three OSes: XDG autostart file on Linux,
+# SMAppService LaunchAgent on macOS, registry Run key on Windows.
+tauri-plugin-autostart = "2.0.0"
 sysinfo = "0.30.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 

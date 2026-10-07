@@ -1,14 +1,17 @@
 // IPC Listener Module - GUI Server for Service Communication
 // T1-010: Implement IPC Listener in GUI
+//
+// Same line-framed protocol on every OS; only the transport differs:
+//   Windows — named pipe (tokio::net::windows::named_pipe)
+//   Unix    — unix domain socket (tokio::net::UnixListener)
+// The endpoint itself comes from service::platform::selector_endpoint().
 
 use serde::Serialize;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 use tokio::io::AsyncReadExt;
-use tokio::net::windows::named_pipe::ServerOptions;
 
-const PIPE_NAME: &str = r"\\.\pipe\promptkey_selector";
 /// Commands are one line; read until '\n' or EOF, bounded so a hostile or
 /// confused client cannot grow the buffer forever.
 const MAX_MESSAGE_BYTES: usize = 8192;
@@ -87,80 +90,159 @@ pub fn listener_state() -> PipeListenerState {
     })
 }
 
+/// One inbound command line → action. Shared by both transports.
+fn handle_message(msg: &str, app: &AppHandle) {
+    if msg.is_empty() {
+        return;
+    }
+    println!("[IPC] Received: {}", msg);
+    update(|st| {
+        st.messages_handled += 1;
+        st.last_message = Some(msg.to_string());
+        st.last_message_at_ms = Some(epoch_ms());
+    });
+    if msg == "SHOW_WHEEL" {
+        // Phase 2: wheel window follows the cursor (positioned in
+        // main.rs). present_wheel records its own outcome.
+        if let Err(e) = crate::present_wheel(app) {
+            record_error(format_args!("present_wheel failed: {}", e));
+        }
+    }
+}
+
 pub fn start_ipc_listener(app: AppHandle) {
+    let endpoint = service::platform::selector_endpoint();
     tauri::async_runtime::spawn(async move {
-        println!("[IPC] Starting listener on {}", PIPE_NAME);
+        println!("[IPC] Starting listener on {}", endpoint);
+        run(app, &endpoint).await;
+    });
+}
 
-        loop {
-            // Create a fresh pipe instance for the next connection.
-            // first_pipe_instance(false) is REQUIRED here: true sets
-            // FILE_FLAG_FIRST_PIPE_INSTANCE, which fails on every create
-            // after the first — this loop creates one instance per
-            // connection, so only the non-first variant can work.
-            let mut server = match ServerOptions::new()
-                .first_pipe_instance(false)
-                .create(PIPE_NAME)
-            {
-                Ok(s) => s,
-                Err(e) => {
-                    // Retrying forever is fine — but only via STATE is a
-                    // persistently-failing create() visible to the user.
-                    record_error(format_args!("create {} failed: {}", PIPE_NAME, e));
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
-            };
-            update(|st| {
-                st.alive = true;
-                st.instances_created += 1;
-            });
+/* ---------------- Windows: named-pipe server ---------------- */
 
-            // Wait for client to connect
-            if let Err(e) = server.connect().await {
-                record_error(format_args!("connect failed: {}", e));
+#[cfg(windows)]
+async fn run(app: AppHandle, endpoint: &str) {
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    loop {
+        // Create a fresh pipe instance for the next connection.
+        // first_pipe_instance(false) is REQUIRED here: true sets
+        // FILE_FLAG_FIRST_PIPE_INSTANCE, which fails on every create
+        // after the first — this loop creates one instance per
+        // connection, so only the non-first variant can work.
+        let mut server = match ServerOptions::new()
+            .first_pipe_instance(false)
+            .create(endpoint)
+        {
+            Ok(s) => s,
+            Err(e) => {
+                // Retrying forever is fine — but only via STATE is a
+                // persistently-failing create() visible to the user.
+                record_error(format_args!("create {} failed: {}", endpoint, e));
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
-            update(|st| st.connects_served += 1);
-            println!("[IPC] Client connected");
+        };
+        update(|st| {
+            st.alive = true;
+            st.instances_created += 1;
+        });
 
-            // Read the command line: until '\n' or EOF, bounded. A byte-mode
-            // pipe can split a short write; a single read() is not a frame.
-            let mut buf: Vec<u8> = Vec::with_capacity(128);
-            let mut chunk = [0u8; 512];
-            loop {
-                match server.read(&mut chunk).await {
-                    Ok(0) => break, // client closed
-                    Ok(n) => {
-                        buf.extend_from_slice(&chunk[..n]);
-                        if buf.contains(&b'\n') || buf.len() >= MAX_MESSAGE_BYTES {
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        record_error(format_args!("read failed: {}", e));
+        // Wait for client to connect
+        if let Err(e) = server.connect().await {
+            record_error(format_args!("connect failed: {}", e));
+            continue;
+        }
+        update(|st| st.connects_served += 1);
+        println!("[IPC] Client connected");
+
+        // Read the command line: until '\n' or EOF, bounded. A byte-mode
+        // pipe can split a short write; a single read() is not a frame.
+        let mut buf: Vec<u8> = Vec::with_capacity(128);
+        let mut chunk = [0u8; 512];
+        loop {
+            match server.read(&mut chunk).await {
+                Ok(0) => break, // client closed
+                Ok(n) => {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if buf.contains(&b'\n') || buf.len() >= MAX_MESSAGE_BYTES {
                         break;
                     }
                 }
-            }
-
-            let msg = String::from_utf8_lossy(&buf).trim().to_string();
-            if !msg.is_empty() {
-                println!("[IPC] Received: {}", msg);
-                update(|st| {
-                    st.messages_handled += 1;
-                    st.last_message = Some(msg.clone());
-                    st.last_message_at_ms = Some(epoch_ms());
-                });
-                if msg == "SHOW_WHEEL" {
-                    // Phase 2: wheel window follows the cursor (positioned in
-                    // main.rs). present_wheel records its own outcome.
-                    if let Err(e) = crate::present_wheel(&app) {
-                        record_error(format_args!("present_wheel failed: {}", e));
-                    }
+                Err(e) => {
+                    record_error(format_args!("read failed: {}", e));
+                    break;
                 }
             }
-            // The served instance is dropped here; the next loop iteration
-            // creates the next listening instance.
         }
-    });
+
+        let msg = String::from_utf8_lossy(&buf).trim().to_string();
+        handle_message(&msg, &app);
+        // The served instance is dropped here; the next loop iteration
+        // creates the next listening instance.
+    }
+}
+
+/* ---------------- Unix: domain-socket server ---------------- */
+
+#[cfg(unix)]
+async fn run(app: AppHandle, endpoint: &str) {
+    use tokio::net::UnixListener;
+
+    // A stale socket file blocks bind; only our own uid can sit here
+    // (the runtime dir is created 0700 by service::platform).
+    let _ = std::fs::remove_file(endpoint);
+    let listener = match UnixListener::bind(endpoint) {
+        Ok(l) => l,
+        Err(e) => {
+            record_error(format_args!("bind {} failed: {}", endpoint, e));
+            return;
+        }
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(0o600));
+    }
+    update(|st| st.alive = true);
+    st_instances_tick();
+
+    loop {
+        let (mut stream, _) = match listener.accept().await {
+            Ok(v) => v,
+            Err(e) => {
+                record_error(format_args!("accept failed: {}", e));
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+        update(|st| st.connects_served += 1);
+
+        let mut buf: Vec<u8> = Vec::with_capacity(128);
+        let mut chunk = [0u8; 512];
+        loop {
+            match stream.read(&mut chunk).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if buf.contains(&b'\n') || buf.len() >= MAX_MESSAGE_BYTES {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    record_error(format_args!("read failed: {}", e));
+                    break;
+                }
+            }
+        }
+
+        let msg = String::from_utf8_lossy(&buf).trim().to_string();
+        handle_message(&msg, &app);
+    }
+}
+
+/// Keep `instances_created` meaningful on unix (one listener, many accepts).
+#[cfg(unix)]
+fn st_instances_tick() {
+    update(|st| st.instances_created += 1);
 }

@@ -63,3 +63,4 @@ nul
 *.bak
 implementation_plan.md
 task.md
+tests/e2e/__pycache__/

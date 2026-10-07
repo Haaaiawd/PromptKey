@@ -14,6 +14,9 @@ pub struct Config {
     pub injection: InjectionConfig,
     #[serde(default)]
     pub applications: HashMap<String, ApplicationConfig>,
+    // Preserve unknown YAML keys across GUI rewrites (forward-compat).
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_yaml::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -33,6 +36,9 @@ pub struct InjectionConfig {
     pub restore_clipboard: bool,
     #[serde(default = "default_true")]
     pub secure_gate: bool,
+    // Preserve unknown keys in the injection map across GUI rewrites.
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_yaml::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -72,6 +78,7 @@ impl Default for InjectionConfig {
             max_retries: default_max_retries(),
             restore_clipboard: true,
             secure_gate: true,
+            extra: HashMap::new(),
         }
     }
 }
@@ -214,14 +221,11 @@ impl Config {
     }
 
     pub fn get_config_path() -> Result<String, Box<dyn std::error::Error>> {
-        // 获取APPDATA路径
-        let appdata = std::env::var("APPDATA")?;
-        let config_dir = format!("{}\\PromptKey", appdata);
-
-        // 创建配置目录（如果不存在）
+        // P2/P3: %APPDATA% was Windows-only. Per-OS dir now lives in
+        // platform::app_config_dir() (same location on Windows).
+        let config_dir = crate::platform::app_config_dir()?;
         fs::create_dir_all(&config_dir)?;
-
-        Ok(format!("{}\\config.yaml", config_dir))
+        Ok(config_dir.join("config.yaml").to_string_lossy().into_owned())
     }
 
     fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -324,12 +328,7 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Self {
-        // 获取默认数据库路径
-        let database_path = if let Ok(appdata) = std::env::var("APPDATA") {
-            format!("{}\\PromptKey\\promptmgr.db", appdata)
-        } else {
-            "promptmgr.db".to_string() // fallback
-        };
+        let database_path = crate::platform::default_database_path();
 
         Config {
             hotkey: default_hotkey(),
@@ -337,6 +336,7 @@ impl Default for Config {
             database_path,
             injection: InjectionConfig::default(),
             applications: HashMap::new(),
+            extra: HashMap::new(),
         }
     }
 }
