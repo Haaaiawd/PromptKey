@@ -1,5 +1,45 @@
 # 更新日志
 
+## 2.0.5 — 2026-10-07
+
+补丁版本。修一个排序健壮性缺陷，并把 Linux / macOS 纳入工程范围；仓库门面重做。
+
+### 轮盘排序：`inject_order = 0` 被沉到队尾
+
+`pinOrder()` 用 `n > 0` 判断「是否排过序」，于是序号 `0` 被判为未排序、塞到队尾
+（排序键回退成 9999）。真后端一直写 1-based 所以没暴露，但这是个真实的陷阱：
+任何 0-based 的写入方（导入的数据、外部脚本）都会让排序静默错乱。
+
+改成 `Number.isFinite(n)`，`0` 是合法序号；`null` / 非数字仍排尾部。
+
+### Linux 与 macOS 从「做不了」变成「代码就绪」
+
+引擎与平台的边界收敛为三个 trait（`Injector` / `Context` / `Hotkey`），
+Windows 实现仅迁移不改逻辑，**CI 跨平台编译确认零回归**：
+
+| 平台 | 注入 | 热键 | 前台上下文 | IPC |
+|------|------|------|-----------|-----|
+| Windows | 剪贴板 + SendInput | `RegisterHotKey` + 阻塞 `GetMessageW` | `GetForegroundWindow` | 命名管道 |
+| Linux-X11 | arboard + enigo/XTEST | `global-hotkey` | x11rb `_NET_ACTIVE_WINDOW` + `/proc` | Unix domain socket |
+| macOS | AX 写值 + ⌘V 兜底 | `global-hotkey` | NSWorkspace frontmost | Unix domain socket |
+
+配套补齐：Linux `.deb` + `.AppImage`、macOS `.app` / `.dmg` + `.icns` +
+单色 template 托盘图标、XDG autostart、设置页「平台状态」（OS / 会话类型 / 能力状态），
+CI 新增 ubuntu-latest 与 macos-latest 编译 job。
+
+**诚实说明**：Linux 与 macOS 只做到「编译通过 + 单测通过」，**未在真机运行过**。
+逐平台能力验证状态见 [docs/PLATFORMS.md](docs/PLATFORMS.md)（只有 Windows 标 ✅ 实机验收）。
+Wayland 下自动注入受平台限制，检测到即明确降级并提示，不假装可用。
+
+### 文档与仓库门面
+
+- README 重写：功能对齐 2.0.5 实际行为，补截图、平台矩阵、设计文档索引、已修正过时的热键说明
+- 新增 [docs/COMPONENTS.md](docs/COMPONENTS.md)：模块划分、设计系统 tokens、组件清单、i18n / 图标 / 测试资产
+- 新增 [docs/PLATFORMS.md](docs/PLATFORMS.md)：按平台列实现选型、代码位置、**三档验证状态**与已知风险
+- 截图脚本 [scripts/screenshots.py](scripts/screenshots.py) 落在仓库里，真实界面无头渲染（后端数据为桩，图注已声明）
+- 图标脚本 [scripts/make_icons.py](scripts/make_icons.py)：从单一源图产出 ico / icns / 多尺寸 PNG / template tray
+- Release notes 补齐 2.0.0–2.0.4 的症状与根因
+
 ## 2.0.4 — 2026-10-07
 
 补丁版本。修一个用户实测发现的排序缺陷 + 收一处过度暴露的内部机制。
