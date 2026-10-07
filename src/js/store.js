@@ -90,7 +90,7 @@ export function wheelPrompts() {
 }
 function pinOrder(p) {
   const n = parseInt(p.inject_order, 10);
-  return Number.isFinite(n) && n > 0 ? n : 9999;
+  return Number.isFinite(n) ? n : 9999;
 }
 
 const VAR_RE = /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g;

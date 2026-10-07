@@ -1034,6 +1034,109 @@
       "created_at": "2026-10-07T05:55:04.721Z",
       "updated_at": "2026-10-07T06:08:09.959Z",
       "completed_at": "2026-10-07T06:08:09.959Z"
+    },
+    {
+      "id": "TASK-011",
+      "title": "Fix wheel-mirror stale order after pin-order commit (pinOrder parse + e2e blind spots)",
+      "outcome": "After a pointer/keyboard reorder commit, #wheelMirror immediately renders the persisted order, the order survives reload, a rejected commit rolls back the visual order, and the e2e proves each of these against a durable mock backend.",
+      "acceptance": [
+        {
+          "criterion": "store.js pinOrder() honors any finite inject_order (including 0 / weight-0 pack data); only missing/unparseable values get the 9999 tail sentinel",
+          "verify_by": "read src/js/store.js pinOrder; e2e 'inject_order 0 ranks first' case",
+          "evidence": "src/js/store.js:93 `return Number.isFinite(n) ? n : 9999;` — 0-based and '0' weight writes now rank as explicit positions"
+        },
+        {
+          "criterion": "e2e mock set_pin_order is durable (localStorage-backed) and writes 1-based inject_order strings matching Rust (i+1).to_string()",
+          "verify_by": "read tests/e2e/wheel_sort_drag_e2e.py INIT block",
+          "evidence": "tests/e2e/wheel_sort_drag_e2e.py INIT: db in localStorage '__pk_e2e_prompts__', writes String(i+1), persist() after each mutation"
+        },
+        {
+          "criterion": "e2e asserts post-drop DOM order equals submitted set_pin_order ids for pointer AND keyboard commits",
+          "verify_by": "python3 tests/e2e/wheel_sort_drag_e2e.py — 'submitted ids == rendered DOM order' checks",
+          "evidence": "'submitted ids == rendered DOM order' + 'keyboard commit: submitted ids == rendered DOM order' checks PASS"
+        },
+        {
+          "criterion": "e2e covers reload persistence, reject-rollback (DOM + backend data unchanged, no mid-state), and inject_order=0 ordering",
+          "verify_by": "python3 tests/e2e/wheel_sort_drag_e2e.py ALL PASS (26 checks)",
+          "evidence": "'order persisted after reload', 'failed commit: DOM rolls back / no mid-state residue / backend data untouched', \"inject_order '0' ranks first, not last\" — all PASS (26/26)"
+        },
+        {
+          "criterion": "e2e provably catches the bug class: with the refresh chain removed it FAILs on named DOM-order checks; with pinOrder reverted it FAILs the '0' check",
+          "verify_by": "local runs recorded in PR body / session evidence",
+          "evidence": "Broken-prompts.js run: FAIL 'DOM re-rendered to committed order', 'submitted ids == rendered DOM order', 'sort toggle now shows manual', + 2 keyboard-path FAILs. Reverted pinOrder run: FAIL \"inject_order '0' ranks first\" (got ['1','3','4','2'])"
+        },
+        {
+          "criterion": "CI green; PR opened against master, not merged",
+          "verify_by": "gh pr checks on fix/wheel-drag-commit-no-refresh",
+          "evidence": "PR #16 https://github.com/Haaaiawd/PromptKey/pull/16 — cargo check/clippy/test pass, frontend static pass, playwright e2e pass; open, not merged"
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No change to Rust backend or schema; inject_order stays TEXT 1-based writes",
+        "No change to drag arming rules: mouse may drag from anywhere on a row, touch/pen only from the .drag grip",
+        "Windows behavior must not regress"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/task-brief-wheel-drag-refresh.md",
+        "src/js/views/prompts.js",
+        "src/js/store.js",
+        "src/main.rs",
+        "tests/e2e/wheel_sort_drag_e2e.py"
+      ],
+      "touches": [
+        "src/js/store.js",
+        "tests/e2e/wheel_sort_drag_e2e.py"
+      ],
+      "implements": ".loom/design/task-brief-wheel-drag-refresh.md",
+      "design_exemption": "",
+      "capability_hooks": [],
+      "capability_exemption": "Bugfix within existing design-system/interaction scope — sort-parse defect + test strengthening; no new professional capability surface.",
+      "integrity_version": 1,
+      "covers": [],
+      "status": "done",
+      "progress": {
+        "completed": [],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "Local: python3 tests/e2e/wheel_sort_drag_e2e.py 26/26 ALL PASS; hotkey_status 10/10; hotkey_recorder 22/22; no_tauri 13/13; user's Linux smoke script 16/17 -> 17/17 unchanged. Negative proofs: refresh chain removed -> 5 named FAILs; pinOrder reverted -> inject_order-0 FAIL. CI: PR #16 all checks green.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "store.js pinOrder() honors any finite inject_order (including 0 / weight-0 pack data); only missing/unparseable values get the 9999 tail sentinel",
+              "evidence": "src/js/store.js:93 `return Number.isFinite(n) ? n : 9999;` — 0-based and '0' weight writes now rank as explicit positions"
+            },
+            {
+              "criterion": "e2e mock set_pin_order is durable (localStorage-backed) and writes 1-based inject_order strings matching Rust (i+1).to_string()",
+              "evidence": "tests/e2e/wheel_sort_drag_e2e.py INIT: db in localStorage '__pk_e2e_prompts__', writes String(i+1), persist() after each mutation"
+            },
+            {
+              "criterion": "e2e asserts post-drop DOM order equals submitted set_pin_order ids for pointer AND keyboard commits",
+              "evidence": "'submitted ids == rendered DOM order' + 'keyboard commit: submitted ids == rendered DOM order' checks PASS"
+            },
+            {
+              "criterion": "e2e covers reload persistence, reject-rollback (DOM + backend data unchanged, no mid-state), and inject_order=0 ordering",
+              "evidence": "'order persisted after reload', 'failed commit: DOM rolls back / no mid-state residue / backend data untouched', \"inject_order '0' ranks first, not last\" — all PASS (26/26)"
+            },
+            {
+              "criterion": "e2e provably catches the bug class: with the refresh chain removed it FAILs on named DOM-order checks; with pinOrder reverted it FAILs the '0' check",
+              "evidence": "Broken-prompts.js run: FAIL 'DOM re-rendered to committed order', 'submitted ids == rendered DOM order', 'sort toggle now shows manual', + 2 keyboard-path FAILs. Reverted pinOrder run: FAIL \"inject_order '0' ranks first\" (got ['1','3','4','2'])"
+            },
+            {
+              "criterion": "CI green; PR opened against master, not merged",
+              "evidence": "PR #16 https://github.com/Haaaiawd/PromptKey/pull/16 — cargo check/clippy/test pass, frontend static pass, playwright e2e pass; open, not merged"
+            }
+          ],
+          "at": "2026-10-07T07:31:11.294Z"
+        }
+      ],
+      "created_at": "2026-10-07T07:25:40.131Z",
+      "updated_at": "2026-10-07T07:31:11.305Z",
+      "completed_at": "2026-10-07T07:31:11.305Z"
     }
   ]
 }
