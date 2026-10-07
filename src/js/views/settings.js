@@ -36,8 +36,49 @@ export async function renderSettings() {
     sel.innerHTML = opts.join('');
     sel.value = mode === 'fixed' && fid ? String(fid) : 'last_used';
   }
+
+  refreshHotkeyStates();
 }
 function esc0(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// Self-check surface: shows what the engine ACTUALLY registered per hotkey —
+// ok / conflict / unsupported / failed / not_registered. A dead engine or a
+// rejected RegisterHotKey is visible here instead of silent.
+async function refreshHotkeyStates() {
+  const wheelEl = $('#hotkeyWheelState');
+  const quickEl = $('#hotkeyQuickState');
+  if (!wheelEl && !quickEl) return null;
+  const mark = (el, cls, txt) => { if (el) { el.className = `sub hk-state ${cls}`; el.textContent = txt; } };
+  mark(wheelEl, 'muted', t('hk.stateChecking'));
+  mark(quickEl, 'muted', t('hk.stateChecking'));
+  let rep;
+  try {
+    rep = await ipc('check_hotkeys', {}, { silent: true });
+  } catch (e) {
+    mark(wheelEl, 'err', t('hk.stateCheckFail'));
+    mark(quickEl, 'err', t('hk.stateCheckFail'));
+    return null;
+  }
+  const engineFailed = rep && rep.engine === 'failed';
+  for (const h of rep?.hotkeys || []) {
+    const el = h.id === 4 ? wheelEl : h.id === 5 ? quickEl : null;
+    if (!el) continue;
+    if (engineFailed) {
+      mark(el, 'err', t('hk.engineDead', { e: rep.engine_error || '' }));
+      continue;
+    }
+    const combo = h.canonical || h.combo || '';
+    switch (h.status) {
+      case 'ok': mark(el, 'ok', `${t('hk.stateOk')} · ${combo}`); break;
+      case 'disabled': mark(el, 'muted', t('hk.stateDisabled')); break;
+      case 'conflict': mark(el, 'err', `${t('hk.stateConflict')} · ${combo}`); break;
+      case 'unsupported': mark(el, 'err', t('hk.stateUnsupported', { e: h.detail || '' })); break;
+      case 'failed': mark(el, 'err', t('hk.stateFailed', { e: h.detail || '' })); break;
+      default: mark(el, 'warn', t('hk.stateOff')); break;
+    }
+  }
+  return rep;
+}
 
 export function wireSettings({ syncShell }) {
   $('#langSel')?.addEventListener('change', e => { setLangPref(e.target.value); syncShell?.(); });
@@ -56,7 +97,17 @@ export function wireSettings({ syncShell }) {
           secureGate: $('#swGate')?.classList.contains('on'),
         },
       });
-      toast('ok', t('hk.saved'));
+      // apply_settings returned Ok — but registration could still have failed;
+      // the self-check statuses say the truth before we celebrate.
+      const rep = await refreshHotkeyStates();
+      const bad = (rep?.hotkeys || []).filter(h => !['ok', 'disabled'].includes(h.status));
+      if (rep?.engine === 'failed') {
+        toast('err', t('hk.engineDead', { e: rep.engine_error || '' }));
+      } else if (bad.length) {
+        toast('err', t('hk.savedInactive', { e: bad.map(b => b.canonical || b.combo).join(', ') }));
+      } else {
+        toast('ok', t('hk.saved'));
+      }
     } catch { /* toasted */ }
   };
   $('#hotkeyInput')?.addEventListener('change', saveHotkeys);

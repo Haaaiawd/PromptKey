@@ -7,16 +7,54 @@ pub mod injector;
 pub mod ipc;
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
+
+/// Engine lifecycle observable by the GUI (`check_hotkeys`, service dot).
+/// `run_service` is invoked once per engine (re)start inside a fresh thread.
+#[derive(Debug, Clone)]
+pub enum EngineState {
+    /// Not running — never started, stopped cleanly, or died before init.
+    Stopped,
+    /// Spawned, still initialising (config/db/injector/hotkey/pipe).
+    Starting,
+    /// Reached the main loop.
+    Running,
+    /// The engine thread panicked; carries the panic message.
+    Failed(String),
+}
+
+static ENGINE_STATE: Mutex<EngineState> = Mutex::new(EngineState::Stopped);
+
+pub fn set_engine_state(s: EngineState) {
+    if let Ok(mut g) = ENGINE_STATE.lock() {
+        *g = s;
+    }
+}
+
+pub fn engine_state() -> EngineState {
+    ENGINE_STATE
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or(EngineState::Stopped)
+}
 
 /// `stop` is the cooperative shutdown flag (review F01/F28/F50/F64).
 /// The loop exits promptly when set, then hotkeys/pipe workers are torn down
 /// so a restarted engine never duplicates registrations or listeners.
 pub fn run_service(stop: Arc<AtomicBool>) {
-    // 初始化日志
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    // 初始化日志 — idempotent: run_service runs again on EVERY engine restart
+    // (apply_settings / restart_service). The previous `init_from_env` panicked
+    // on the second call (logger is process-global), silently killing the
+    // restarted engine before hotkeys were ever registered — the toast still
+    // said "saved". try_init returns Err instead of panicking.
+    let _ = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .try_init();
+    set_engine_state(EngineState::Starting);
     println!("🔥 [INTERNAL_ENGINE] 提示词引擎正在子线程启动...");
 
     // 1. 初始化配置 (Moved up to get DB path)
@@ -47,6 +85,7 @@ pub fn run_service(stop: Arc<AtomicBool>) {
 
     // 8. 进入主循环
     println!("✅ [INTERNAL_ENGINE] 引擎就绪，等待指令...");
+    set_engine_state(EngineState::Running);
 
     // Store the context (window) that was active before opening the wheel/selector
     let mut last_active_context: Option<context::AppContext> = None;
@@ -109,6 +148,7 @@ pub fn run_service(stop: Arc<AtomicBool>) {
     // receiver; the inject server thread exits via its own stop watch.
     println!("🛑 [INTERNAL_ENGINE] 引擎停止");
     hotkey_service.stop();
+    set_engine_state(EngineState::Stopped);
 }
 
 /// Phase 2 D1+D5: render a prompt's template content in a single pass.

@@ -244,6 +244,10 @@ table.log td.err-cell{color:var(--danger);font-size:var(--fs-caption)}
 .set-row:last-child{border-bottom:none}
 .set-row .lbl{font-size:var(--fs-body)}
 .set-row .sub{font-size:var(--fs-caption);color:var(--text-muted);margin-top:2px}
+.hk-state:empty{display:none}
+.hk-state.ok{color:var(--success)}
+.hk-state.err{color:var(--danger)}
+.hk-state.warn{color:var(--warning)}
 .set-row select{min-width:130px}
 .about-brand{display:flex;align-items:center;gap:10px}
 .about-logo{width:32px;height:32px;border-radius:8px;object-fit:cover}
