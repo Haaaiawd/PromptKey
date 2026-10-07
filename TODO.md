@@ -15,6 +15,11 @@
 P0 — Windows 实机验证（CI 只能编译，不能验证行为）
 - [ ] 安装包安装/卸载/升级（perMachine NSIS，中英向导）
 - [ ] 热键呼出轮盘 → 光标跟随 → 点击注入，在记事本/VS Code/浏览器输入框实测
+      —— 2.0.1「轮盘唤不出」根因已修复（pipe 打开重试 + emit 先于 show + set_focus 不再吞 emit +
+      失焦宽限期），设置页新增「链路诊断」按钮（diagnose_hotkey_pipeline）可逐环定位；
+      待真机复核 → 分支 fix/wheel-hotkey-ipc-and-recorder
+- [ ] 设置页热键录制器实测（点击录入真实组合键、Esc 取消还原、冲突回滚、中英双语）
+      —— 已实现 + Playwright 22 项断言全过；待真机复核
 - [ ] 密码框门禁实测（浏览器登录框、Windows 凭据框）
 - [ ] 剪贴板备份恢复实测（先复制图片再注入，确认剪贴板图片还在）
 - [ ] WebView2 缺失场景的表现（`webviewInstallMode: skip` 下直接装会怎样）

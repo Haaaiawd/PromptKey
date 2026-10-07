@@ -140,8 +140,9 @@ def main():
         check("engine failed: mentions service error", "服务异常" in (w.text_content() or ""))
         page.close()
 
-        # ---- 4. save flow: apply_settings ok but registration conflict ----
-        # (record vs probe skew — the UI must still surface it)
+        # ---- 4. record flow: apply_settings ok but registration conflict ----
+        # The fields are key-capture recorders now — drive the real chord
+        # instead of fill()+change (readonly inputs reject fill()).
         page = browser.new_page()
         rep = report(hotkeys=[
             {"id": 4, "combo": "Ctrl+Alt+F9", "canonical": "Ctrl+Alt+F9",
@@ -151,8 +152,8 @@ def main():
         ])
         open_settings(page, port, {"settings": BASE_SETTINGS, "report": rep})
         inp = page.locator("#hotkeyInput")
-        inp.fill("Ctrl+Alt+F9")
-        inp.dispatch_event("change")
+        inp.click()
+        page.keyboard.press("Control+Alt+F9")
         err_toast = page.locator("#toasts .toast.err")
         err_toast.first.wait_for(timeout=5000)
         check("save: error toast on inactive hotkey", "热键未生效" in (err_toast.first.text_content() or ""))

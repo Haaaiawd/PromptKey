@@ -200,6 +200,7 @@ fn main() {
             trigger_wheel_injection,       // TW005: PromptWheel injection trigger
             trigger_wheel_injection_vars,  // Phase2: inject with {{var}} values
             show_wheel_window,             // TW012: Show PromptWheel window (cursor-following)
+            diagnose_hotkey_pipeline,      // P0 fix: locate where the hotkey→wheel chain breaks
             present_main_window_new_prompt, // D4 fix: wheel quick-create hands off to the main editor
             create_prompt,
             update_prompt,
@@ -270,12 +271,24 @@ fn main() {
             .visible(false)           // Start hidden
             .build()?;
             
-            // TW014: Register focus lost event to auto-hide wheel
+            // TW014: Register focus lost event to auto-hide wheel.
+            // Grace window: Windows can grant then immediately retract
+            // foreground after a hotkey-driven SetForegroundWindow (focus
+            // bounce). A blur inside PRESENT_BLUR_GRACE of the present call is
+            // not the user clicking away — hiding then is what made the wheel
+            // appear to "never open".
             let wheel_window_clone = wheel_window.clone();
             wheel_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::Focused(false) = event {
-                    // Auto-hide on blur
-                    let _ = wheel_window_clone.hide();
+                    let bounced = LAST_PRESENT_AT
+                        .lock()
+                        .ok()
+                        .and_then(|g| *g)
+                        .map(|t| t.elapsed() < PRESENT_BLUR_GRACE)
+                        .unwrap_or(false);
+                    if !bounced {
+                        let _ = wheel_window_clone.hide();
+                    }
                 }
             });
             
@@ -491,38 +504,211 @@ fn trigger_wheel_injection_vars(prompt_id: i32, vars_json: String) -> Result<(),
         .map_err(|e| format!("Failed to send inject request: {}", e))
 }
 
+/// Instant of the most recent `present_wheel` — read by the Focused(false)
+/// autohide to ignore focus-bounce right after a hotkey-driven summon.
+static LAST_PRESENT_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+/// Focus events arriving within this window of a present are treated as
+/// bounce, not as "user clicked away".
+const PRESENT_BLUR_GRACE: Duration = Duration::from_millis(700);
+
+/// Last `present_wheel` outcome, surfaced by `diagnose_hotkey_pipeline`.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresentRecord {
+    /// Unix epoch ms.
+    pub at_ms: u64,
+    pub ok: bool,
+    pub detail: Option<String>,
+}
+static LAST_PRESENT: Mutex<Option<PresentRecord>> = Mutex::new(None);
+
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 // Position the wheel window centered on the mouse cursor, inside the monitor
-// that contains the cursor.
+// that contains the cursor, then make it visible and arm the JS side.
+// Every call records into LAST_PRESENT — the pipe→present chain used to fail
+// invisibly (a transparent 320px overlay shows literally nothing).
 pub(crate) fn present_wheel(app: &AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("wheel-panel") {
-        // Review F03/F56/F71: monitors can have negative/virtual origins, so a
-        // `.max(0.0)` floor teleported the wheel onto the primary display.
-        // Clamp against the cursor monitor's position+size instead.
-        if let Ok(pos) = app.cursor_position() {
-            let mut x = pos.x - 160.0;
-            let mut y = pos.y - 160.0;
-            if let Ok(Some(mon)) = window.monitor_from_point(pos.x, pos.y) {
-                let mp = mon.position();
-                let ms = mon.size();
-                let margin = 16.0;
-                // clamp() panics on inverted ranges (monitor smaller than the window)
-                let lo_x = mp.x as f64 + margin;
-                let hi_x = (mp.x as f64 + ms.width as f64 - 320.0 - margin).max(lo_x);
-                let lo_y = mp.y as f64 + margin;
-                let hi_y = (mp.y as f64 + ms.height as f64 - 320.0 - margin).max(lo_y);
-                x = x.clamp(lo_x, hi_x);
-                y = y.clamp(lo_y, hi_y);
-            }
-            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
-        }
-        window.show().map_err(|e| format!("Show window failed: {}", e))?;
-        window.set_focus().map_err(|e| format!("Set focus failed: {}", e))?;
-        window.emit("wheel-show", ()).map_err(|e| format!("Emit failed: {}", e))?;
-        println!("✅ Wheel window shown at cursor");
-        Ok(())
-    } else {
-        Err("Wheel window not found".to_string())
+    let r = present_wheel_inner(app);
+    if let Ok(mut g) = LAST_PRESENT.lock() {
+        *g = Some(PresentRecord {
+            at_ms: epoch_ms(),
+            ok: r.is_ok(),
+            detail: r.as_ref().err().cloned(),
+        });
     }
+    r
+}
+
+fn present_wheel_inner(app: &AppHandle) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("wheel-panel") else {
+        return Err("wheel window 'wheel-panel' does not exist".to_string());
+    };
+    // Review F03/F56/F71: monitors can have negative/virtual origins, so a
+    // `.max(0.0)` floor teleported the wheel onto the primary display.
+    // Clamp against the cursor monitor's position+size instead.
+    if let Ok(pos) = app.cursor_position() {
+        let mut x = pos.x - 160.0;
+        let mut y = pos.y - 160.0;
+        if let Ok(Some(mon)) = window.monitor_from_point(pos.x, pos.y) {
+            let mp = mon.position();
+            let ms = mon.size();
+            let margin = 16.0;
+            // clamp() panics on inverted ranges (monitor smaller than the window)
+            let lo_x = mp.x as f64 + margin;
+            let hi_x = (mp.x as f64 + ms.width as f64 - 320.0 - margin).max(lo_x);
+            let lo_y = mp.y as f64 + margin;
+            let hi_y = (mp.y as f64 + ms.height as f64 - 320.0 - margin).max(lo_y);
+            x = x.clamp(lo_x, hi_x);
+            y = y.clamp(lo_y, hi_y);
+        }
+        let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+    // Emit BEFORE show(): if the webview's listener is gone the wheel can
+    // never render, and a shown-but-unrendered transparent overlay is the
+    // worst possible state (invisible click-catcher). Emit failure keeps the
+    // window hidden and surfaces as Err.
+    window
+        .emit("wheel-show", ())
+        .map_err(|e| format!("emit wheel-show failed: {}", e))?;
+    // Arm the blur-bounce grace before the window can gain/lose focus.
+    if let Ok(mut g) = LAST_PRESENT_AT.lock() {
+        *g = Some(std::time::Instant::now());
+    }
+    window
+        .show()
+        .map_err(|e| format!("show wheel window failed: {}", e))?;
+    // Best-effort: Windows may deny SetForegroundWindow to a process that was
+    // not foreground. A denied grab is NOT fatal — the wheel stays usable —
+    // but it used to abort before the emit, leaving the overlay invisible.
+    if let Err(e) = window.set_focus() {
+        eprintln!("[wheel] set_focus failed (non-fatal): {}", e);
+    }
+    println!("✅ Wheel window shown at cursor");
+    Ok(())
+}
+
+/// Self-diagnostic for the hotkey→wheel chain (settings → 诊断按钮). Every
+/// link reports what it actually saw so a silent break is locatable:
+/// engine state → per-hotkey registration → pipe send record → GUI listener
+/// record → wheel window presence. `hints` are machine-readable; the UI
+/// localizes them.
+#[tauri::command]
+fn diagnose_hotkey_pipeline(app: AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_or_default_config()?;
+    let want = [(4u32, cfg.hotkey.clone()), (5u32, cfg.quick_hotkey.clone())];
+    let hotkeys = service::hotkey::check(&want);
+
+    let (engine, engine_error) = match service::engine_state() {
+        service::EngineState::Running => ("running", None),
+        service::EngineState::Starting => ("starting", None),
+        service::EngineState::Failed(e) => ("failed", Some(e)),
+        service::EngineState::Stopped => ("stopped", None),
+    };
+
+    #[cfg(windows)]
+    let (listener, listener_alive, listener_last_msg_at) = {
+        let st = ipc_listener::listener_state();
+        (
+            serde_json::to_value(&st).unwrap_or_default(),
+            st.alive,
+            st.last_message_at_ms,
+        )
+    };
+    #[cfg(not(windows))]
+    let (listener, listener_alive, listener_last_msg_at) = (
+        serde_json::json!({ "alive": false, "platform": "named pipes are Windows-only" }),
+        false,
+        None,
+    );
+
+    let last_send = service::ipc::last_wheel_send();
+    let last_send_json = serde_json::to_value(&last_send).unwrap_or_default();
+    let last_present = LAST_PRESENT
+        .lock()
+        .ok()
+        .and_then(|g| g.clone());
+    let last_present_json = serde_json::to_value(&last_present).unwrap_or_default();
+
+    let wheel = app.get_webview_window("wheel-panel");
+    let (wheel_exists, wheel_visible, wheel_focused) = match &wheel {
+        Some(w) => (
+            true,
+            w.is_visible().unwrap_or(false),
+            w.is_focused().unwrap_or(false),
+        ),
+        None => (false, false, false),
+    };
+
+    let mut hints: Vec<String> = Vec::new();
+    if engine != "running" {
+        hints.push("engine_not_running".into());
+    }
+    #[cfg(windows)]
+    {
+        if !listener_alive {
+            hints.push("listener_not_running".into());
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = listener_last_msg_at;
+        hints.push("unsupported_platform".into());
+    }
+    if let Some(s) = &last_send {
+        if s.kind == "open_failed" || s.kind == "write_failed" {
+            hints.push("send_failed".into());
+        } else if s.kind == "sent" {
+            // Sent but never logged by the listener → the break is inside the
+            // pipe itself (or a different process owns the name).
+            let received = listener_last_msg_at
+                .map(|t| t >= s.at_ms)
+                .unwrap_or(false);
+            if !received {
+                hints.push("send_no_receipt".into());
+            }
+        }
+    }
+    if let Some(p) = &last_present {
+        if !p.ok {
+            hints.push("present_failed".into());
+        }
+    }
+    if !wheel_exists {
+        hints.push("wheel_window_missing".into());
+    }
+    if engine == "running"
+        && hotkeys
+            .iter()
+            .any(|h| h.status != "ok" && h.status != "disabled")
+    {
+        hints.push("hotkey_not_ok".into());
+    }
+    if hints.is_empty() {
+        hints.push("ok".into());
+    }
+
+    Ok(serde_json::json!({
+        "engine": engine,
+        "engine_error": engine_error,
+        "hotkeys": hotkeys,
+        "pipe": {
+            "listener": listener,
+            "listener_alive": listener_alive,
+            "last_send": last_send_json,
+            "last_present": last_present_json,
+        },
+        "wheel_window": {
+            "exists": wheel_exists,
+            "visible": wheel_visible,
+            "focused": wheel_focused,
+        },
+        "hints": hints,
+    }))
 }
 
 // TW012: Show wheel window command (also used by the in-app wheel preview button)

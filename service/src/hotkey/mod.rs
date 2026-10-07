@@ -123,12 +123,15 @@ fn named_key(name: &str) -> Option<(u32, &'static str)> {
         "NUMPAD7" | "NUM7" => (0x67, "Num7"),
         "NUMPAD8" | "NUM8" => (0x68, "Num8"),
         "NUMPAD9" | "NUM9" => (0x69, "Num9"),
-        "NUMPAD*" | "NUMMULTIPLY" | "MULTIPLY" => (0x6A, "Num*"),
+        // Canonical names must re-parse — the UI saves what it displays.
+        // "Num+" can NEVER round-trip: '+' is the combo separator, so the
+        // canonical name for VK_ADD is "NumAdd" (and bare "NUM+" is dropped).
+        "NUMPAD*" | "NUM*" | "NUMMULTIPLY" | "MULTIPLY" => (0x6A, "Num*"),
         // "NUMPAD+" is unreachable — '+' is the combo separator. Use NUMADD.
-        "NUMADD" | "ADD" | "NUMPADPLUS" => (0x6B, "Num+"),
-        "NUMPAD-" | "NUMSUBTRACT" | "SUBTRACT" => (0x6D, "Num-"),
-        "NUMPAD." | "NUMDECIMAL" | "DECIMAL" => (0x6E, "Num."),
-        "NUMPAD/" | "NUMDIVIDE" | "DIVIDE" => (0x6F, "Num/"),
+        "NUMADD" | "ADD" | "NUMPADPLUS" => (0x6B, "NumAdd"),
+        "NUMPAD-" | "NUM-" | "NUMSUBTRACT" | "SUBTRACT" => (0x6D, "Num-"),
+        "NUMPAD." | "NUM." | "NUMDECIMAL" | "DECIMAL" => (0x6E, "Num."),
+        "NUMPAD/" | "NUM/" | "NUMDIVIDE" | "DIVIDE" => (0x6F, "Num/"),
         _ => return None,
     };
     Some(key)
@@ -419,5 +422,28 @@ mod tests {
     fn canonical_orders_modifiers() {
         assert_eq!(parse("shift+ctrl+f9").unwrap().canonical, "Ctrl+Shift+F9");
         assert_eq!(parse("Win+q").unwrap().canonical, "Win+Q");
+    }
+
+    /// Every canonical name the parser emits (what the UI shows/saves) must
+    /// parse back to the same vk+modifiers — the recorder writes canonical
+    /// strings, so a non-round-tripping name would brick on next load.
+    #[test]
+    fn canonical_names_round_trip() {
+        for combo in [
+            "Ctrl+Alt+Space", "Ctrl+Enter", "Alt+Tab", "Ctrl+Shift+Esc",
+            "Ctrl+Backspace", "Alt+Delete", "Ctrl+Insert", "Win+Home",
+            "Ctrl+End", "Alt+PageUp", "Ctrl+PageDown", "Ctrl+Up", "Alt+Down",
+            "Ctrl+Left", "Shift+Right", "Win+CapsLock", "Ctrl+NumLock",
+            "Alt+ScrollLock", "Ctrl+PrintScreen", "Ctrl+Pause",
+            "Ctrl+;", "Alt+/", "Ctrl+`", "Shift+[", "Ctrl+\\", "Alt+]",
+            "Ctrl+'", "Win+-", "Ctrl+=", "Alt+,", "Ctrl+.",
+            "Ctrl+Num0", "Alt+Num5", "Ctrl+Num9", "Shift+Num*",
+            "Ctrl+NumAdd", "Alt+Num-", "Ctrl+Num.", "Win+Num/",
+            "Ctrl+F1", "Alt+F12", "Ctrl+Shift+F24", "Ctrl+A", "Alt+9",
+        ] {
+            let p = parse_hotkey(combo)
+                .unwrap_or_else(|e| panic!("canonical combo {} failed to re-parse: {}", combo, e));
+            assert_eq!(p.canonical, combo, "round-trip mismatch for {}", combo);
+        }
     }
 }

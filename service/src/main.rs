@@ -121,7 +121,13 @@ pub fn run_service(stop: Arc<AtomicBool>) {
                         );
                         last_active_context = Some(ctx);
                     }
-                    let _ = ipc_client.send_show_wheel();
+                    // Was `let _ =`: a dead pipe read exactly like "hotkey does
+                    // nothing". The attempt is recorded in
+                    // service::ipc::last_wheel_send() for diagnose_hotkey_pipeline.
+                    if let Err(e) = ipc_client.send_show_wheel() {
+                        eprintln!("❌ [HOTKEY] 轮盘唤起失败（pipe 发送失败）: {}", e);
+                        log::error!("SHOW_WHEEL send failed: {}", e);
+                    }
                 }
                 5 => {
                     // Phase 2 N4: quick hotkey → inject the configured default prompt

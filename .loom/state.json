@@ -4,7 +4,7 @@
     "name": "promptkey",
     "status": "building",
     "created_at": "2026-10-06T08:16:56.246Z",
-    "updated_at": "2026-10-06T14:15:38.680Z"
+    "updated_at": "2026-10-07T02:41:17.476Z"
   },
   "understanding": {
     "confirmed": [
@@ -151,6 +151,18 @@
         "text": "版本号单一权威源为 tauri.conf.json（2.0.0），同步点：Cargo.toml/Cargo.lock crate 版本、src/index.html 关于页。",
         "source": "conversation",
         "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "F-025",
+        "text": "2.0.1 轮盘热键失效根因定位：整条链路存在多个静默断点 —— (a) service 侧 let _= 丢弃 send_show_wheel 返回值；(b) IPC open() 单次尝试撞上 GUI listener 每次连接间销毁/重建 pipe 实例的空窗（ERROR_FILE_NOT_FOUND/ERROR_PIPE_BUSY）；(c) present_wheel 先 set_focus()? 后 emit，焦点被拒时 wheel-show 事件永不送达而 320px 全透明窗口已 show —— 用户看到的就是按了没反应还吞点击；(d) Focused(false) 自动隐藏会把焦点抖动当成点击离开而立即隐藏轮盘。id=5 直注不经过 pipe/GUI，故正常。",
+        "source": "conversation",
+        "at": "2026-10-07T02:41:17.476Z"
+      },
+      {
+        "id": "F-026",
+        "text": "前端热键输入框改为按键录制器（hotkey_recorder.js）：event.code → Rust canonical 名；Parser canonical 'Num+' 永远无法回解析（+ 是分隔符），已改为 'NumAdd' 并补 NUM*/NUM-/NUM./NUM/ 别名 + canonical_names_round_trip 测试。",
+        "source": "conversation",
+        "at": "2026-10-07T02:41:17.476Z"
       }
     ],
     "assumptions": [
@@ -226,6 +238,20 @@
         "impact": "medium",
         "status": "open",
         "at": "2026-10-06T13:50:35.393Z"
+      },
+      {
+        "id": "Q-007",
+        "question": "轮盘热键链路修复是否在所有 Windows 环境生效（focus-bounce 宽限期 700ms 是否足够；企业组策略/远程桌面下 SetForegroundWindow 行为差异）？",
+        "impact": "high",
+        "status": "open",
+        "at": "2026-10-07T02:41:17.476Z"
+      },
+      {
+        "id": "Q-008",
+        "question": "diagnose_hotkey_pipeline 的 hints 是否需要日志持久化供离线支持（当前仅会话内内存 + 悬停 JSON）？",
+        "impact": "low",
+        "status": "open",
+        "at": "2026-10-07T02:41:17.476Z"
       }
     ]
   },
