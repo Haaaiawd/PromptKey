@@ -112,7 +112,7 @@ fn mods_to_global(modifiers: u32) -> Modifiers {
 mod main_thread {
     use std::ffi::c_void;
 
-    extern "C" {
+    unsafe extern "C" {
         fn dispatch_get_main_queue() -> *mut c_void;
         fn dispatch_sync_f(queue: *mut c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
     }

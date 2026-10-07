@@ -87,7 +87,7 @@ mod x11_impl;
 pub use x11_impl::X11Injector;
 
 #[cfg(target_os = "macos")]
-mod macos_ax;
+pub(crate) mod macos_ax;
 #[cfg(target_os = "macos")]
 mod macos_impl;
 #[cfg(target_os = "macos")]

@@ -21,7 +21,7 @@ fn err(msg: impl Into<String>) -> AnyErr {
 
 // ApplicationServices exports the prompt option key as a CFStringRef global.
 #[link(name = "ApplicationServices", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     static kAXTrustedCheckOptionPrompt: CFStringRef;
 
     fn AXIsProcessTrusted() -> bool;
