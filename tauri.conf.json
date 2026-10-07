@@ -1,6 +1,6 @@
 {
   "productName": "PromptKey", 
-  "version": "2.0.3",
+  "version": "2.0.4",
   "identifier": "com.promptkey.manager",
   "build": {
     "beforeDevCommand": "",
