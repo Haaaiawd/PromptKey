@@ -740,27 +740,27 @@
         {
           "criterion": "Service→GUI wheel send retries through the listener's per-connection instance gap and never debounces a failed send; every attempt is recorded",
           "verify_by": "cargo test service::ipc + code review of service/src/ipc/mod.rs",
-          "evidence": ""
+          "evidence": "open_pipe_write retries Win32 2/231 for 900ms/40ms steps; debounce latch set post-write only; SendRecord in LAST_WHEEL_SEND; service::ipc tests green on CI."
         },
         {
           "criterion": "GUI present_wheel emits wheel-show before show(), treats set_focus denial as non-fatal, ignores focus-bounce inside a 700ms grace, and records each outcome",
           "verify_by": "code review src/main.rs + src/ipc_listener.rs",
-          "evidence": ""
+          "evidence": "src/main.rs present_wheel_inner: emit('wheel-show')→show()→set_focus best-effort; LAST_PRESENT_AT grace in Focused(false) handler; LAST_PRESENT record. CI green."
         },
         {
           "criterion": "diagnose_hotkey_pipeline Tauri command returns per-link state (engine, hotkey registration, pipe listener/send/present, wheel window) with machine-readable hints surfaced in settings",
           "verify_by": "cargo check + settings UI review",
-          "evidence": ""
+          "evidence": "Command registered; returns engine/engine_error/hotkeys/pipe{listener,last_send,last_present}/wheel_window/hints; settings.js renders localized hints + full JSON on hover; 链路诊断 row in index.html."
         },
         {
           "criterion": "Recorder: click-to-arm, keydown capture normalized to Rust canonical names, modifier required, Esc/blur cancel restores, preventDefault blocks typing, commit validates via apply_settings+check_hotkeys and rolls back on conflict/failure",
           "verify_by": "python3 tests/e2e/hotkey_recorder_e2e.py",
-          "evidence": ""
+          "evidence": "src/js/hotkey_recorder.js + settings.js commitHotkey; Playwright hotkey_recorder_e2e.py 22/22 local + CI pass incl. conflict rollback and numpad/Fn normalization."
         },
         {
           "criterion": "Parser canonical names round-trip (NumAdd not Num+ — '+' is the combo separator)",
           "verify_by": "cargo test hotkey::tests::canonical_names_round_trip",
-          "evidence": ""
+          "evidence": "canonical_names_round_trip test (40 combos) in hotkey/mod.rs; canonical for VK_ADD changed to NumAdd; NUM*/NUM-/NUM./NUM/ aliases added. cargo test green on CI."
         }
       ],
       "done_when": [],
@@ -807,15 +807,45 @@
       "capability_exemption": "Bugfix within existing architecture; no new capability surface.",
       "integrity_version": 1,
       "covers": [],
-      "status": "active",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "PR #12 (fix/wheel-hotkey-ipc-and-recorder, commit 4f5c2c0) — CI green: cargo check/clippy/test on windows-latest, frontend static checks, playwright e2e job all pass. Local Playwright: 22+10 assertions pass.",
+        "Root cause recorded: pipe single-shot open raced the listener's per-connection instance recreation; present_wheel emitted wheel-show only AFTER set_focus? so a denied foreground steal left a shown-but-never-rendered transparent overlay; Focused(false) autohide could hide the wheel on focus-bounce; send errors were dropped via let _=.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "Service→GUI wheel send retries through the listener's per-connection instance gap and never debounces a failed send; every attempt is recorded",
+              "evidence": "open_pipe_write retries Win32 2/231 for 900ms/40ms steps; debounce latch set post-write only; SendRecord in LAST_WHEEL_SEND; service::ipc tests green on CI."
+            },
+            {
+              "criterion": "GUI present_wheel emits wheel-show before show(), treats set_focus denial as non-fatal, ignores focus-bounce inside a 700ms grace, and records each outcome",
+              "evidence": "src/main.rs present_wheel_inner: emit('wheel-show')→show()→set_focus best-effort; LAST_PRESENT_AT grace in Focused(false) handler; LAST_PRESENT record. CI green."
+            },
+            {
+              "criterion": "diagnose_hotkey_pipeline Tauri command returns per-link state (engine, hotkey registration, pipe listener/send/present, wheel window) with machine-readable hints surfaced in settings",
+              "evidence": "Command registered; returns engine/engine_error/hotkeys/pipe{listener,last_send,last_present}/wheel_window/hints; settings.js renders localized hints + full JSON on hover; 链路诊断 row in index.html."
+            },
+            {
+              "criterion": "Recorder: click-to-arm, keydown capture normalized to Rust canonical names, modifier required, Esc/blur cancel restores, preventDefault blocks typing, commit validates via apply_settings+check_hotkeys and rolls back on conflict/failure",
+              "evidence": "src/js/hotkey_recorder.js + settings.js commitHotkey; Playwright hotkey_recorder_e2e.py 22/22 local + CI pass incl. conflict rollback and numpad/Fn normalization."
+            },
+            {
+              "criterion": "Parser canonical names round-trip (NumAdd not Num+ — '+' is the combo separator)",
+              "evidence": "canonical_names_round_trip test (40 combos) in hotkey/mod.rs; canonical for VK_ADD changed to NumAdd; NUM*/NUM-/NUM./NUM/ aliases added. cargo test green on CI."
+            }
+          ],
+          "at": "2026-10-07T02:47:43.480Z"
+        }
+      ],
       "created_at": "2026-10-07T02:37:42.508Z",
-      "updated_at": "2026-10-07T02:38:13.542Z"
+      "updated_at": "2026-10-07T02:47:43.480Z",
+      "completed_at": "2026-10-07T02:47:43.480Z"
     }
   ]
 }
