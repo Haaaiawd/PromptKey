@@ -855,17 +855,17 @@
         {
           "criterion": "capabilities/default.json exists; windows cover main + wheel-panel; permissions include core:default + allow-set-position + allow-hide",
           "verify_by": "cat capabilities/default.json; node scripts/check_capabilities.mjs; cargo test capabilities_cover_both_windows",
-          "evidence": ""
+          "evidence": "capabilities/default.json created (identifier 'default', windows [main, wheel-panel], permissions [core:default, allow-set-position, allow-hide]). node scripts/check_capabilities.mjs → 'capabilities OK'; negative tests (drop wheel-panel / drop mutating perms) fail correctly. Rust test capabilities_cover_both_windows added to src/main.rs — CI runs it (cargo test --workspace); local cargo unavailable per hard constraint."
         },
         {
           "criterion": "When __TAURI__ is absent OR plugin IPC is ACL-denied, main window shows a persistent bilingual banner; wheel window shows a visible error card",
           "verify_by": "python tests/e2e/no_tauri_e2e.py — no-mock and acl-denied cases",
-          "evidence": ""
+          "evidence": "13/13 PASS. probeIpcEnvironment() (store.js) distinguishes no-bridge vs acl-denied via a live event.listen probe; app.js boot fills #envBanner (persistent, role=alert); wheel.js init() fills #envErr card. i18n keys added zh-CN + en-US."
         },
         {
           "criterion": "CI fails if capabilities/ disappears or loses window coverage; release build fails if resolved capabilities are empty",
           "verify_by": "review .github/workflows/ci.yml + release.yml; node scripts/check_capabilities.mjs exit codes",
-          "evidence": ""
+          "evidence": "ci.yml frontend job runs check_capabilities.mjs (validates dir exists, windows coverage, identifier existence vs acl-manifests.json, resolved allow-set); e2e job adds no_tauri_e2e.py. release.yml asserts gen/schemas/capabilities.json non-empty + covers both windows after tauri build."
         }
       ],
       "done_when": [],
@@ -906,15 +906,40 @@
       "capability_exemption": "Pure configuration/IPC-hardening fix — no professional-domain judgment needed beyond the source-verified Tauri 2 ACL semantics.",
       "integrity_version": 1,
       "covers": [],
-      "status": "active",
+      "status": "done",
       "progress": {
         "completed": [],
-        "current": "",
+        "current": "complete",
         "next": ""
       },
-      "evidence": [],
+      "evidence": [
+        "commit 8ce0dc0 on fix/tauri2-capabilities pushed; PR #13 against master (not merged)",
+        "mechanism correction documented in .loom/design/task-brief-capabilities-fix.md (TASK-009 节): __TAURI__ IS injected; plugin:* commands were ACL-denied; app commands ungated (no __app-acl__ manifest)",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "capabilities/default.json exists; windows cover main + wheel-panel; permissions include core:default + allow-set-position + allow-hide",
+              "verify_by": "cat capabilities/default.json; node scripts/check_capabilities.mjs; cargo test capabilities_cover_both_windows",
+              "evidence": "capabilities/default.json created (identifier 'default', windows [main, wheel-panel], permissions [core:default, allow-set-position, allow-hide]). node scripts/check_capabilities.mjs → 'capabilities OK'; negative tests (drop wheel-panel / drop mutating perms) fail correctly. Rust test capabilities_cover_both_windows added to src/main.rs — CI runs it (cargo test --workspace); local cargo unavailable per hard constraint."
+            },
+            {
+              "criterion": "When __TAURI__ is absent OR plugin IPC is ACL-denied, main window shows a persistent bilingual banner; wheel window shows a visible error card",
+              "verify_by": "python tests/e2e/no_tauri_e2e.py — no-mock and acl-denied cases",
+              "evidence": "13/13 PASS. probeIpcEnvironment() (store.js) distinguishes no-bridge vs acl-denied via a live event.listen probe; app.js boot fills #envBanner (persistent, role=alert); wheel.js init() fills #envErr card. i18n keys added zh-CN + en-US."
+            },
+            {
+              "criterion": "CI fails if capabilities/ disappears or loses window coverage; release build fails if resolved capabilities are empty",
+              "verify_by": "review .github/workflows/ci.yml + release.yml; node scripts/check_capabilities.mjs exit codes",
+              "evidence": "ci.yml frontend job runs check_capabilities.mjs (validates dir exists, windows coverage, identifier existence vs acl-manifests.json, resolved allow-set); e2e job adds no_tauri_e2e.py. release.yml asserts gen/schemas/capabilities.json non-empty + covers both windows after tauri build."
+            }
+          ],
+          "at": "2026-10-07T04:30:31.806Z"
+        }
+      ],
       "created_at": "2026-10-07T04:17:40.992Z",
-      "updated_at": "2026-10-07T04:17:51.529Z"
+      "updated_at": "2026-10-07T04:30:31.807Z",
+      "completed_at": "2026-10-07T04:30:31.807Z"
     }
   ]
 }
