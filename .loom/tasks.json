@@ -1218,6 +1218,85 @@
       "created_at": "2026-10-07T06:47:00.011Z",
       "updated_at": "2026-10-07T07:38:06.889Z",
       "completed_at": "2026-10-07T07:38:06.889Z"
+    },
+    {
+      "id": "TASK-012",
+      "title": "Release pipeline: extend release.yml to Linux + macOS (3-platform matrix)",
+      "outcome": "Pushing a v* tag produces Windows NSIS/MSI + Linux deb/AppImage + macOS dmg (aarch64 + x86_64) on a single GitHub Release, with per-artifact sanity verification, an honest three-platform release body, and zero changes to the proven Windows build steps.",
+      "acceptance": [
+        {
+          "criterion": "release.yml gains build-linux (ubuntu-22.04, apt deps + pkg-config preflight gate, tauri build --bundles deb,appimage) and build-macos (matrix aarch64-apple-darwin + x86_64-apple-darwin, signingIdentity guard) jobs running in parallel with the untouched build-windows job",
+          "verify_by": "review .github/workflows/release.yml diff; python YAML parse; confirm windows job steps byte-identical",
+          "evidence": ""
+        },
+        {
+          "criterion": "A prepare-release job creates/updates the tag's GitHub Release up front so parallel platform publish steps always take the update path (no action-gh-release create race, softprops#616/#705)",
+          "verify_by": "review job graph; all publish steps set identical body+generate_release_notes",
+          "evidence": ""
+        },
+        {
+          "criterion": "scripts/verify_release_artifacts.sh validates per-format magic (MZ+PE, OLE2, ar members, ELF+AI\\x02, koly trailer, gzip) and minimum-size floors, and its --selftest passes locally",
+          "verify_by": "run scripts/verify_release_artifacts.sh --selftest on this machine",
+          "evidence": ""
+        },
+        {
+          "criterion": "Release body documents all three platforms (download table, install notes, system requirements, unsigned/Wayland caveats)",
+          "verify_by": "review body string in workflow; consistent across prepare-release and each publish step",
+          "evidence": ""
+        },
+        {
+          "criterion": "docs/PLATFORMS.md gains a Release packaging section and README download/install instructions reflect actual artifact names",
+          "verify_by": "review diffs",
+          "evidence": ""
+        },
+        {
+          "criterion": "PR opened from feat/release-matrix-linux-macos against master, not merged; post-merge execution checklist delivered",
+          "verify_by": "gh pr status; checklist text in delivery",
+          "evidence": ""
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No Windows job step changes (capabilities check, bundle check, NSIS/MSI upload untouched); only its release body text is updated per the three-platform requirement",
+        "No code signing or notarization anywhere (no certs; explicit unsigned logging instead)",
+        "No local cargo build or workflow run possible — verification is static review + script selftest + post-merge checklist",
+        "No universal2 macOS binary — two single-arch dmgs chosen as the lower-risk, independently-verifiable path"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/task-brief-release-matrix.md",
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        "tauri.conf.json",
+        "Cargo.toml",
+        "capabilities/default.json",
+        "scripts/check_capabilities.mjs",
+        "docs/PLATFORMS.md",
+        "README.md"
+      ],
+      "touches": [
+        ".github/workflows/release.yml",
+        "scripts/verify_release_artifacts.sh",
+        "scripts/check_build_capabilities.mjs",
+        "docs/PLATFORMS.md",
+        "README.md",
+        ".loom/"
+      ],
+      "implements": ".loom/design/task-brief-release-matrix.md",
+      "design_exemption": "",
+      "capability_hooks": [],
+      "capability_exemption": "CI/release engineering within existing design surface; no new professional capability domain — platform packaging knowledge is sourced inline in the brief and workflow comments.",
+      "integrity_version": 1,
+      "covers": [],
+      "status": "active",
+      "progress": {
+        "completed": [],
+        "current": "",
+        "next": ""
+      },
+      "evidence": [],
+      "created_at": "2026-10-08T08:16:50.774Z",
+      "updated_at": "2026-10-08T08:17:24.074Z"
     }
   ]
 }
