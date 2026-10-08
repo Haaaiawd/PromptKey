@@ -406,11 +406,13 @@ jobs:
       - name: Verify resolved capabilities made it into the build
         run: node scripts/check_build_capabilities.mjs
 
+      # NOTE: passing --target namespaces cargo's output dir — bundles land in
+      # target/<triple>/release/bundle/, NOT target/release/bundle/.
       - name: List + verify bundle artifacts
         run: |
-          find target/release/bundle -type f -exec ls -l {} +
+          find "target/${{ matrix.target }}/release/bundle" -type f -exec ls -l {} +
           shopt -s nullglob
-          artifacts=(target/release/bundle/dmg/*.dmg target/release/bundle/macos/*.app.tar.gz)
+          artifacts=("target/${{ matrix.target }}/release/bundle/dmg/"*.dmg "target/${{ matrix.target }}/release/bundle/macos/"*.app.tar.gz)
           if [ ${#artifacts[@]} -eq 0 ]; then
             echo "::error::No macOS bundle artifacts produced (expected .dmg)"
             exit 1
@@ -422,8 +424,8 @@ jobs:
         with:
           name: promptkey-macos-${{ matrix.arch }}-${{ github.ref_name }}
           path: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -465,5 +467,5 @@ jobs:
             - Linux Wayland 会话下自动注入只能到达 XWayland 客户端；应用内会明确提示降级，管理功能不受影响。
             - 更新内容见 [CHANGELOG.md](https://github.com/Haaaiawd/PromptKey/blob/master/CHANGELOG.md)
           files: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
