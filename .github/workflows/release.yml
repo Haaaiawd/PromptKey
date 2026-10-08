@@ -12,6 +12,60 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Materialize the GitHub Release for this tag BEFORE any build job reaches
+  # its publish step. Parallel jobs racing action-gh-release's create path can
+  # hit `422 already_exists` or even create duplicate releases
+  # (softprops/action-gh-release#616 / #705); a ~seconds job up front means
+  # every publish step below only ever takes the update path. The job always
+  # runs (its step is tag-gated) so `needs:` stays satisfied on
+  # workflow_dispatch builds too.
+  #
+  # The `body:` below is repeated identically in every publish step — the
+  # final Release text is then independent of job completion order.
+  prepare-release:
+    name: Prepare GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create/update release for this tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## PromptKey ${{ github.ref_name }}
+
+            ### 下载
+
+            | 平台 | 安装包 | 说明 |
+            |---|---|---|
+            | Windows | `*_x64-setup.exe` | NSIS 安装向导（中英双语，推荐） |
+            | Windows | `*_x64_en-US.msi` | MSI 备选 |
+            | Linux | `*_amd64.deb` | Debian / Ubuntu 系，apt/dpkg 安装 |
+            | Linux | `*_amd64.AppImage` | 免安装通用包，`chmod +x` 后运行 |
+            | macOS | `*_aarch64.dmg` | Apple Silicon（M 系列） |
+            | macOS | `*_x64.dmg` | Intel Mac |
+
+            ### 安装说明
+
+            - **Windows**：运行安装包按向导完成。需系统已安装 WebView2 Runtime（Windows 11 与多数 Windows 10 自带；安装包不会自动安装）。
+            - **Linux · deb**：`sudo apt install ./*_amd64.deb`（依赖声明含 WebKitGTK 4.1 / libayatana-appindicator）。
+            - **Linux · AppImage**：`chmod +x` 后直接执行；运行时需 FUSE2（Ubuntu 24.04+：`sudo apt install libfuse2t64`）。
+            - **macOS**：打开 dmg 拖入 Applications；首次运行被 Gatekeeper 拦截时：系统设置 → 隐私与安全性 →「仍要打开」。
+
+            ### 系统要求
+
+            - Windows 10 / 11（x64）+ WebView2 Runtime
+            - Linux：glibc ≥ 2.35（Ubuntu 22.04+ / Debian 12+ 或更新）+ WebKitGTK 4.1，X11 会话
+            - macOS 11+（Apple Silicon 选 aarch64 包，Intel 选 x64 包）
+
+            ### 注意
+
+            - 三个平台均**未做代码签名/公证**：Windows SmartScreen 与 macOS Gatekeeper 的「未知开发者」提示属预期。
+            - macOS 自动注入需在「系统设置 → 隐私与安全性 → 辅助功能」中授权（设置页可一键触发系统授权对话框）。
+            - Linux Wayland 会话下自动注入只能到达 XWayland 客户端；应用内会明确提示降级，管理功能不受影响。
+            - 更新内容见 [CHANGELOG.md](https://github.com/Haaaiawd/PromptKey/blob/master/CHANGELOG.md)
+
   build-windows:
     name: Build Windows installer
     runs-on: windows-latest
@@ -93,17 +147,190 @@ jobs:
           body: |
             ## PromptKey ${{ github.ref_name }}
 
+            ### 下载
+
+            | 平台 | 安装包 | 说明 |
+            |---|---|---|
+            | Windows | `*_x64-setup.exe` | NSIS 安装向导（中英双语，推荐） |
+            | Windows | `*_x64_en-US.msi` | MSI 备选 |
+            | Linux | `*_amd64.deb` | Debian / Ubuntu 系，apt/dpkg 安装 |
+            | Linux | `*_amd64.AppImage` | 免安装通用包，`chmod +x` 后运行 |
+            | macOS | `*_aarch64.dmg` | Apple Silicon（M 系列） |
+            | macOS | `*_x64.dmg` | Intel Mac |
+
             ### 安装说明
-            - `PromptKey_*_x64-setup.exe` —— NSIS 安装包（推荐，支持中英双语安装向导）
-            - `PromptKey_*_x64_en-US.msi` —— MSI 安装包（备选）
+
+            - **Windows**：运行安装包按向导完成。需系统已安装 WebView2 Runtime（Windows 11 与多数 Windows 10 自带；安装包不会自动安装）。
+            - **Linux · deb**：`sudo apt install ./*_amd64.deb`（依赖声明含 WebKitGTK 4.1 / libayatana-appindicator）。
+            - **Linux · AppImage**：`chmod +x` 后直接执行；运行时需 FUSE2（Ubuntu 24.04+：`sudo apt install libfuse2t64`）。
+            - **macOS**：打开 dmg 拖入 Applications；首次运行被 Gatekeeper 拦截时：系统设置 → 隐私与安全性 →「仍要打开」。
 
             ### 系统要求
-            - Windows 10 / 11（x64）
-            - 需要系统已安装 **WebView2 Runtime**（Windows 11 与大多数 Windows 10 自带；本安装包不会自动安装。如无请从微软官网下载 Evergreen Bootstrapper）
+
+            - Windows 10 / 11（x64）+ WebView2 Runtime
+            - Linux：glibc ≥ 2.35（Ubuntu 22.04+ / Debian 12+ 或更新）+ WebKitGTK 4.1，X11 会话
+            - macOS 11+（Apple Silicon 选 aarch64 包，Intel 选 x64 包）
 
             ### 注意
-            - 本版本**未做代码签名**：Windows SmartScreen 可能提示「未知发布者」，选择「仍要运行」即可。
+
+            - 三个平台均**未做代码签名/公证**：Windows SmartScreen 与 macOS Gatekeeper 的「未知开发者」提示属预期。
+            - macOS 自动注入需在「系统设置 → 隐私与安全性 → 辅助功能」中授权（设置页可一键触发系统授权对话框）。
+            - Linux Wayland 会话下自动注入只能到达 XWayland 客户端；应用内会明确提示降级，管理功能不受影响。
             - 更新内容见 [CHANGELOG.md](https://github.com/Haaaiawd/PromptKey/blob/master/CHANGELOG.md)
           files: |
             target/release/bundle/nsis/*.exe
             target/release/bundle/msi/*.msi
+
+  # ubuntu-22.04 deliberately, NOT ubuntu-latest: it is the oldest supported
+  # base that ships WebKitGTK 4.1, so the glibc floor stays at 2.35 (matches
+  # the documented Ubuntu 22.04+/Debian 12+ requirement — building on 24.04
+  # would silently raise it to 2.39). It also sidesteps linuxdeploy's known
+  # 24.04 failures (FUSE2 renamed to libfuse2t64; its bundled strip dies on
+  # .relr.dyn sections of glibc ≥ 2.36 — tauri-apps/tauri#14796).
+  build-linux:
+    name: Build Linux packages
+    needs: prepare-release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      # linuxdeploy and appimagetool are themselves AppImages; FUSE mounts are
+      # unreliable on CI runners → extract-and-run instead of mounting.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      # linuxdeploy's bundled strip (binutils 2.35) dies on .relr.dyn sections
+      # in glibc ≥ 2.36 system libs. Inert on 22.04; protects a future bump.
+      NO_STRIP: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      # Same -dev set as ci.yml's rust-unix job (known-good on Ubuntu) plus the
+      # bundling extras: patchelf for AppImage, libfuse2 to run linuxdeploy,
+      # libxdo-dev per the Tauri prerequisites list.
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config build-essential \
+            libglib2.0-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            libxdo-dev libssl-dev \
+            patchelf file libfuse2
+
+      # Fail HERE with a precise missing list instead of dying ~20min into
+      # bundling. webkit2gtk **4.1** (not 4.0) is the Tauri 2 requirement.
+      - name: "Preflight: pkg-config + tool gate"
+        run: |
+          missing=""
+          for pc in glib-2.0 gobject-2.0 gio-2.0 gdk-3.0 gtk+-3.0 \
+                    libsoup-3.0 javascriptcoregtk-4.1 webkit2gtk-4.1 \
+                    ayatana-appindicator3-0.1 librsvg-2.0; do
+            pkg-config --exists "$pc" || missing="$missing pc:$pc"
+          done
+          for tool in pkg-config patchelf ar dpkg-deb file; do
+            command -v "$tool" >/dev/null || missing="$missing tool:$tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Tauri Linux build dependencies:$missing"
+            exit 1
+          fi
+          echo "deps OK: webkit2gtk-4.1 + gtk+-3.0 + libsoup-3.0 + appindicator + rsvg + patchelf"
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: linux
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Tauri CLI
+        run: npm install -g "@tauri-apps/cli@2.12.0"
+
+      - name: Compile gate (cargo check)
+        run: cargo check --workspace --all-targets
+
+      # Static capability gate (same as ci.yml frontend job).
+      - name: Verify capability files cover both windows
+        run: node scripts/check_capabilities.mjs
+
+      # `--bundles deb,appimage`, not "all": tauri.conf.json's targets:"all"
+      # also includes rpm on Linux, which needs rpmbuild we don't install.
+      # `tauri build` auto-adds --features custom-protocol for release builds —
+      # same as the Windows job, correct here too.
+      - name: Build + bundle (tauri build)
+        run: tauri build --verbose --bundles deb,appimage
+
+      # Post-build proof that capabilities were resolved into the binary's
+      # context (node port of the Windows job's pwsh check).
+      - name: Verify resolved capabilities made it into the build
+        run: node scripts/check_build_capabilities.mjs
+
+      - name: List + verify bundle artifacts
+        run: |
+          find target/release/bundle -type f -exec ls -l {} +
+          shopt -s nullglob
+          artifacts=(target/release/bundle/deb/*.deb target/release/bundle/appimage/*.AppImage)
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "::error::No Linux bundle artifacts produced (expected .deb / .AppImage)"
+            exit 1
+          fi
+          scripts/verify_release_artifacts.sh --strict "${artifacts[@]}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptkey-linux-${{ github.ref_name }}
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## PromptKey ${{ github.ref_name }}
+
+            ### 下载
+
+            | 平台 | 安装包 | 说明 |
+            |---|---|---|
+            | Windows | `*_x64-setup.exe` | NSIS 安装向导（中英双语，推荐） |
+            | Windows | `*_x64_en-US.msi` | MSI 备选 |
+            | Linux | `*_amd64.deb` | Debian / Ubuntu 系，apt/dpkg 安装 |
+            | Linux | `*_amd64.AppImage` | 免安装通用包，`chmod +x` 后运行 |
+            | macOS | `*_aarch64.dmg` | Apple Silicon（M 系列） |
+            | macOS | `*_x64.dmg` | Intel Mac |
+
+            ### 安装说明
+
+            - **Windows**：运行安装包按向导完成。需系统已安装 WebView2 Runtime（Windows 11 与多数 Windows 10 自带；安装包不会自动安装）。
+            - **Linux · deb**：`sudo apt install ./*_amd64.deb`（依赖声明含 WebKitGTK 4.1 / libayatana-appindicator）。
+            - **Linux · AppImage**：`chmod +x` 后直接执行；运行时需 FUSE2（Ubuntu 24.04+：`sudo apt install libfuse2t64`）。
+            - **macOS**：打开 dmg 拖入 Applications；首次运行被 Gatekeeper 拦截时：系统设置 → 隐私与安全性 →「仍要打开」。
+
+            ### 系统要求
+
+            - Windows 10 / 11（x64）+ WebView2 Runtime
+            - Linux：glibc ≥ 2.35（Ubuntu 22.04+ / Debian 12+ 或更新）+ WebKitGTK 4.1，X11 会话
+            - macOS 11+（Apple Silicon 选 aarch64 包，Intel 选 x64 包）
+
+            ### 注意
+
+            - 三个平台均**未做代码签名/公证**：Windows SmartScreen 与 macOS Gatekeeper 的「未知开发者」提示属预期。
+            - macOS 自动注入需在「系统设置 → 隐私与安全性 → 辅助功能」中授权（设置页可一键触发系统授权对话框）。
+            - Linux Wayland 会话下自动注入只能到达 XWayland 客户端；应用内会明确提示降级，管理功能不受影响。
+            - 更新内容见 [CHANGELOG.md](https://github.com/Haaaiawd/PromptKey/blob/master/CHANGELOG.md)
+          files: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+
