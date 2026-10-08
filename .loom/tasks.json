@@ -1290,13 +1290,19 @@
       "covers": [],
       "status": "active",
       "progress": {
-        "completed": [],
-        "current": "",
-        "next": ""
+        "completed": [
+          "verify_release_artifacts.sh written; --selftest 13/13 pass locally (real ar/od/truncate fixtures)",
+          "check_build_capabilities.mjs verified against real gen/schemas/capabilities.json",
+          "release.yml: prepare-release + build-linux (ubuntu-22.04, pkg-config gate) + build-macos matrix (aarch64+x86_64) + 3-platform body; windows job steps byte-identical apart from body",
+          "post-push self-review caught target/<triple>/ namespacing bug in macOS artifact paths — fixed in c23a0f0",
+          "docs/PLATFORMS.md + README updated; PR #17 opened against master (not merged); ci.yml checks running"
+        ],
+        "current": "Waiting on PR CI (ci.yml checks — release.yml jobs only trigger on tags)",
+        "next": "Confirm PR checks green; fill acceptance evidence; deliver execution checklist"
       },
       "evidence": [],
       "created_at": "2026-10-08T08:16:50.774Z",
-      "updated_at": "2026-10-08T08:17:24.074Z"
+      "updated_at": "2026-10-08T08:31:10.251Z"
     }
   ]
 }
