@@ -69,10 +69,10 @@ PromptKey 是一个专为 AI 重度用户设计的系统级提示词管理器：
 
 | 平台 | 状态 | 产物 | 验证情况 |
 |------|------|------|----------|
-| **Windows 10/11 x64** | ✅ 完整支持 | NSIS / MSI | **已实机验收**（2.0.4 轮盘、注入、拖拽排序均经用户实测） |
-| **Linux (X11)** | ⚠️ 代码就绪 | AppImage / deb | **编译通过 + 单测/E2E 通过，未做真机验证**；X11 注入/热键/上下文已实现，真机行为待确认 |
+| **Windows 10/11 x64** | ✅ 完整支持 | `*_x64-setup.exe`（NSIS）/ `*_x64_en-US.msi` | **已实机验收**（2.0.4 轮盘、注入、拖拽排序均经用户实测） |
+| **Linux (X11)** | ⚠️ 代码就绪 | `*_amd64.deb` / `*_amd64.AppImage` | **编译通过 + 单测/E2E 通过，未做真机验证**；X11 注入/热键/上下文已实现，真机行为待确认 |
 | **Linux (Wayland)** | ⚠️ 降级可用 | 同上 | 管理/剪贴板可用；X11 路径只能到达 XWayland 客户端，**原生 Wayland 窗口的自动注入未支持**，界面会明确提示降级 |
-| **macOS** | ⚠️ 代码就绪 | app / dmg | **编译路径就绪，未做真机验证**；AX 注入 + 剪贴板兜底已实现，需授予「辅助功能」权限 |
+| **macOS** | ⚠️ 代码就绪 | `*_aarch64.dmg`（Apple Silicon）/ `*_x64.dmg`（Intel） | **编译路径就绪，未做真机验证**；AX 注入 + 剪贴板兜底已实现，需授予「辅助功能」权限 |
 
 > ⚠️ **诚实声明**：Windows 是唯一经过真机验收的平台。Linux/macOS 的实现经过编译验证与单元/E2E 测试，但**从未在真机上运行过**——首次使用可能遇到我们尚未发现的问题，欢迎反馈（见文末）。CI 会验证 Linux/macOS 的编译，但不验证运行时行为。
 
@@ -89,21 +89,23 @@ PromptKey 是一个专为 AI 重度用户设计的系统级提示词管理器：
 ### Linux
 
 ```bash
-# AppImage：赋予执行权限后直接运行
-chmod +x PromptKey-*.AppImage && ./PromptKey-*.AppImage
+# deb（推荐，自动带入 WebKitGTK 4.1 等依赖）
+sudo apt install ./*_amd64.deb
 
-# deb
-sudo dpkg -i promptkey_*.deb
+# AppImage：赋予执行权限后直接运行
+chmod +x *_amd64.AppImage && ./*_amd64.AppImage
 ```
 
-- 需要 X11 会话（或接受 Wayland 降级行为）；运行时依赖 WebKitGTK。
+- 需要 X11 会话（或接受 Wayland 降级行为）；运行时依赖 WebKitGTK 4.1（deb 已声明依赖；AppImage 自带）。
+- AppImage 需要 FUSE2：Ubuntu 24.04+ 为 `sudo apt install libfuse2t64`（22.04 为 `libfuse2`）。
 - XWayland 下大部分能力可用；纯 Wayland 会话会在设置页显示「当前会话为 Wayland，自动注入能力受限」。
 
 ### macOS
 
-1. 打开 `.dmg`，拖入 Applications。
-2. **首次使用会请求「辅助功能」权限**：未授权时自动注入会降级为「复制到剪贴板 + 提示」。可在 设置 → 辅助功能权限 行重新触发系统授权对话框。
-3. 未公证（需付费开发者账号）：首次打开可能被 Gatekeeper 拦截，右键 → 打开 即可绕过。
+1. 按芯片选 dmg：Apple Silicon（M 系列）下 `*_aarch64.dmg`，Intel Mac 下 `*_x64.dmg`。
+2. 打开 dmg，拖入 Applications。
+3. **首次使用会请求「辅助功能」权限**：未授权时自动注入会降级为「复制到剪贴板 + 提示」。可在 设置 → 辅助功能权限 行重新触发系统授权对话框。
+4. 未签名/未公证：首次打开可能被 Gatekeeper 拦截 —— 右键 → 打开，或 系统设置 → 隐私与安全性 →「仍要打开」。
 
 ### 使用
 
@@ -162,7 +164,7 @@ tauri build    # 产出 .deb + .AppImage（target/release/bundle/）
 
 **macOS**：`cargo run` / `tauri build`（产出 `.app` + `.dmg`）。公证需付费 Apple Developer 账号，`tauri.conf.json` 未配置签名。
 
-CI/CD：PR 与 master push 运行 `cargo check`/`clippy`/`test`（Windows + Linux + macOS）+ 前端静态检查；推送 `v*` tag 自动构建并发布 GitHub Release（见 `.github/workflows/`）。
+CI/CD：PR 与 master push 运行 `cargo check`/`clippy`/`test`（Windows + Linux + macOS）+ 前端静态检查；推送 `v*` tag 触发三平台**并行**构建（Windows NSIS/MSI、Linux deb/AppImage、macOS aarch64+x64 dmg），逐产物做 magic/体积校验后追加到同一个 GitHub Release（见 `.github/workflows/release.yml` 与 `docs/PLATFORMS.md` 的打包产物表）。
 
 ### 项目结构
 
@@ -189,7 +191,7 @@ PromptKey/
 ├── capabilities/             # Tauri IPC 权限（main + wheel-panel 两个 webview）
 ├── tests/e2e/                # Playwright 端到端测试（stub __TAURI__，4 套件 60+ 断言）
 ├── docs/                     # PLATFORMS.md / COMPONENTS.md / screenshots/
-├── scripts/                  # make_icons.py（多平台图标）/ screenshots.py / check_capabilities.mjs
+├── scripts/                  # make_icons.py（多平台图标）/ screenshots.py / check_capabilities.mjs / check_build_capabilities.mjs / verify_release_artifacts.sh
 ├── blueprint/                # 历史 PRD / RFC / 复杂度审计（1.x → 2.0 演进档案）
 ├── .loom/design/             # 现行设计文档（见下方索引）
 └── .github/workflows/        # CI + Release
