@@ -334,3 +334,136 @@ jobs:
             target/release/bundle/deb/*.deb
             target/release/bundle/appimage/*.AppImage
 
+  # Two single-arch dmgs instead of one universal2 binary: each build is a
+  # vanilla `tauri build` — the lowest-risk path we can reason about without a
+  # local Mac — and a failing arch can't block the other (fail-fast: false).
+  # macos-latest is an arm64 runner: aarch64 compiles natively, x86_64
+  # cross-compiles via `rustup target` (same approach as the Tauri docs).
+  # Coverage: every Mac since 2020 vs. shipping aarch64-only.
+  build-macos:
+    name: Build macOS bundle (${{ matrix.arch }})
+    needs: prepare-release
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            target: aarch64-apple-darwin
+          - arch: x64
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-${{ matrix.arch }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Tauri CLI
+        run: npm install -g "@tauri-apps/cli@2.12.0"
+
+      # No signing certs exist on the runner and none are provisioned — the
+      # dmg ships unsigned/unnotarized BY DESIGN. Fail loudly if someone adds
+      # a real signingIdentity without provisioning certs, instead of letting
+      # the bundler silently fail at the codesign step 20 minutes in.
+      # ('-' = ad-hoc signing is fine; tauri ad-hoc signs .app by default.)
+      - name: "Preflight: unsigned-build guard + assets"
+        run: |
+          node -e '
+            const c = require("./tauri.conf.json");
+            const m = (c.bundle && c.bundle.macOS) || {};
+            if (m.signingIdentity && m.signingIdentity !== "-") {
+              throw new Error(`bundle.macOS.signingIdentity=${m.signingIdentity} but no certs on the runner — remove it or provision signing first`);
+            }
+            console.log("unsigned build confirmed — .app gets ad-hoc signature only, no notarization; Gatekeeper warning is expected");
+          '
+          test -s icons/icon.icns || { echo "::error::icons/icon.icns missing/empty — dmg icon would be blank"; exit 1; }
+          echo "icon.icns present ($(stat -f %z icons/icon.icns) bytes)"
+
+      - name: Compile gate (cargo check)
+        run: cargo check --workspace --all-targets --target ${{ matrix.target }}
+
+      - name: Verify capability files cover both windows
+        run: node scripts/check_capabilities.mjs
+
+      - name: Build + bundle (tauri build)
+        run: tauri build --verbose --target ${{ matrix.target }} --bundles dmg
+
+      - name: Verify resolved capabilities made it into the build
+        run: node scripts/check_build_capabilities.mjs
+
+      - name: List + verify bundle artifacts
+        run: |
+          find target/release/bundle -type f -exec ls -l {} +
+          shopt -s nullglob
+          artifacts=(target/release/bundle/dmg/*.dmg target/release/bundle/macos/*.app.tar.gz)
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "::error::No macOS bundle artifacts produced (expected .dmg)"
+            exit 1
+          fi
+          scripts/verify_release_artifacts.sh --strict "${artifacts[@]}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptkey-macos-${{ matrix.arch }}-${{ github.ref_name }}
+          path: |
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## PromptKey ${{ github.ref_name }}
+
+            ### 下载
+
+            | 平台 | 安装包 | 说明 |
+            |---|---|---|
+            | Windows | `*_x64-setup.exe` | NSIS 安装向导（中英双语，推荐） |
+            | Windows | `*_x64_en-US.msi` | MSI 备选 |
+            | Linux | `*_amd64.deb` | Debian / Ubuntu 系，apt/dpkg 安装 |
+            | Linux | `*_amd64.AppImage` | 免安装通用包，`chmod +x` 后运行 |
+            | macOS | `*_aarch64.dmg` | Apple Silicon（M 系列） |
+            | macOS | `*_x64.dmg` | Intel Mac |
+
+            ### 安装说明
+
+            - **Windows**：运行安装包按向导完成。需系统已安装 WebView2 Runtime（Windows 11 与多数 Windows 10 自带；安装包不会自动安装）。
+            - **Linux · deb**：`sudo apt install ./*_amd64.deb`（依赖声明含 WebKitGTK 4.1 / libayatana-appindicator）。
+            - **Linux · AppImage**：`chmod +x` 后直接执行；运行时需 FUSE2（Ubuntu 24.04+：`sudo apt install libfuse2t64`）。
+            - **macOS**：打开 dmg 拖入 Applications；首次运行被 Gatekeeper 拦截时：系统设置 → 隐私与安全性 →「仍要打开」。
+
+            ### 系统要求
+
+            - Windows 10 / 11（x64）+ WebView2 Runtime
+            - Linux：glibc ≥ 2.35（Ubuntu 22.04+ / Debian 12+ 或更新）+ WebKitGTK 4.1，X11 会话
+            - macOS 11+（Apple Silicon 选 aarch64 包，Intel 选 x64 包）
+
+            ### 注意
+
+            - 三个平台均**未做代码签名/公证**：Windows SmartScreen 与 macOS Gatekeeper 的「未知开发者」提示属预期。
+            - macOS 自动注入需在「系统设置 → 隐私与安全性 → 辅助功能」中授权（设置页可一键触发系统授权对话框）。
+            - Linux Wayland 会话下自动注入只能到达 XWayland 客户端；应用内会明确提示降级，管理功能不受影响。
+            - 更新内容见 [CHANGELOG.md](https://github.com/Haaaiawd/PromptKey/blob/master/CHANGELOG.md)
+          files: |
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app.tar.gz
