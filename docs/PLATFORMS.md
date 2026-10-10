@@ -58,7 +58,7 @@ IPC 仍走命名管道；引擎重启/防抖语义不变（失败重发不锁防
 | IPC | Unix domain socket（`$XDG_RUNTIME_DIR` 或 `$TMPDIR/promptkey-$UID/`，目录 0700 / socket 0600） | ⚠️ 同上 |
 | 自动启动 | `tauri-plugin-autostart` → `~/.config/autostart/promptkey.desktop`（XDG Autostart） | ⚠️ 同上 |
 | 配置路径 | `${XDG_CONFIG_HOME:-~/.config}/promptkey/` | ⚠️ 同上 |
-| 打包 | `tauri build` → `.deb` + `.AppImage` | ⚠️ CI 仅验证编译 |
+| 打包 | Release workflow `build-linux`（ubuntu-22.04 runner，刻意压低 glibc 下限）→ `*_amd64.deb` + `*_amd64.AppImage` | ⚠️ CI 构建 + 格式/体积校验，未真机安装 |
 
 **已知风险（未真机验证推断）**：
 - XTEST 在某些发行版被禁/受限时会表现为「粘贴可用、逐键无效」——诊断可见注入策略耗时。
@@ -93,7 +93,7 @@ IPC 仍走命名管道；引擎重启/防抖语义不变（失败重发不锁防
 | 配置路径 | `~/Library/Application Support/PromptKey/` | ⚠️ 同上 |
 | 图标 | `icons/icon.icns`（`scripts/make_icons.py` 生成，PNG-payload icns）+ 单色 template tray icon | ⚠️ 生成产物已验证，视觉未真机 |
 | 轮盘窗口 | 透明无边框需要 Tauri `macos-private-api` feature（未文档化的 WKWebView API）——已按 `cfg(macos)` 作用域启用；**App Store 审核风险不适用**（本应用走未签名 dmg 直发） | ⚠️ 同上 |
-| 打包 | `tauri build` → `.app` + `.dmg`；**未公证**（需付费账号，文档说明绕过方式） | ⚠️ CI 仅验证编译 |
+| 打包 | Release workflow `build-macos` matrix（arm64 runner 原生 aarch64 + 交叉 x86_64）→ `*_aarch64.dmg` + `*_x64.dmg`；**未签名/未公证**，workflow 内设 `signingIdentity` 护栏 | ⚠️ CI 构建 + 格式/体积校验，未真机运行 |
 
 **权限缺失时的行为**：`status_json()` 报告 `injection=needs-permission` + `notes=["ax_permission_missing"]`，
 设置页出现「辅助功能权限」行可一键触发系统授权；授权前注入降级为「复制到剪贴板并提示」而非静默失败。
@@ -135,6 +135,25 @@ Windows 端为命名管道，Unix 端为 UDS——协议字节级一致，`platf
 | 前台上下文 | ✅ | ⚠️ | ⚠️ | ⚠️ |
 | IPC | ✅ | ⚠️ | ⚠️ | ⚠️ |
 | 自动启动 | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| 打包产物 | ✅ | ⚠️（CI 构建） | — | ⚠️（CI 构建，未公证） |
+| 打包产物 | ✅（Release 产出 NSIS+MSI） | ⚠️（Release 产出 deb+AppImage） | — | ⚠️（Release 产出双架构 dmg，未公证） |
 
 ✅=实机/实际验证；⚠️=代码就绪未实机；❌=有意不支持。
+
+---
+
+## Release 打包产物与流水线（`.github/workflows/release.yml`）
+
+推送 `v*` tag 触发：`prepare-release` 先建/更新 GitHub Release（避免并行 job 抢建产生 422/重复 release），
+随后 `build-windows` / `build-linux` / `build-macos` 三平台**并行**构建、各自把产物追加到同一个 Release——
+任一平台失败不阻塞其余平台发布（互相无 `needs` 于彼此）。
+
+| 平台 | Job / Runner | 产物文件 | 打包前校验 | 安装方式 |
+|------|-------------|----------|-----------|----------|
+| Windows | `build-windows` / windows-latest | `PromptKey_*_x64-setup.exe`（NSIS）、`PromptKey_*_x64_en-US.msi` | capabilities 解析 + 产物存在性 | 运行安装向导；需 WebView2 Runtime |
+| Linux | `build-linux` / **ubuntu-22.04** | `*_amd64.deb`、`*_amd64.AppImage` | pkg-config 依赖门 + `scripts/verify_release_artifacts.sh`（ar members / ELF+`AI\x02` / 体积下限） | `sudo apt install ./*.deb`；或 `chmod +x` AppImage 直接运行（需 FUSE2） |
+| macOS | `build-macos` / macos-latest（arm64） | `*_aarch64.dmg`（Apple Silicon）、`*_x64.dmg`（Intel，交叉编译） | unsigned 护栏（`signingIdentity` 必须为未配置）+ `koly` trailer / 体积下限 | 拖入 Applications；Gatekeeper「仍要打开」；注入需辅助功能授权 |
+
+**产物诚实性约定**：
+- Linux 在 ubuntu-22.04 构建 → glibc 下限 2.35，与「Ubuntu 22.04+ / Debian 12+」的要求一致；不用 ubuntu-latest 以免下限被悄悄抬高，也规避 linuxdeploy 在 24.04 的已知故障（tauri-apps/tauri#14796）。
+- macOS 出**两个单架构 dmg** 而非 universal2：各自是原生 `tauri build` 路径，风险最低、可独立验证；Intel Mac 仍被覆盖。
+- 三平台全部**未签名/未公证**，Release 说明与本文档如实标注；`verify_release_artifacts.sh` 只做格式与体积健全性检查，不验证内容正确性。

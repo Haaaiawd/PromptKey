@@ -1218,6 +1218,126 @@
       "created_at": "2026-10-07T06:47:00.011Z",
       "updated_at": "2026-10-07T07:38:06.889Z",
       "completed_at": "2026-10-07T07:38:06.889Z"
+    },
+    {
+      "id": "TASK-012",
+      "title": "Release pipeline: extend release.yml to Linux + macOS (3-platform matrix)",
+      "outcome": "Pushing a v* tag produces Windows NSIS/MSI + Linux deb/AppImage + macOS dmg (aarch64 + x86_64) on a single GitHub Release, with per-artifact sanity verification, an honest three-platform release body, and zero changes to the proven Windows build steps.",
+      "acceptance": [
+        {
+          "criterion": "release.yml gains build-linux (ubuntu-22.04, apt deps + pkg-config preflight gate, tauri build --bundles deb,appimage) and build-macos (matrix aarch64-apple-darwin + x86_64-apple-darwin, signingIdentity guard) jobs running in parallel with the untouched build-windows job",
+          "verify_by": "review .github/workflows/release.yml diff; python YAML parse; confirm windows job steps byte-identical",
+          "evidence": "python yaml parse: jobs = prepare-release, build-windows, build-linux(needs:prepare-release, ubuntu-22.04, 14 steps), build-macos(needs:prepare-release, matrix aarch64/x64, 13 steps); windows steps diff vs HEAD = identical apart from body text"
+        },
+        {
+          "criterion": "A prepare-release job creates/updates the tag's GitHub Release up front so parallel platform publish steps always take the update path (no action-gh-release create race, softprops#616/#705)",
+          "verify_by": "review job graph; all publish steps set identical body+generate_release_notes",
+          "evidence": "prepare-release job runs at workflow start (tag-gated step); linux/macos carry needs:prepare-release; windows untouched — its publish step runs ~20min in, long after release exists. All 4 publish bodies verified byte-identical."
+        },
+        {
+          "criterion": "scripts/verify_release_artifacts.sh validates per-format magic (MZ+PE, OLE2, ar members, ELF+AI\\x02, koly trailer, gzip) and minimum-size floors, and its --selftest passes locally",
+          "verify_by": "run scripts/verify_release_artifacts.sh --selftest on this machine",
+          "evidence": "selftest output: 13 passed, 0 failed — fabricated PE/MZ, OLE2, real ar deb, ELF+AI\\x02, koly-trailer dmg, gzip fixtures accepted; no-PE/html/empty/no-marker/no-trailer/no-members/non-exec all rejected"
+        },
+        {
+          "criterion": "Release body documents all three platforms (download table, install notes, system requirements, unsigned/Wayland caveats)",
+          "verify_by": "review body string in workflow; consistent across prepare-release and each publish step",
+          "evidence": "6-row download table (exe/msi/deb/AppImage/aarch64 dmg/x64 dmg), per-platform install notes, glibc>=2.35 + WebKitGTK4.1 + macOS11+ requirements, unsigned + Gatekeeper + AX + Wayland-degradation notes; identical in prepare-release and all 3 publish steps"
+        },
+        {
+          "criterion": "docs/PLATFORMS.md gains a Release packaging section and README download/install instructions reflect actual artifact names",
+          "verify_by": "review diffs",
+          "evidence": "PLATFORMS.md: new 'Release 打包产物与流水线' section (job table + honesty constraints) + updated packaging rows; README: real artifact globs in platform table, apt-deb + FUSE2 notes, per-arch dmg selection, Gatekeeper bypass"
+        },
+        {
+          "criterion": "PR opened from feat/release-matrix-linux-macos against master, not merged; post-merge execution checklist delivered",
+          "verify_by": "gh pr status; checklist text in delivery",
+          "evidence": "https://github.com/Haaaiawd/PromptKey/pull/17 open; checklist delivered in session response"
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No Windows job step changes (capabilities check, bundle check, NSIS/MSI upload untouched); only its release body text is updated per the three-platform requirement",
+        "No code signing or notarization anywhere (no certs; explicit unsigned logging instead)",
+        "No local cargo build or workflow run possible — verification is static review + script selftest + post-merge checklist",
+        "No universal2 macOS binary — two single-arch dmgs chosen as the lower-risk, independently-verifiable path"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/design/task-brief-release-matrix.md",
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        "tauri.conf.json",
+        "Cargo.toml",
+        "capabilities/default.json",
+        "scripts/check_capabilities.mjs",
+        "docs/PLATFORMS.md",
+        "README.md"
+      ],
+      "touches": [
+        ".github/workflows/release.yml",
+        "scripts/verify_release_artifacts.sh",
+        "scripts/check_build_capabilities.mjs",
+        "docs/PLATFORMS.md",
+        "README.md",
+        ".loom/"
+      ],
+      "implements": ".loom/design/task-brief-release-matrix.md",
+      "design_exemption": "",
+      "capability_hooks": [],
+      "capability_exemption": "CI/release engineering within existing design surface; no new professional capability domain — platform packaging knowledge is sourced inline in the brief and workflow comments.",
+      "integrity_version": 1,
+      "covers": [],
+      "status": "done",
+      "progress": {
+        "completed": [
+          "verify_release_artifacts.sh written; --selftest 13/13 pass locally (real ar/od/truncate fixtures)",
+          "check_build_capabilities.mjs verified against real gen/schemas/capabilities.json",
+          "release.yml: prepare-release + build-linux (ubuntu-22.04, pkg-config gate) + build-macos matrix (aarch64+x86_64) + 3-platform body; windows job steps byte-identical apart from body",
+          "post-push self-review caught target/<triple>/ namespacing bug in macOS artifact paths — fixed in c23a0f0",
+          "docs/PLATFORMS.md + README updated; PR #17 opened against master (not merged); ci.yml checks running"
+        ],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "PR #17 (feat/release-matrix-linux-macos → master, unmerged). ci.yml checks all green: cargo check/clippy/test (win), cargo check (ubuntu+macos), frontend, e2e — run 37750387593. release.yml jobs only fire on v* tags; static verification done locally: YAML parses, all embedded bash passes bash -n, node snippets pass node --check, 4 publish bodies byte-identical, build-windows steps verified programmatically identical to HEAD except body text.",
+        "scripts/verify_release_artifacts.sh --selftest → 13/13 (6 valid fixtures pass, 7 broken fixtures correctly rejected incl. strict-mode exec-bit check).",
+        "scripts/check_build_capabilities.mjs run against real gen/schemas/capabilities.json → 'resolved capabilities: default — windows: main, wheel-panel'.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "release.yml gains build-linux (ubuntu-22.04, apt deps + pkg-config preflight gate, tauri build --bundles deb,appimage) and build-macos (matrix aarch64-apple-darwin + x86_64-apple-darwin, signingIdentity guard) jobs running in parallel with the untouched build-windows job",
+              "evidence": "python yaml parse: jobs = prepare-release, build-windows, build-linux(needs:prepare-release, ubuntu-22.04, 14 steps), build-macos(needs:prepare-release, matrix aarch64/x64, 13 steps); windows steps diff vs HEAD = identical apart from body text"
+            },
+            {
+              "criterion": "A prepare-release job creates/updates the tag's GitHub Release up front so parallel platform publish steps always take the update path (no action-gh-release create race, softprops#616/#705)",
+              "evidence": "prepare-release job runs at workflow start (tag-gated step); linux/macos carry needs:prepare-release; windows untouched — its publish step runs ~20min in, long after release exists. All 4 publish bodies verified byte-identical."
+            },
+            {
+              "criterion": "scripts/verify_release_artifacts.sh validates per-format magic (MZ+PE, OLE2, ar members, ELF+AI\\x02, koly trailer, gzip) and minimum-size floors, and its --selftest passes locally",
+              "evidence": "selftest output: 13 passed, 0 failed — fabricated PE/MZ, OLE2, real ar deb, ELF+AI\\x02, koly-trailer dmg, gzip fixtures accepted; no-PE/html/empty/no-marker/no-trailer/no-members/non-exec all rejected"
+            },
+            {
+              "criterion": "Release body documents all three platforms (download table, install notes, system requirements, unsigned/Wayland caveats)",
+              "evidence": "6-row download table (exe/msi/deb/AppImage/aarch64 dmg/x64 dmg), per-platform install notes, glibc>=2.35 + WebKitGTK4.1 + macOS11+ requirements, unsigned + Gatekeeper + AX + Wayland-degradation notes; identical in prepare-release and all 3 publish steps"
+            },
+            {
+              "criterion": "docs/PLATFORMS.md gains a Release packaging section and README download/install instructions reflect actual artifact names",
+              "evidence": "PLATFORMS.md: new 'Release 打包产物与流水线' section (job table + honesty constraints) + updated packaging rows; README: real artifact globs in platform table, apt-deb + FUSE2 notes, per-arch dmg selection, Gatekeeper bypass"
+            },
+            {
+              "criterion": "PR opened from feat/release-matrix-linux-macos against master, not merged; post-merge execution checklist delivered",
+              "evidence": "https://github.com/Haaaiawd/PromptKey/pull/17 open; checklist delivered in session response"
+            }
+          ],
+          "at": "2026-10-08T08:38:14.928Z"
+        }
+      ],
+      "created_at": "2026-10-08T08:16:50.774Z",
+      "updated_at": "2026-10-08T08:38:14.929Z",
+      "completed_at": "2026-10-08T08:38:14.929Z"
     }
   ]
 }
