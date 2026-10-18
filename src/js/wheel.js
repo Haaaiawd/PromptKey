@@ -218,7 +218,7 @@ document.addEventListener('keydown', e => {
     const n = parseInt(e.key, 10);
     const els = $$('.petal');
     if (n >= 1 && matches[n - 1] && els[n - 1]) { pick(els[n - 1], matches[n - 1]); return; }
-    if (matches.length) toast('info', t('wh.keyRange', { n: matches.length }), 1400);
+    if (matches.length) toast('info', t('wh.keyRange', { n: matches.length }), 1400, 'wh.keyRange');
     return;
   }
   // typing filter: single printable chars

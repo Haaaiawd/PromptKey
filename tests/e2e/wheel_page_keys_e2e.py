@@ -192,6 +192,26 @@ def main():
         check("still on page 2 after stray digits", "2/2" in center_text(page),
               center_text(page))
 
+        # ---- 5b. holding an out-of-range digit must NOT stack toasts ----
+        # Regression guard for Devin Review on PR #18: keydown auto-repeat used
+        # to spawn one toast per repeat (up to 5), and the stacked toasts sit
+        # over the lower petals with pointer events enabled -> clicks hit a
+        # toast instead of selecting a prompt. Keyed toasts coalesce into one.
+        page.keyboard.down("7")
+        page.wait_for_timeout(700)          # let OS key-repeat fire
+        page.keyboard.up("7")
+        page.wait_for_timeout(120)
+        n_toasts = page.locator("#toasts .toast").count()
+        check("held out-of-range digit coalesces to one toast", n_toasts == 1,
+              f"toasts={n_toasts}")
+        check("toast does not intercept petal clicks",
+              "none" == page.evaluate(
+                  "() => getComputedStyle("
+                  "document.querySelector('#toasts .toast')).pointerEvents"),
+              page.evaluate(
+                  "() => getComputedStyle("
+                  "document.querySelector('#toasts .toast')).pointerEvents"))
+
         # ---- 6. ArrowRight on last page: no crash, no wrap, no filter ----
         page.keyboard.press("ArrowRight")
         page.wait_for_timeout(120)
@@ -211,11 +231,16 @@ def main():
         page.keyboard.press("ArrowRight")
         assert wait_js(page, "document.querySelectorAll('#wheel .petal').length === 2")
         n_toasts = page.locator("#toasts .toast").count()
+        n_inject = len(inject_calls(page))
         page.keyboard.press("5")
         page.wait_for_timeout(120)
+        # wave44-review: a keyed toast REPLACES the live one instead of stacking,
+        # so the count may stay flat — assert the hint is present and correct
+        # (and still nothing injected), not that the stack grew.
         check("digit 5 on 2-petal page hints, does not inject",
-              len(inject_calls(page)) == before
-              and page.locator("#toasts .toast").count() > n_toasts)
+              len(inject_calls(page)) == n_inject
+              and "1–2" in (page.locator("#toasts").text_content() or ""),
+              page.locator("#toasts").text_content() or "")
 
         # ---- 9. letters still filter; 10. digit never appends to query ----
         page.keyboard.press("x")  # zero matches -> empty-tip, petals gone
