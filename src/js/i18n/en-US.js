@@ -39,6 +39,7 @@ export default {
   "wh.new": "+ New",
   "wh.centerHint": "Click to close · right-click/hold = new prompt",
   "wh.page": "{a}/{b}",
+  "wh.keyRange": "This page has {n} — press 1–{n} to pick",
   "wh.envNoBridge": "Runtime problem: Tauri bridge not injected — wheel cannot work",
   "wh.envAcl": "IPC denied by ACL — capabilities missing, wheel cannot work",
 

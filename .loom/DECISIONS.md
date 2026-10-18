@@ -23,3 +23,9 @@ Current truth belongs in PROJECT.md and linked design documents. This file prese
 - **`APPIMAGE_EXTRACT_AND_RUN=1` + `NO_STRIP=true` on the linux job.** CI runners can't reliably
   FUSE-mount linuxdeploy/appimagetool (themselves AppImages); NO_STRIP future-proofs a runner bump
   to 24.04. Both inert when unnecessary.
+
+## D-2026-10-18-r30p: 轮盘数字键定案为页内语义：花瓣徽章 1..n 即按键提示（所见即所按），第二页第一个按 1 而非 7——PAGE=6 下全局编号第二页就需要不存在的 10/11/12 键，物理不可行，且 UI_UX_REDESIGN.md 本已声明'数字键 1-6 直选保留'。修复 wheel.js：所有数字键(0-9)一律走花瓣选择分支，超出当前页花瓣数的按键弹出 i18n 提示 wh.keyRange 并 return，不再漏进 query 过滤（原 bug：按 7 会 query+='7' 且 page=0 跳回第一页）。新增 tests/e2e/wheel_page_keys_e2e.py（20 项断言全绿）；既有 e2e 26+13+10+22 无回归。
+
+- Changed: src/js/wheel.js, src/js/i18n/zh-CN.js, src/js/i18n/en-US.js, tests/e2e/wheel_page_keys_e2e.py
+- Affected tasks: 
+- At: 2026-10-18T11:55:36.073Z

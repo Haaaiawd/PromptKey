@@ -39,6 +39,7 @@ export default {
   "wh.new": "+ 新建",
   "wh.centerHint": "点击关闭 · 右键/长按 = 新建提示词",
   "wh.page": "{a}/{b}",
+  "wh.keyRange": "本页只有 {n} 项，按 1–{n} 选择",
   "wh.envNoBridge": "环境异常：桌面桥接（window.__TAURI__）未注入 — 轮盘无法工作",
   "wh.envAcl": "IPC 被 ACL 拒绝 — capabilities 缺失，轮盘无法工作",
 
