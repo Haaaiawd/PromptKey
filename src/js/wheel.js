@@ -212,13 +212,16 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter') { const el = $$('.petal')[0]; if (el && matches[0]) pick(el, matches[0]); return; }
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { page++; render(); return; }
   if (e.key === 'ArrowLeft' || e.key === 'PageUp') { page = Math.max(0, page - 1); render(); return; }
-  const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= PAGE && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  // digits always pick the petal with that badge (page-local 1..matches.length),
+  // never filter text — out-of-range digits get a hint instead of polluting query
+  if (/^\d$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const n = parseInt(e.key, 10);
     const els = $$('.petal');
-    if (matches[n - 1] && els[n - 1]) pick(els[n - 1], matches[n - 1]);
+    if (n >= 1 && matches[n - 1] && els[n - 1]) { pick(els[n - 1], matches[n - 1]); return; }
+    if (matches.length) toast('info', t('wh.keyRange', { n: matches.length }), 1400, 'wh.keyRange');
     return;
   }
-  // typing filter: single printable chars (digits 1-6 are selection keys per design)
+  // typing filter: single printable chars
   if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
     query += e.key; page = 0; render();
   }

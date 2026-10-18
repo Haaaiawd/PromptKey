@@ -3,15 +3,28 @@ import { $, el } from './dom.js';
 
 const ICONS = { ok: 'circle-check', err: 'octagon-alert', warn: 'triangle-alert', info: 'info' };
 
-export function toast(kind, msg, ms = 2600) {
+export function toast(kind, msg, ms = 2600, key = null) {
   const box = $('#toasts');
   if (!box) { console.warn('[toast]', kind, msg); return; }
+  // keyed toast: a repeated message (e.g. holding an out-of-range digit, whose
+  // keydown auto-repeat fires dozens of times) replaces the live one instead of
+  // stacking up — stacked toasts cover the wheel petals and intercept clicks.
+  if (key) {
+    const live = box.querySelector(`[data-toast-key="${CSS.escape(key)}"]`);
+    if (live) {
+      live.lastElementChild.textContent = msg;
+      clearTimeout(live._toastTimer);
+      live._toastTimer = setTimeout(() => { live.style.opacity = '0'; setTimeout(() => live.remove(), 180); }, ms);
+      return;
+    }
+  }
   const node = el('div', `toast ${kind}`);
+  if (key) node.dataset.toastKey = key;
   node.innerHTML = `<span class="ico">${icon(ICONS[kind] || 'info', 16)}</span><span></span>`;
   node.lastElementChild.textContent = msg;
   box.appendChild(node);
   while (box.children.length > 5) box.firstElementChild.remove();
-  setTimeout(() => { node.style.opacity = '0'; setTimeout(() => node.remove(), 180); }, ms);
+  node._toastTimer = setTimeout(() => { node.style.opacity = '0'; setTimeout(() => node.remove(), 180); }, ms);
 }
 
 // Promise-based confirm modal (replaces native confirm())
